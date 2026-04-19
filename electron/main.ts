@@ -6,6 +6,8 @@ import { registerWorkflowVersionIpcHandlers } from './ipc/workflow-version'
 import { registerExecutionLogIpcHandlers } from './ipc/execution-log'
 import { registerChatIpcHandlers } from './ipc/chat'
 import { registerShortcutIpcHandlers, registerGlobalShortcuts, unregisterGlobalShortcuts } from './ipc/shortcut'
+import { registerPluginIpcHandlers } from './ipc/plugin'
+import { pluginManager } from './services/plugin-manager'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -46,6 +48,8 @@ app.whenReady().then(() => {
   registerExecutionLogIpcHandlers()
   registerChatIpcHandlers()
   registerShortcutIpcHandlers()
+  registerPluginIpcHandlers()
+  pluginManager.loadAll()
 
   ipcMain.handle('app:getVersion', () => app.getVersion())
   ipcMain.handle('shell:openExternal', (_e, url: string) => {
@@ -54,6 +58,7 @@ app.whenReady().then(() => {
   })
 
   createWindow()
+  pluginManager.setMainWindow(mainWindow!)
   registerGlobalShortcuts()
 
   app.on('activate', () => {
@@ -63,5 +68,6 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   unregisterGlobalShortcuts()
+  pluginManager.shutdown()
   if (process.platform !== 'darwin') app.quit()
 })

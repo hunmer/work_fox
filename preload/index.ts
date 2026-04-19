@@ -95,6 +95,18 @@ const api = {
     reset: (): Promise<any> => ipcRenderer.invoke('shortcut:reset'),
   },
 
+  plugin: {
+    list: () => ipcRenderer.invoke('plugin:list'),
+    enable: (id: string) => ipcRenderer.invoke('plugin:enable', id),
+    disable: (id: string) => ipcRenderer.invoke('plugin:disable', id),
+    getView: (id: string) => ipcRenderer.invoke('plugin:get-view', id),
+    getIcon: (id: string) => ipcRenderer.invoke('plugin:get-icon', id),
+    importZip: () => ipcRenderer.invoke('plugin:import-zip'),
+    openFolder: () => ipcRenderer.invoke('plugin:open-folder'),
+    install: (url: string) => ipcRenderer.invoke('plugin:install', url),
+    uninstall: (id: string) => ipcRenderer.invoke('plugin:uninstall', id),
+  },
+
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
 
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion'),
