@@ -107,6 +107,13 @@ const api = {
     uninstall: (id: string) => ipcRenderer.invoke('plugin:uninstall', id),
   },
 
+  window: {
+    minimize: (): void => ipcRenderer.send('window:minimize'),
+    maximize: (): void => ipcRenderer.send('window:maximize'),
+    close: (): void => ipcRenderer.send('window:close'),
+    isMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:isMaximized'),
+  },
+
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
 
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion'),

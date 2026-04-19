@@ -19,7 +19,6 @@ function createWindow(): void {
     minHeight: 600,
     show: false,
     frame: false,
-    titleBarStyle: 'hidden',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -50,6 +49,14 @@ app.whenReady().then(() => {
   registerShortcutIpcHandlers()
   registerPluginIpcHandlers()
   pluginManager.loadAll()
+
+  ipcMain.on('window:minimize', () => mainWindow?.minimize())
+  ipcMain.on('window:maximize', () => {
+    if (mainWindow?.isMaximized()) mainWindow.unmaximize()
+    else mainWindow?.maximize()
+  })
+  ipcMain.on('window:close', () => mainWindow?.close())
+  ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false)
 
   ipcMain.handle('app:getVersion', () => app.getVersion())
   ipcMain.handle('shell:openExternal', (_e, url: string) => {

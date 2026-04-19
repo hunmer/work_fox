@@ -1,4 +1,4 @@
-import { ref, nextTick } from 'vue'
+import { ref } from 'vue'
 import type { Ref } from 'vue'
 import { useWorkflowStore } from '@/stores/workflow'
 import { useNotification } from '@/composables/useNotification'
@@ -11,7 +11,6 @@ export function useWorkflowFileActions(
 
   const isEditingName = ref(false)
   const editingName = ref('')
-  const nameInput = ref<HTMLInputElement | null>(null)
 
   function openWorkflow() {
     listDialogOpen.value = true
@@ -21,7 +20,6 @@ export function useWorkflowFileActions(
     if (!store.currentWorkflow) return
     editingName.value = store.currentWorkflow.name || ''
     isEditingName.value = true
-    nextTick(() => nameInput.value?.focus())
   }
 
   function finishEditName() {
@@ -90,7 +88,6 @@ export function useWorkflowFileActions(
   return {
     isEditingName,
     editingName,
-    nameInput,
     openWorkflow,
     startEditName,
     finishEditName,

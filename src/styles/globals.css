@@ -147,3 +147,11 @@ textarea,
   -webkit-user-select: text;
   user-select: text;
 }
+
+.app-drag {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
