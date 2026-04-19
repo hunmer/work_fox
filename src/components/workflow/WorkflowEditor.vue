@@ -194,6 +194,7 @@ function openRecentWorkflow(id: string) {
 
 watch(() => store.currentWorkflow, (val) => {
   if (val) store.saveDraft()
+  tabStore.updateTabWorkflow(props.tab.id, val?.id ?? null, val?.name || '未命名工作流')
 }, { deep: true })
 
 let cleanupFileUpdates: (() => void) | null = null

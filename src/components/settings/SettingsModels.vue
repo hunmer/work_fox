@@ -5,13 +5,18 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Plus, Trash2, TestTube2, ChevronDown, Loader2 } from 'lucide-vue-next'
+import { Plus, Trash2, TestTube2, ChevronDown, Loader2, Pencil } from 'lucide-vue-next'
 import type { AIProvider, AIModel } from '@/types'
 
 const providerStore = useAIProviderStore()
 const expandedProviderId = ref<string | null>(null)
-const testing = ref(false)
-const testResult = ref<{ success: boolean; error?: string } | null>(null)
+const testingId = ref<string | null>(null)
+const testResult = ref<{ providerId: string; success: boolean; error?: string } | null>(null)
+
+const editingProviderId = ref<string | null>(null)
+const editName = ref('')
+const editApiBase = ref('')
+const editApiKey = ref('')
 
 const showAddProvider = ref(false)
 const newProviderName = ref('')
@@ -45,10 +50,30 @@ async function handleDeleteProvider(id: string) {
 }
 
 async function handleTestConnection(id: string) {
-  testing.value = true
+  testingId.value = id
   testResult.value = null
-  testResult.value = await providerStore.testConnection(id)
-  testing.value = false
+  const result = await providerStore.testConnection(id)
+  testResult.value = { providerId: id, ...result }
+  testingId.value = null
+}
+
+function startEditProvider(provider: AIProvider) {
+  editingProviderId.value = provider.id
+  editName.value = provider.name
+  editApiBase.value = provider.apiBase
+  editApiKey.value = ''
+}
+
+async function handleSaveEdit(id: string) {
+  const updates: Partial<AIProvider> = {
+    name: editName.value.trim(),
+    apiBase: editApiBase.value.trim(),
+  }
+  if (editApiKey.value.trim()) {
+    updates.apiKey = editApiKey.value.trim()
+  }
+  await providerStore.updateProvider(id, updates)
+  editingProviderId.value = null
 }
 
 async function handleAddModel(providerId: string) {
@@ -123,13 +148,21 @@ async function handleToggleProvider(provider: AIProvider) {
               @click="handleTestConnection(provider.id)"
             >
               <Loader2
-                v-if="testing"
+                v-if="testingId === provider.id"
                 class="h-3 w-3 animate-spin"
               />
               <TestTube2
                 v-else
                 class="h-3 w-3"
               />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              class="h-6 w-6"
+              @click="startEditProvider(provider)"
+            >
+              <Pencil class="h-3 w-3" />
             </Button>
             <Button
               variant="ghost"
@@ -145,6 +178,38 @@ async function handleToggleProvider(provider: AIProvider) {
           <div class="px-3 pb-2 space-y-1 text-xs text-muted-foreground">
             <div>API Base: {{ provider.apiBase }}</div>
             <div>模型数量: {{ provider.models.length }}</div>
+          </div>
+          <div
+            v-if="testResult && testResult.providerId === provider.id"
+            class="mx-3 mb-2 text-xs rounded px-2 py-1"
+            :class="testResult.success ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'"
+          >
+            {{ testResult.success ? '连接成功' : `连接失败: ${testResult.error}` }}
+          </div>
+          <div
+            v-if="editingProviderId === provider.id"
+            class="px-3 pb-2 space-y-1.5"
+          >
+            <Input
+              v-model="editName"
+              placeholder="供应商名称"
+              class="h-7 text-xs"
+            />
+            <Input
+              v-model="editApiBase"
+              placeholder="API Base URL"
+              class="h-7 text-xs"
+            />
+            <Input
+              v-model="editApiKey"
+              type="password"
+              placeholder="新 API Key (留空不修改)"
+              class="h-7 text-xs"
+            />
+            <div class="flex gap-1">
+              <Button size="sm" class="h-6 text-xs" @click="handleSaveEdit(provider.id)">保存</Button>
+              <Button size="sm" variant="ghost" class="h-6 text-xs" @click="editingProviderId = null">取消</Button>
+            </div>
           </div>
           <div class="px-3 pb-2 space-y-1">
             <div
@@ -224,14 +289,6 @@ async function handleToggleProvider(provider: AIProvider) {
           </div>
         </CollapsibleContent>
       </Collapsible>
-    </div>
-
-    <div
-      v-if="testResult"
-      class="text-xs rounded px-2 py-1"
-      :class="testResult.success ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'"
-    >
-      {{ testResult.success ? '连接成功' : `连接失败: ${testResult.error}` }}
     </div>
 
     <div
