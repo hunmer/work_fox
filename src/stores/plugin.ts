@@ -68,6 +68,14 @@ export const usePluginStore = defineStore('plugin', () => {
     await window.api.plugin.openFolder()
   }
 
+  async function getWorkflowNodes(pluginId: string): Promise<any[]> {
+    return window.api.plugin.getWorkflowNodes(pluginId)
+  }
+
+  async function listWorkflowPlugins(): Promise<any[]> {
+    return window.api.plugin.listWorkflowPlugins()
+  }
+
   return {
     plugins,
     isLoading,
@@ -83,6 +91,8 @@ export const usePluginStore = defineStore('plugin', () => {
     openView,
     closeView,
     importPlugin,
-    openPluginsFolder
+    openPluginsFolder,
+    getWorkflowNodes,
+    listWorkflowPlugins
   }
 })

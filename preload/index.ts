@@ -105,6 +105,8 @@ const api = {
     openFolder: () => ipcRenderer.invoke('plugin:open-folder'),
     install: (url: string) => ipcRenderer.invoke('plugin:install', url),
     uninstall: (id: string) => ipcRenderer.invoke('plugin:uninstall', id),
+    getWorkflowNodes: (pluginId: string) => ipcRenderer.invoke('plugin:get-workflow-nodes', pluginId),
+    listWorkflowPlugins: () => ipcRenderer.invoke('plugin:list-workflow-plugins'),
   },
 
   window: {
