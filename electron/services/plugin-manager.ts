@@ -87,7 +87,7 @@ class PluginManager {
     }
 
     const storage = new PluginStorage(info.id, this.userDataPath)
-    const { context, cleanupEvents } = createPluginContext(info, storage, pluginEventBus, () => this.mainWindow)
+    const { context, cleanupEvents } = createPluginContext(info, storage, pluginEventBus, () => this.mainWindow, !!info.hasWorkflow)
     const isDisabled = this.disabledIds.has(info.id)
     const pluginModule = require(mainPath)
 
@@ -100,6 +100,22 @@ class PluginManager {
       context,
       storage,
       cleanupEvents
+    }
+
+    // 加载 workflow.js（如果有）
+    if (info.hasWorkflow) {
+      const workflowPath = join(pluginDir, 'workflow.js')
+      if (existsSync(workflowPath)) {
+        try {
+          const workflowModule = require(workflowPath)
+          if (workflowModule?.nodes) {
+            const { workflowNodeRegistry } = require('./workflow-node-registry')
+            workflowNodeRegistry.register(info.id, workflowModule)
+          }
+        } catch (err) {
+          console.error(`[PluginManager] 插件 ${info.name} 的 workflow.js 加载失败:`, err)
+        }
+      }
     }
 
     this.plugins.set(info.id, instance)
@@ -123,6 +139,11 @@ class PluginManager {
       } catch (err) {
         console.error(`[PluginManager] 插件停用失败: ${instance.info.name}`, err)
       }
+    }
+    // 注销工作流节点
+    if (instance.info.hasWorkflow) {
+      const { workflowNodeRegistry } = require('./workflow-node-registry')
+      workflowNodeRegistry.unregister(pluginId)
     }
     instance.cleanupEvents()
     this.plugins.delete(pluginId)
