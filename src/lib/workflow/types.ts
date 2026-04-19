@@ -92,6 +92,7 @@ export interface NodeTypeDefinition {
   description: string
   properties: NodeProperty[]
   handles?: NodeHandleConfig
+  outputs?: OutputField[]
 }
 
 /** 执行步骤记录 */

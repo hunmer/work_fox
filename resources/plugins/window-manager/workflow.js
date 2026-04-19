@@ -12,6 +12,11 @@ module.exports = {
         { key: 'width', label: '宽度', type: 'number', default: 1280, tooltip: '窗口宽度' },
         { key: 'height', label: '高度', type: 'number', default: 800, tooltip: '窗口高度' },
       ],
+      outputs: [
+        { key: 'windowId', type: 'number' },
+        { key: 'url', type: 'string' },
+        { key: 'title', type: 'string' },
+      ],
       handler: async (ctx, args) => {
         const result = await ctx.api.createWindow(args)
         return { success: true, message: `窗口已创建: ${result.id}`, data: result }
@@ -27,6 +32,10 @@ module.exports = {
         { key: 'windowId', label: '窗口 ID', type: 'number', required: true, tooltip: '目标窗口 ID' },
         { key: 'url', label: 'URL', type: 'text', required: true, tooltip: '目标 URL' },
       ],
+      outputs: [
+        { key: 'windowId', type: 'number' },
+        { key: 'url', type: 'string' },
+      ],
       handler: async (ctx, args) => {
         await ctx.api.navigateWindow(args.windowId, args.url)
         return { success: true, message: `窗口 ${args.windowId} 已导航到 ${args.url}` }
@@ -41,6 +50,9 @@ module.exports = {
       properties: [
         { key: 'windowId', label: '窗口 ID', type: 'number', required: true, tooltip: '要关闭的窗口 ID' },
       ],
+      outputs: [
+        { key: 'windowId', type: 'number' },
+      ],
       handler: async (ctx, args) => {
         await ctx.api.closeWindow(args.windowId)
         return { success: true, message: `窗口 ${args.windowId} 已关闭` }
@@ -53,6 +65,14 @@ module.exports = {
       icon: 'LayoutList',
       description: '列出所有打开的浏览器窗口',
       properties: [],
+      outputs: [
+        { key: 'windows', type: 'object', children: [
+          { key: 'id', type: 'number' },
+          { key: 'title', type: 'string' },
+          { key: 'url', type: 'string' },
+        ] },
+        { key: 'count', type: 'number' },
+      ],
       handler: async (ctx) => {
         const windows = await ctx.api.listWindows()
         return { success: true, message: `共 ${windows.length} 个窗口`, data: { windows } }
@@ -66,6 +86,9 @@ module.exports = {
       description: '将指定窗口聚焦到前台',
       properties: [
         { key: 'windowId', label: '窗口 ID', type: 'number', required: true, tooltip: '目标窗口 ID' },
+      ],
+      outputs: [
+        { key: 'windowId', type: 'number' },
       ],
       handler: async (ctx, args) => {
         await ctx.api.focusWindow(args.windowId)
@@ -81,6 +104,9 @@ module.exports = {
       properties: [
         { key: 'windowId', label: '窗口 ID', type: 'number', required: true, tooltip: '目标窗口 ID' },
       ],
+      outputs: [
+        { key: 'screenshot', type: 'string' },
+      ],
       handler: async (ctx, args) => {
         const dataUrl = await ctx.api.screenshotWindow(args.windowId)
         return { success: true, message: '截图完成', data: { screenshot: dataUrl } }
@@ -94,6 +120,13 @@ module.exports = {
       description: '获取窗口详细信息',
       properties: [
         { key: 'windowId', label: '窗口 ID', type: 'number', required: true, tooltip: '目标窗口 ID' },
+      ],
+      outputs: [
+        { key: 'id', type: 'number' },
+        { key: 'title', type: 'string' },
+        { key: 'url', type: 'string' },
+        { key: 'width', type: 'number' },
+        { key: 'height', type: 'number' },
       ],
       handler: async (ctx, args) => {
         const detail = await ctx.api.getWindowDetail(args.windowId)

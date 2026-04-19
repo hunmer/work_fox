@@ -315,7 +315,9 @@ function createEditActions(
     undoRedo.pushUndo(`添加节点: ${type}`)
     const def = getNodeDefinition(type)
     const label = def?.label || type
-    const node: WorkflowNode = { id: crypto.randomUUID(), type, label, position, data: {} }
+    const data: Record<string, any> = {}
+    if (def?.outputs?.length) data.outputs = JSON.parse(JSON.stringify(def.outputs))
+    const node: WorkflowNode = { id: crypto.randomUUID(), type, label, position, data }
     currentWorkflow.value!.nodes.push(node)
     return node
   }
