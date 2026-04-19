@@ -11,9 +11,9 @@ export interface ThemePreset {
   dark: Record<string, string>
 }
 
-const THEME_KEY = 'sessionbox-theme'
-const PRESET_KEY = 'sessionbox-theme-preset'
-const CUSTOM_PRESET_KEY = 'sessionbox-theme-custom'
+const THEME_KEY = 'workfox-theme'
+const PRESET_KEY = 'workfox-theme-preset'
+const CUSTOM_PRESET_KEY = 'workfox-theme-custom'
 
 // 主题预设需要覆盖的 CSS 变量列表
 export const THEME_VARS = [
@@ -36,7 +36,7 @@ export const themePresets: ThemePreset[] = [
   {
     key: 'default',
     label: '默认',
-    desc: 'SessionBox 默认蓝色主题',
+    desc: 'workfox 默认蓝色主题',
     light: {},
     dark: {}
   },

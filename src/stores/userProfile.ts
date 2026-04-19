@@ -6,7 +6,7 @@ export interface UserProfile {
   avatar: string // emoji 字符或 "img:filename" 格式
 }
 
-const STORAGE_KEY = 'sessionbox-user-profile'
+const STORAGE_KEY = 'workfox-user-profile'
 
 const defaults: UserProfile = {
   name: '用户',

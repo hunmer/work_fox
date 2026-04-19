@@ -2,9 +2,9 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { BROWSER_TOOL_LIST } from '@/lib/agent/tools'
 
-const PANEL_VISIBLE_KEY = 'sessionbox-chat-panel-visible'
-const TARGET_TAB_KEY = 'sessionbox-chat-target-tab'
-const ENABLED_TOOLS_KEY = 'sessionbox-chat-enabled-tools'
+const PANEL_VISIBLE_KEY = 'workfox-chat-panel-visible'
+const TARGET_TAB_KEY = 'workfox-chat-target-tab'
+const ENABLED_TOOLS_KEY = 'workfox-chat-enabled-tools'
 
 function loadEnabledTools(): Record<string, boolean> {
   try {

@@ -6,7 +6,7 @@ class ChatDB extends Dexie {
   messages!: Table<ChatMessage, string>
 
   constructor() {
-    super('sessionbox-chat')
+    super('workfox-chat')
     this.version(1).stores({
       sessions: 'id, updatedAt, createdAt',
       messages: 'id, sessionId, createdAt, [sessionId+createdAt]',

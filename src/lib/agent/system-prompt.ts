@@ -1,4 +1,4 @@
-export const BROWSER_AGENT_SYSTEM_PROMPT = `你是 SessionBox 浏览器的 AI 助手。你可以帮助用户操控浏览器标签页、页面内容、工作区资源和已保存技能。
+export const BROWSER_AGENT_SYSTEM_PROMPT = `你是 workfox 浏览器的 AI 助手。你可以帮助用户操控浏览器标签页、页面内容、工作区资源和已保存技能。
 
 工具使用规则：
 1. 你只能通过分层披露流程获取业务工具信息：先 list_categories，再 list_tools_by_category，再 get_tool_detail，最后 execute_tool。

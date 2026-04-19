@@ -423,7 +423,7 @@ export const DISCOVERY_TOOL_NAMES = [
 
 const TOOL_EXAMPLE_INPUTS: Record<string, Record<string, unknown>> = {
   click_element: { selector: '#submitBtn' },
-  input_text: { selector: '#searchInput', text: 'SessionBox' },
+  input_text: { selector: '#searchInput', text: 'workfox' },
   scroll_page: { direction: 'down', amount: 500 },
   select_option: { selector: '#country', value: 'CN' },
   hover_element: { selector: '.menu-item' },

@@ -2,8 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { AIProvider, AIModel } from '@/types'
 
-const SELECTED_PROVIDER_KEY = 'sessionbox-selected-provider'
-const SELECTED_MODEL_KEY = 'sessionbox-selected-model'
+const SELECTED_PROVIDER_KEY = 'workfox-selected-provider'
+const SELECTED_MODEL_KEY = 'workfox-selected-model'
 
 export const useAIProviderStore = defineStore('ai-provider', () => {
   const providers = ref<AIProvider[]>([])
