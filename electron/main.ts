@@ -9,6 +9,7 @@ import { registerShortcutIpcHandlers, registerGlobalShortcuts, unregisterGlobalS
 import { registerPluginIpcHandlers } from './ipc/plugin'
 import { registerTabsIpcHandlers } from './ipc/tabs'
 import { pluginManager } from './services/plugin-manager'
+import { getWindowMaximized, setWindowMaximized } from './services/store'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -27,8 +28,14 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
+    if (getWindowMaximized()) {
+      mainWindow!.maximize()
+    }
     mainWindow!.show()
   })
+
+  mainWindow.on('maximize', () => setWindowMaximized(true))
+  mainWindow.on('unmaximize', () => setWindowMaximized(false))
 
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
@@ -57,6 +64,7 @@ app.whenReady().then(() => {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize()
     else mainWindow?.maximize()
   })
+
   ipcMain.on('window:close', () => mainWindow?.close())
   ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false)
 

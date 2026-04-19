@@ -74,6 +74,7 @@ interface StoreSchema {
   aiProviders: AIProvider[]
   shortcutBindings: ShortcutBinding[]
   appTabs: { tabs: AppTab[]; activeTabId: string | null }
+  windowMaximized: boolean
 }
 
 const store = new Store<StoreSchema>({
@@ -81,6 +82,7 @@ const store = new Store<StoreSchema>({
     aiProviders: [],
     shortcutBindings: [],
     appTabs: { tabs: [], activeTabId: null },
+    windowMaximized: false,
   }
 })
 
@@ -131,4 +133,13 @@ export function getAppTabs(): { tabs: AppTab[]; activeTabId: string | null } {
 
 export function setAppTabs(data: { tabs: AppTab[]; activeTabId: string | null }): void {
   store.set('appTabs', data)
+}
+
+// ===== Window State =====
+export function getWindowMaximized(): boolean {
+  return store.get('windowMaximized', false)
+}
+
+export function setWindowMaximized(maximized: boolean): void {
+  store.set('windowMaximized', maximized)
 }

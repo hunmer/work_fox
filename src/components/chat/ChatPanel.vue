@@ -3,7 +3,6 @@ import { ref, computed, watch } from 'vue'
 import type { ChatStoreInstance } from '@/stores/chat'
 import { useAIProviderStore } from '@/stores/ai-provider'
 import { useChatUIStore } from '@/stores/chat-ui'
-import { useTabStore } from '@/stores/tab'
 import { BROWSER_TOOL_LIST } from '@/lib/agent/tools'
 import type { ToolDisplayItem } from '@/types'
 import ChatMessageList from './ChatMessageList.vue'
@@ -16,26 +15,22 @@ import { Settings, X } from 'lucide-vue-next'
 
 const props = defineProps<{
   chat: ChatStoreInstance
+  enabledPlugins?: string[]
 }>()
 
 const providerStore = useAIProviderStore()
 const uiStore = useChatUIStore()
-const tabStore = useTabStore()
 const showProviderManager = ref(false)
 const pluginTools = ref<ToolDisplayItem[]>([])
 
-const enabledPlugins = computed(() => {
-  const workflowStore = tabStore.activeStore
-  return workflowStore?.currentWorkflow?.enabledPlugins || []
-})
-
 async function loadPluginTools(pluginIds: string[]) {
-  if (!pluginIds.length) {
+  if (!pluginIds?.length) {
     pluginTools.value = []
     return
   }
   try {
-    const tools = await window.api.plugin.getAgentTools(pluginIds)
+    const rawIds = JSON.parse(JSON.stringify(pluginIds))
+    const tools = await window.api.plugin.getAgentTools(rawIds)
     pluginTools.value = (tools || []).map((t: any) => ({
       name: t.name,
       description: t.description,
@@ -46,7 +41,7 @@ async function loadPluginTools(pluginIds: string[]) {
   }
 }
 
-watch(enabledPlugins, (ids) => loadPluginTools(ids), { immediate: true })
+watch(() => props.enabledPlugins, (ids) => loadPluginTools(ids || []), { immediate: true })
 
 const toolDisplayItems = computed<ToolDisplayItem[]>(() => {
   const base = BROWSER_TOOL_LIST.map((t) => ({
@@ -69,6 +64,9 @@ function handleSend(content: string, images: string[]) {
   props.chat.sendMessage(content, images.length > 0 ? images : undefined)
 }
 
+function handleClose() {
+  uiStore.togglePanel()
+}
 
 function handleClear() {
   if (props.chat.currentSessionId) {
@@ -94,6 +92,15 @@ function handleEdit(messageId: string, newContent: string) {
         @click="showProviderManager = true"
       >
         <Settings class="h-4 w-4" />
+      </Button>
+      <div class="flex-1" />
+      <Button
+        variant="ghost"
+        size="icon"
+        class="h-7 w-7"
+        @click="handleClose"
+      >
+        <X class="h-4 w-4" />
       </Button>
     </div>
 

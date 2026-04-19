@@ -133,6 +133,7 @@ watch(activeTab, async (tab) => {
       >
         <ChatPanel
           :chat="workflowChat"
+          :enabled-plugins="workflowStore.currentWorkflow?.enabledPlugins || []"
         />
       </TabsContent>
     </Tabs>
