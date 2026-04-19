@@ -1,30 +1,58 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { getNodeDefinitionsByCategory, searchNodeDefinitions } from '@/lib/workflow/nodeRegistry'
+import { ref, computed, watch } from 'vue'
+import { allNodeDefinitions, searchNodeDefinitions, type NodeTypeDefinition } from '@/lib/workflow/nodeRegistry'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
+import { usePluginStore } from '@/stores/plugin'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import { Search } from 'lucide-vue-next'
+import { Search, Plus } from 'lucide-vue-next'
+
+const props = defineProps<{
+  enabledPlugins?: string[]
+}>()
+
+const emit = defineEmits<{
+  (e: 'openPluginPicker'): void
+}>()
+
+const pluginStore = usePluginStore()
+const pluginNodes = ref<any[]>([])
 
 const searchQuery = ref('')
 const openCategories = ref<Record<string, boolean>>({})
 
-const categories = computed(() => {
-  if (searchQuery.value.trim()) {
-    const results = searchNodeDefinitions(searchQuery.value)
-    const grouped: Record<string, typeof results> = {}
-    for (const def of results) {
-      if (!grouped[def.category]) grouped[def.category] = []
-      grouped[def.category].push(def)
-    }
-    return grouped
+async function loadPluginNodes() {
+  if (!props.enabledPlugins?.length) {
+    pluginNodes.value = []
+    return
   }
-  return getNodeDefinitionsByCategory()
+  const allNodes: any[] = []
+  for (const pluginId of props.enabledPlugins) {
+    const nodes = await pluginStore.getWorkflowNodes(pluginId)
+    allNodes.push(...nodes)
+  }
+  pluginNodes.value = allNodes
+}
+
+watch(() => props.enabledPlugins, loadPluginNodes, { immediate: true, deep: true })
+
+const categories = computed(() => {
+  const base = searchQuery.value.trim()
+    ? searchNodeDefinitions(searchQuery.value)
+    : allNodeDefinitions
+  const merged = [...base, ...pluginNodes.value]
+  const grouped: Record<string, any[]> = {}
+  for (const def of merged) {
+    if (!grouped[def.category]) grouped[def.category] = []
+    grouped[def.category].push(def)
+  }
+  return grouped
 })
 
 function onDragStart(event: DragEvent, nodeType: string) {
@@ -42,13 +70,14 @@ function getIcon(name: string) {
 <template>
   <div class="border-r border-border bg-background flex flex-col h-full">
     <div class="p-2 border-b border-border">
-      <div class="relative">
-        <Search class="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-        <Input
-          v-model="searchQuery"
-          placeholder="搜索节点..."
-          class="pl-7 h-7 text-xs"
-        />
+      <div class="relative flex items-center gap-1">
+        <div class="relative flex-1">
+          <Search class="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input v-model="searchQuery" placeholder="搜索节点..." class="pl-7 h-7 text-xs" />
+        </div>
+        <Button variant="ghost" size="icon" class="h-7 w-7 shrink-0" @click="emit('openPluginPicker')">
+          <Plus class="h-3.5 w-3.5" />
+        </Button>
       </div>
     </div>
 

@@ -62,7 +62,7 @@ export function createPluginContext(
       const win = getMainWindow()
       if (!win || win.isDestroyed()) return
       win.webContents.send(channel, ...args)
-    }
+    },
 
     ...(hasWorkflow
       ? {

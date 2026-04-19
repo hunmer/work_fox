@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, markRaw, watch, onMounted, onUnmounted } from 'vue'
+import { ref, markRaw, computed, watch, onMounted, onUnmounted } from 'vue'
 import { VueFlow, useVueFlow, ConnectionMode } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { MiniMap } from '@vue-flow/minimap'
@@ -24,6 +24,7 @@ import WelcomePage from './WelcomePage.vue'
 import CanvasToolbar from './CanvasToolbar.vue'
 import PluginsDialog from '@/components/plugins/PluginsDialog.vue'
 import SettingsDialog from '@/components/settings/SettingsDialog.vue'
+import PluginPickerDialog from './PluginPickerDialog.vue'
 
 import { useConnectionDrop } from '@/composables/workflow/useConnectionDrop'
 import { useEdgeInsert } from '@/composables/workflow/useEdgeInsert'
@@ -39,6 +40,7 @@ const listDialogOpen = ref(false)
 const nodeSelectOpen = ref(false)
 const pluginsDialogOpen = ref(false)
 const settingsDialogOpen = ref(false)
+const pluginPickerOpen = ref(false)
 const FLOW_ID = 'workflow-editor-flow'
 
 const {
@@ -160,6 +162,8 @@ function onDrop(event: DragEvent) {
   store.addNode(type, position)
 }
 
+const enabledPlugins = computed(() => store.currentWorkflow?.enabledPlugins || [])
+
 watch(() => store.currentWorkflow, (val) => {
   if (val) store.saveDraft()
 }, { deep: true })
@@ -227,7 +231,10 @@ function onConnect(params: any) {
               :min-size="10"
               :max-size="35"
             >
-              <NodeSidebar />
+              <NodeSidebar
+                :enabled-plugins="enabledPlugins"
+                @open-plugin-picker="pluginPickerOpen = true"
+              />
             </ResizablePanel>
 
             <ResizableHandle with-handle />
@@ -319,6 +326,11 @@ function onConnect(params: any) {
     <SettingsDialog
       :open="settingsDialogOpen"
       @update:open="settingsDialogOpen = $event"
+    />
+    <PluginPickerDialog
+      v-if="store.currentWorkflow"
+      :enabled-plugins="store.currentWorkflow.enabledPlugins || []"
+      @update:enabled-plugins="store.currentWorkflow!.enabledPlugins = $event"
     />
   </div>
 </template>
