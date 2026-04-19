@@ -49,6 +49,7 @@ export interface Workflow {
   edges: WorkflowEdge[]
   createdAt: number
   updatedAt: number
+  enabledPlugins?: string[]
 }
 
 /** 节点输出字段定义（支持嵌套） */

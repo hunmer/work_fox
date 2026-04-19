@@ -12,6 +12,7 @@ export interface PluginInfo {
   tags?: string[]
   minAppVersion?: string
   hasView?: boolean
+  hasWorkflow?: boolean
 }
 
 /** 插件展示信息（传递给渲染进程） */
@@ -72,4 +73,43 @@ export interface PluginContext {
     warn(msg: string, ...args: any[]): void
     error(msg: string, ...args: any[]): void
   }
+}
+
+/** 插件工作流节点定义（渲染进程使用，不含 handler） */
+export interface PluginWorkflowNode {
+  type: string
+  label: string
+  category: string
+  icon?: string
+  description: string
+  properties?: Array<{
+    key: string
+    label: string
+    type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'code'
+    required?: boolean
+    default?: any
+    options?: Array<{ label: string; value: string }>
+    tooltip?: string
+  }>
+  handles?: {
+    source?: boolean
+    target?: boolean
+    dynamicSource?: { dataKey: string; extraCount?: number }
+  }
+}
+
+/** 插件 API 能力（渲染进程类型声明） */
+export interface PluginApi {
+  createWindow(opts: {
+    url: string
+    title?: string
+    width?: number
+    height?: number
+  }): Promise<{ id: number; webContentsId: number }>
+  closeWindow(windowId: number): Promise<void>
+  navigateWindow(windowId: number, url: string): Promise<void>
+  focusWindow(windowId: number): Promise<void>
+  screenshotWindow(windowId: number): Promise<string>
+  getWindowDetail(windowId: number): Promise<Record<string, any>>
+  listWindows(): Promise<Array<Record<string, any>>>
 }
