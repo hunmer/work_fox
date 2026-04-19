@@ -4,7 +4,6 @@ import { resolvePendingRendererTool } from '../services/workflow-tool-dispatcher
 import { listAIProviders, createAIProvider, updateAIProvider, deleteAIProvider } from '../services/store'
 import { testProviderConnection } from '../services/ai-proxy'
 import { workflowNodeRegistry } from '../services/workflow-node-registry'
-import { windowManager } from '../services/window-manager'
 
 export function registerChatIpcHandlers(): void {
   ipcMain.handle('agent:execTool', async (_event, toolType: string, params: Record<string, any>) => {
@@ -12,19 +11,11 @@ export function registerChatIpcHandlers(): void {
     if (!handler) {
       return { error: `Tool not available: ${toolType}` }
     }
+    const api = workflowNodeRegistry.getApiForNodeType(toolType) || {}
     try {
       const result = await handler(
         {
-          api: {
-            createWindow: (opts: any) => windowManager.createWindow(opts),
-            closeWindow: (wid: number) => windowManager.closeWindow(wid),
-            navigateWindow: (wid: number, url: string) => windowManager.navigateWindow(wid, url),
-            focusWindow: (wid: number) => windowManager.focusWindow(wid),
-            screenshotWindow: (wid: number) => windowManager.screenshotWindow(wid),
-            getWindowDetail: (wid: number) => windowManager.getWindowDetail(wid),
-            listWindows: () => windowManager.listWindows(),
-            injectJS: (wid: number, code: string) => windowManager.injectJS(wid, code),
-          },
+          api,
           nodeId: params.nodeId || '',
           nodeLabel: params.nodeLabel || '',
           upstream: params.upstream || {},

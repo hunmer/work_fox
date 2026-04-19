@@ -68,6 +68,7 @@ function buildWorkflowOptions(
       nodes: workflowStore.currentWorkflow.nodes.map(n => ({ id: n.id, type: n.type, label: n.label })),
       edges: workflowStore.currentWorkflow.edges.map(e => ({ id: e.id, source: e.source, target: e.target })),
     },
+    enabledPlugins: workflowStore.currentWorkflow.enabledPlugins || [],
   }
 }
 

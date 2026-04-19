@@ -7,6 +7,7 @@ import {
   isBrowserBusinessToolName,
 } from '../../src/lib/agent/tools'
 import { dispatchWorkflowTool, rejectPendingRendererToolsForRequest } from './workflow-tool-dispatcher'
+import { workflowNodeRegistry } from './workflow-node-registry'
 
 interface ProxyRequest {
   _requestId: string
@@ -141,7 +142,16 @@ export async function proxyChatCompletions(
       const toolResults: Array<Record<string, unknown>> = []
       for (const tc of parsed.toolCalls) {
         let result: any
-        if (_mode === 'workflow' && _workflowId) {
+
+        // 优先检查插件 Agent 工具
+        const pluginTool = workflowNodeRegistry.getAgentToolHandler(tc.name)
+        if (pluginTool) {
+          try {
+            result = await pluginTool.handler(tc.name, tc.args, pluginTool.api)
+          } catch (err) {
+            result = { success: false, message: err instanceof Error ? err.message : String(err) }
+          }
+        } else if (_mode === 'workflow' && _workflowId) {
           result = await dispatchWorkflowTool(mainWindow, _requestId, tc.id, tc.name, tc.args, _workflowId)
         } else {
           result = await executeTool(tc.name, tc.args, enabledToolNames)

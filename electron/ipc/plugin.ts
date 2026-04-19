@@ -53,4 +53,8 @@ export function registerPluginIpcHandlers(): void {
       nodeCount: workflowNodeRegistry.getPluginNodes(p.id).length,
     }))
   })
+
+  ipcMain.handle('plugin:get-agent-tools', (_e, pluginIds: string[]) => {
+    return workflowNodeRegistry.getAgentTools(pluginIds)
+  })
 }

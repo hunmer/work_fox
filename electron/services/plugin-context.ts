@@ -1,7 +1,7 @@
 import { BrowserWindow } from 'electron'
 import { pluginEventBus } from './plugin-event-bus'
 import { PluginStorage } from './plugin-storage'
-import { windowManager } from './window-manager'
+import { workflowNodeRegistry } from './workflow-node-registry'
 import type { PluginContext, PluginInfo, PluginApi } from './plugin-types'
 
 export function createPluginContext(
@@ -66,16 +66,14 @@ export function createPluginContext(
 
     ...(hasWorkflow
       ? {
-          api: {
-            createWindow: (opts: any) => windowManager.createWindow(opts),
-            closeWindow: (windowId: number) => windowManager.closeWindow(windowId),
-            navigateWindow: (windowId: number, url: string) => windowManager.navigateWindow(windowId, url),
-            focusWindow: (windowId: number) => windowManager.focusWindow(windowId),
-            screenshotWindow: (windowId: number) => windowManager.screenshotWindow(windowId),
-            getWindowDetail: (windowId: number) => windowManager.getWindowDetail(windowId),
-            listWindows: () => windowManager.listWindows(),
-            injectJS: (windowId: number, code: string) => windowManager.injectJS(windowId, code),
-          } satisfies PluginApi,
+          get api(): PluginApi {
+            const nodes = workflowNodeRegistry.getPluginNodes(pluginInfo.id)
+            for (const node of nodes) {
+              const api = workflowNodeRegistry.getApiForNodeType(node.type)
+              if (api) return api as PluginApi
+            }
+            return {} as PluginApi
+          },
         }
       : {}),
   }

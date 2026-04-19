@@ -7,6 +7,7 @@ import { PluginStorage } from './plugin-storage'
 import { createPluginContext } from './plugin-context'
 import type { PluginInfo, PluginMeta, PluginInstance } from './plugin-types'
 import { workflowNodeRegistry } from './workflow-node-registry'
+import { windowManager } from './window-manager'
 
 class PluginManager {
   private plugins: Map<string, PluginInstance> = new Map()
@@ -114,6 +115,33 @@ class PluginManager {
           }
         } catch (err) {
           console.error(`[PluginManager] 插件 ${info.name} 的 workflow.js 加载失败:`, err)
+        }
+      }
+
+      // 加载 api.js（如果有）—— 插件自定义 API
+      const apiPath = join(pluginDir, 'api.js')
+      if (existsSync(apiPath)) {
+        try {
+          const apiModule = require(apiPath)
+          if (typeof apiModule?.createApi === 'function') {
+            const api = apiModule.createApi({ windowManager })
+            workflowNodeRegistry.registerApi(info.id, api)
+          }
+        } catch (err) {
+          console.error(`[PluginManager] 插件 ${info.name} 的 api.js 加载失败:`, err)
+        }
+      }
+
+      // 加载 tools.js（如果有）—— 插件 Agent 工具定义
+      const toolsPath = join(pluginDir, 'tools.js')
+      if (existsSync(toolsPath)) {
+        try {
+          const toolsModule = require(toolsPath)
+          if (toolsModule?.tools && typeof toolsModule.handler === 'function') {
+            workflowNodeRegistry.registerAgentTools(info.id, toolsModule)
+          }
+        } catch (err) {
+          console.error(`[PluginManager] 插件 ${info.name} 的 tools.js 加载失败:`, err)
         }
       }
     }
