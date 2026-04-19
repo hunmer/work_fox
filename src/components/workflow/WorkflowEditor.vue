@@ -45,17 +45,11 @@ const nodeSelectOpen = ref(false)
 const FLOW_ID = 'workflow-editor-flow'
 
 const {
-  onNodesChange,
-  onEdgesChange,
-  onViewportChange,
   project,
   vueFlowRef,
-  setViewport,
-  fitView,
   zoomIn,
   zoomOut,
   zoomTo,
-  updateNodeInternals,
   getSelectedNodes,
   getSelectedEdges,
   addSelectedNodes,
@@ -97,14 +91,7 @@ const {
   edges,
   handleConnect,
   handleNodesInitialized,
-} = useFlowCanvas(FLOW_ID, {
-  onNodesChange,
-  onEdgesChange,
-  onViewportChange,
-  setViewport,
-  fitView,
-  updateNodeInternals,
-})
+} = useFlowCanvas(FLOW_ID)
 
 // 文件操作
 const {

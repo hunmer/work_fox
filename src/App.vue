@@ -12,8 +12,7 @@ const pluginStore = usePluginStore()
 const commandPaletteOpen = ref(false)
 
 onMounted(async () => {
-  await store.loadWorkflows()
-  await store.loadWorkflowFolders()
+  await store.loadData()
   await pluginStore.init()
 })
 </script>

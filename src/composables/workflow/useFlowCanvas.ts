@@ -1,19 +1,18 @@
 import { computed, watch, nextTick } from 'vue'
-import { MarkerType } from '@vue-flow/core'
+import { useVueFlow, MarkerType } from '@vue-flow/core'
 import { useWorkflowStore } from '@/stores/workflow'
 
-export function useFlowCanvas(
-  flowId: string,
-  deps: {
-    onNodesChange: (cb: (changes: any[]) => void) => void
-    onEdgesChange: (cb: (changes: any[]) => void) => void
-    onViewportChange: (cb: (vp: any) => void) => void
-    setViewport: (vp: any) => void
-    fitView: () => void
-    updateNodeInternals: (ids: string[]) => void
-  },
-) {
+export function useFlowCanvas(flowId: string) {
   const store = useWorkflowStore()
+
+  const {
+    onNodesChange,
+    onEdgesChange,
+    onViewportChange,
+    setViewport,
+    fitView,
+    updateNodeInternals,
+  } = useVueFlow(flowId)
 
   onNodesChange((changes) => {
     for (const change of changes) {
@@ -33,7 +32,6 @@ export function useFlowCanvas(
     }
   })
 
-  // Viewport 持久化
   const VIEWPORT_KEY = (id: string) => `workflow-vp-${id}`
   let viewportSaveTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -62,9 +60,9 @@ export function useFlowCanvas(
     await nextTick()
     const saved = getSavedViewport(id)
     if (saved) {
-      deps.setViewport(saved)
+      setViewport(saved)
     } else {
-      deps.fitView()
+      fitView()
     }
   })
 
@@ -101,7 +99,7 @@ export function useFlowCanvas(
 
   function handleNodesInitialized(nodes: any[]) {
     nextTick(() => {
-      deps.updateNodeInternals(nodes.map((node) => node.id))
+      updateNodeInternals(nodes.map((node) => node.id))
     })
   }
 
