@@ -85,7 +85,19 @@ const api = {
     clear: (workflowId: string): Promise<void> => ipcRenderer.invoke('executionLog:clear', workflowId),
   },
 
+  shortcut: {
+    list: (): Promise<{ groups: any[]; shortcuts: any[] }> => ipcRenderer.invoke('shortcut:list'),
+    update: (id: string, accelerator: string, isGlobal: boolean, enabled?: boolean): Promise<any> =>
+      ipcRenderer.invoke('shortcut:update', id, accelerator, isGlobal, enabled),
+    toggle: (id: string, enabled: boolean): Promise<any> =>
+      ipcRenderer.invoke('shortcut:toggle', id, enabled),
+    clear: (id: string): Promise<any> => ipcRenderer.invoke('shortcut:clear', id),
+    reset: (): Promise<any> => ipcRenderer.invoke('shortcut:reset'),
+  },
+
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
+
+  getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion'),
 
   on: (channel: string, callback: (...args: any[]) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, ...args: any[]) => callback(...args)

@@ -54,14 +54,24 @@ export interface Workflow {
   updatedAt: number
 }
 
+// ===== Shortcut 类型 =====
+export interface ShortcutBinding {
+  id: string
+  accelerator: string
+  global: boolean
+  enabled: boolean
+}
+
 // ===== Store 实例 =====
 interface StoreSchema {
   aiProviders: AIProvider[]
+  shortcutBindings: ShortcutBinding[]
 }
 
 const store = new Store<StoreSchema>({
   defaults: {
-    aiProviders: []
+    aiProviders: [],
+    shortcutBindings: []
   }
 })
 
@@ -94,4 +104,13 @@ export function updateAIProvider(id: string, data: Partial<Omit<AIProvider, 'id'
 export function deleteAIProvider(id: string): void {
   const providers = listAIProviders().filter(p => p.id !== id)
   store.set('aiProviders', providers)
+}
+
+// ===== Shortcut Bindings =====
+export function getShortcutBindings(): ShortcutBinding[] {
+  return store.get('shortcutBindings', [])
+}
+
+export function setShortcutBindings(bindings: ShortcutBinding[]): void {
+  store.set('shortcutBindings', bindings)
 }
