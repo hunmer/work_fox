@@ -1,13 +1,15 @@
 import { BrowserWindow } from 'electron'
 import { pluginEventBus } from './plugin-event-bus'
 import { PluginStorage } from './plugin-storage'
-import type { PluginContext, PluginInfo } from './plugin-types'
+import { windowManager } from './window-manager'
+import type { PluginContext, PluginInfo, PluginApi } from './plugin-types'
 
 export function createPluginContext(
   pluginInfo: PluginInfo,
   storage: PluginStorage,
   eventBus: typeof pluginEventBus,
-  getMainWindow: () => BrowserWindow | null
+  getMainWindow: () => BrowserWindow | null,
+  hasWorkflow = false,
 ): { context: PluginContext; cleanupEvents: () => void } {
   const prefix = `plugin:${pluginInfo.id}:`
 
@@ -61,6 +63,20 @@ export function createPluginContext(
       if (!win || win.isDestroyed()) return
       win.webContents.send(channel, ...args)
     }
+
+    ...(hasWorkflow
+      ? {
+          api: {
+            createWindow: (opts: any) => windowManager.createWindow(opts),
+            closeWindow: (windowId: number) => windowManager.closeWindow(windowId),
+            navigateWindow: (windowId: number, url: string) => windowManager.navigateWindow(windowId, url),
+            focusWindow: (windowId: number) => windowManager.focusWindow(windowId),
+            screenshotWindow: (windowId: number) => windowManager.screenshotWindow(windowId),
+            getWindowDetail: (windowId: number) => windowManager.getWindowDetail(windowId),
+            listWindows: () => windowManager.listWindows(),
+          } satisfies PluginApi,
+        }
+      : {}),
   }
 
   const cleanupEvents = () => {
