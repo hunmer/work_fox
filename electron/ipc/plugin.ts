@@ -37,4 +37,21 @@ export function registerPluginIpcHandlers(): void {
   ipcMain.handle('plugin:uninstall', async (_e, pluginId: string) => {
     return pluginManager.uninstallPlugin(pluginId)
   })
+
+  ipcMain.handle('plugin:get-workflow-nodes', (_e, pluginId: string) => {
+    const { workflowNodeRegistry } = require('../services/workflow-node-registry')
+    return workflowNodeRegistry.getPluginNodes(pluginId)
+  })
+
+  ipcMain.handle('plugin:list-workflow-plugins', () => {
+    const { workflowNodeRegistry } = require('../services/workflow-node-registry')
+    const allPluginMeta = pluginManager.list()
+    const workflowPlugins = allPluginMeta.filter((p) => {
+      return workflowNodeRegistry.getPluginNodes(p.id).length > 0
+    })
+    return workflowPlugins.map((p) => ({
+      ...p,
+      nodeCount: workflowNodeRegistry.getPluginNodes(p.id).length,
+    }))
+  })
 }
