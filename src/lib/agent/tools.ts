@@ -140,69 +140,6 @@ export const BROWSER_TOOL_LIST: ToolMeta[] = [
     suitableFor: ['触发悬浮菜单', '查看 tooltip', '展开 hover 状态内容'],
   },
   {
-    name: 'create_window',
-    description: '创建独立浏览器窗口',
-    category: '窗口管理',
-    discoveryCategory: 'tab',
-    tags: ['action', 'window', 'create'],
-    riskLevel: 'medium',
-    suitableFor: ['在独立窗口中打开页面', '隔离会话浏览'],
-  },
-  {
-    name: 'navigate_window',
-    description: '导航窗口到指定 URL',
-    category: '窗口管理',
-    discoveryCategory: 'page',
-    tags: ['action', 'window', 'navigate'],
-    riskLevel: 'medium',
-    suitableFor: ['在独立窗口中跳转 URL'],
-  },
-  {
-    name: 'close_window',
-    description: '关闭独立浏览器窗口',
-    category: '窗口管理',
-    discoveryCategory: 'tab',
-    tags: ['action', 'window', 'destructive'],
-    riskLevel: 'high',
-    suitableFor: ['关闭指定的独立窗口'],
-  },
-  {
-    name: 'list_windows',
-    description: '列出所有打开的窗口',
-    category: '窗口管理',
-    discoveryCategory: 'tab',
-    tags: ['read', 'window', 'list'],
-    riskLevel: 'low',
-    suitableFor: ['查看所有窗口列表', '定位目标窗口'],
-  },
-  {
-    name: 'focus_window',
-    description: '聚焦窗口到前台',
-    category: '窗口管理',
-    discoveryCategory: 'tab',
-    tags: ['action', 'window', 'focus'],
-    riskLevel: 'low',
-    suitableFor: ['将窗口显示到前台', '恢复最小化的窗口'],
-  },
-  {
-    name: 'screenshot_window',
-    description: '截取窗口截图',
-    category: '窗口管理',
-    discoveryCategory: 'page',
-    tags: ['read', 'window', 'screenshot'],
-    riskLevel: 'low',
-    suitableFor: ['截取独立窗口的页面截图'],
-  },
-  {
-    name: 'get_window_detail',
-    description: '获取窗口详细信息',
-    category: '窗口管理',
-    discoveryCategory: 'tab',
-    tags: ['read', 'window', 'detail'],
-    riskLevel: 'low',
-    suitableFor: ['查看窗口标题、URL、尺寸等详细信息'],
-  },
-  {
     name: 'delay',
     description: '延迟等待指定时间后继续执行，用于等待页面加载、AJAX 完成或动画结束',
     category: '辅助工具',
@@ -235,13 +172,6 @@ const TOOL_EXAMPLE_INPUTS: Record<string, Record<string, unknown>> = {
   scroll_page: { direction: 'down', amount: 500 },
   select_option: { selector: '#country', value: 'CN' },
   hover_element: { selector: '.menu-item' },
-  create_window: { url: 'https://example.com' },
-  navigate_window: { windowId: 2, url: 'https://example.com' },
-  close_window: { windowId: 2 },
-  list_windows: {},
-  focus_window: { windowId: 2 },
-  screenshot_window: { windowId: 2 },
-  get_window_detail: { windowId: 2 },
   delay: { milliseconds: 2000, reason: '等待页面加载完成' },
   inject_js: { webContentId: 5, code: 'return document.title' },
 }
@@ -266,20 +196,6 @@ function createDomInteractionTools(tabIdField: { type: 'string'; description: st
   ]
 }
 
-/** 窗口管理工具 */
-function createWindowTools(): ToolDefinition[] {
-  const wid = { type: 'number' as const, description: '目标窗口 ID' }
-  return [
-    { name: 'create_window', description: '创建独立浏览器窗口。用于在独立 BrowserWindow 中打开页面。', input_schema: { type: 'object', properties: { url: { type: 'string', description: '要打开的 URL' }, pageId: { type: 'string', description: '已有页面 ID，用于关联容器' }, containerId: { type: 'string', description: '容器 ID，用于 Session 隔离' }, title: { type: 'string', description: '窗口标题' }, width: { type: 'number', description: '窗口宽度，默认 1280' }, height: { type: 'number', description: '窗口高度，默认 800' } }, required: ['url'] } },
-    { name: 'navigate_window', description: '导航独立窗口到指定 URL。', input_schema: { type: 'object', properties: { windowId: wid, url: { type: 'string', description: '目标 URL' } }, required: ['windowId', 'url'] } },
-    { name: 'close_window', description: '关闭指定的独立浏览器窗口。（破坏性操作）', input_schema: { type: 'object', properties: { windowId: wid }, required: ['windowId'] } },
-    { name: 'list_windows', description: '列出所有打开的浏览器窗口。', input_schema: { type: 'object', properties: {} } },
-    { name: 'focus_window', description: '将指定窗口聚焦到前台。如果窗口最小化则恢复。', input_schema: { type: 'object', properties: { windowId: wid }, required: ['windowId'] } },
-    { name: 'screenshot_window', description: '截取独立窗口的页面截图。', input_schema: { type: 'object', properties: { windowId: wid }, required: ['windowId'] } },
-    { name: 'get_window_detail', description: '获取窗口详细信息（标题、URL、尺寸、状态等）。', input_schema: { type: 'object', properties: { windowId: wid }, required: ['windowId'] } },
-  ]
-}
-
 /** 辅助工具：延迟等待、JS 注入 */
 function createUtilityTools(): ToolDefinition[] {
   return [
@@ -297,7 +213,6 @@ export function createBrowserTools(_targetTabId: string | null): ToolDefinition[
 
   return [
     ...createDomInteractionTools(tabIdField),
-    ...createWindowTools(),
     ...createUtilityTools(),
   ]
 }

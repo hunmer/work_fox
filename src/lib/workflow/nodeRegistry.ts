@@ -81,41 +81,6 @@ const toolSchemas: Record<string, { properties: Record<string, any>; required?: 
     },
     required: ['selector'],
   },
-  create_window: {
-    properties: {
-      url: { type: 'string', description: '要打开的 URL' },
-      pageId: { type: 'string', description: '已有页面 ID，用于关联容器' },
-      containerId: { type: 'string', description: '容器 ID，用于 Session 隔离' },
-      title: { type: 'string', description: '窗口标题' },
-      width: { type: 'number', description: '窗口宽度，默认 1280' },
-      height: { type: 'number', description: '窗口高度，默认 800' },
-    },
-    required: ['url'],
-  },
-  navigate_window: {
-    properties: {
-      windowId: { type: 'number', description: '目标窗口 ID' },
-      url: { type: 'string', description: '目标 URL' },
-    },
-    required: ['windowId', 'url'],
-  },
-  close_window: {
-    properties: { windowId: { type: 'number', description: '要关闭的窗口 ID' } },
-    required: ['windowId'],
-  },
-  list_windows: { properties: {} },
-  focus_window: {
-    properties: { windowId: { type: 'number', description: '目标窗口 ID' } },
-    required: ['windowId'],
-  },
-  screenshot_window: {
-    properties: { windowId: { type: 'number', description: '目标窗口 ID' } },
-    required: ['windowId'],
-  },
-  get_window_detail: {
-    properties: { windowId: { type: 'number', description: '目标窗口 ID' } },
-    required: ['windowId'],
-  },
   inject_js: {
     properties: {
       webContentId: { type: 'number', description: '目标 WebContents ID（Electron webContents.id）' },
@@ -132,13 +97,6 @@ function getToolIcon(name: string): string {
     scroll_page: 'ArrowUpDown',
     select_option: 'List',
     hover_element: 'Pointer',
-    create_window: 'AppWindow',
-    navigate_window: 'Navigation',
-    close_window: 'X',
-    list_windows: 'LayoutList',
-    focus_window: 'Maximize',
-    screenshot_window: 'Camera',
-    get_window_detail: 'Info',
     inject_js: 'FileCode',
     run_code: 'Terminal',
     toast: 'Bell',

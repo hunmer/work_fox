@@ -25,14 +25,6 @@ const NODE_TYPE_DEFINITIONS: NodeTypeDefinition[] = [
   { type: 'scroll_page', label: '滚动页面', category: '页面交互', description: '滚动页面到指定方向和距离' },
   { type: 'select_option', label: '选择下拉选项', category: '页面交互', description: '选择下拉框的选项' },
   { type: 'hover_element', label: '悬停元素', category: '页面交互', description: '鼠标悬停在元素上' },
-  // 窗口管理
-  { type: 'create_window', label: '创建窗口', category: '窗口管理', description: '创建独立浏览器窗口' },
-  { type: 'navigate_window', label: '导航窗口', category: '窗口管理', description: '导航独立窗口到指定 URL' },
-  { type: 'close_window', label: '关闭窗口', category: '窗口管理', description: '关闭指定的独立浏览器窗口' },
-  { type: 'list_windows', label: '列出窗口', category: '窗口管理', description: '列出所有打开的浏览器窗口' },
-  { type: 'focus_window', label: '聚焦窗口', category: '窗口管理', description: '将指定窗口聚焦到前台' },
-  { type: 'screenshot_window', label: '窗口截图', category: '窗口管理', description: '截取独立窗口的页面截图' },
-  { type: 'get_window_detail', label: '窗口详情', category: '窗口管理', description: '获取窗口详细信息' },
   // 辅助工具
   { type: 'inject_js', label: '注入 JS', category: '辅助工具', description: '向指定 WebContents 注入并执行 JavaScript 代码' },
 ]
