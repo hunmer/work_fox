@@ -5,14 +5,17 @@ import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import CommandPaletteDialog from '@/components/command-palette/CommandPaletteDialog.vue'
 import { useTabStore } from '@/stores/tab'
 import { usePluginStore } from '@/stores/plugin'
+import { useAIProviderStore } from '@/stores/ai-provider'
 
 const tabStore = useTabStore()
 const pluginStore = usePluginStore()
+const providerStore = useAIProviderStore()
 
 const commandPaletteOpen = ref(false)
 
 onMounted(async () => {
   await pluginStore.init()
+  await providerStore.init()
   await tabStore.restoreTabs()
 })
 </script>
