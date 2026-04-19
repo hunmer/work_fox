@@ -125,6 +125,7 @@ export interface PluginApi {
   screenshotWindow(windowId: number): Promise<string>
   getWindowDetail(windowId: number): Promise<Record<string, any>>
   listWindows(): Promise<Array<Record<string, any>>>
+  injectJS(windowId: number, code: string): Promise<any>
 }
 
 /** 插件工作流模块（workflow.js 导出） */

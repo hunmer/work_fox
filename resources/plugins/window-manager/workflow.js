@@ -14,12 +14,31 @@ module.exports = {
       ],
       outputs: [
         { key: 'windowId', type: 'number' },
+        { key: 'webContentsId', type: 'number' },
         { key: 'url', type: 'string' },
         { key: 'title', type: 'string' },
       ],
       handler: async (ctx, args) => {
         const result = await ctx.api.createWindow(args)
         return { success: true, message: `窗口已创建: ${result.id}`, data: result }
+      },
+    },
+    {
+      type: 'inject_js',
+      label: '注入JS代码',
+      category: '窗口管理',
+      icon: 'Code',
+      description: '向指定窗口注入并执行JavaScript代码',
+      properties: [
+        { key: 'windowId', label: '窗口 ID', type: 'number', required: true, tooltip: '目标窗口 ID' },
+        { key: 'code', label: 'JS代码', type: 'code', required: true, tooltip: '要注入的 JavaScript 代码' },
+      ],
+      outputs: [
+        { key: 'result', type: 'string' },
+      ],
+      handler: async (ctx, args) => {
+        const result = await ctx.api.injectJS(args.windowId, args.code)
+        return { success: true, message: 'JS代码已执行', data: { result } }
       },
     },
     {

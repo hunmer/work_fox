@@ -74,6 +74,7 @@ export function createPluginContext(
             screenshotWindow: (windowId: number) => windowManager.screenshotWindow(windowId),
             getWindowDetail: (windowId: number) => windowManager.getWindowDetail(windowId),
             listWindows: () => windowManager.listWindows(),
+            injectJS: (windowId: number, code: string) => windowManager.injectJS(windowId, code),
           } satisfies PluginApi,
         }
       : {}),

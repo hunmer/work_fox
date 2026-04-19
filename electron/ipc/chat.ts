@@ -23,6 +23,7 @@ export function registerChatIpcHandlers(): void {
             screenshotWindow: (wid: number) => windowManager.screenshotWindow(wid),
             getWindowDetail: (wid: number) => windowManager.getWindowDetail(wid),
             listWindows: () => windowManager.listWindows(),
+            injectJS: (wid: number, code: string) => windowManager.injectJS(wid, code),
           },
           nodeId: params.nodeId || '',
           nodeLabel: params.nodeLabel || '',

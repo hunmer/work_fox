@@ -118,6 +118,12 @@ class WindowManager {
     return result
   }
 
+  async injectJS(windowId: number, code: string): Promise<any> {
+    const managed = this.windows.get(windowId)
+    if (!managed) throw new Error(`窗口 ${windowId} 不存在`)
+    return managed.window.webContents.executeJavaScript(code)
+  }
+
   closeAll(): void {
     for (const [, managed] of this.windows) {
       if (!managed.window.isDestroyed()) {
