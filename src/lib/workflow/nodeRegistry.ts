@@ -81,69 +81,6 @@ const toolSchemas: Record<string, { properties: Record<string, any>; required?: 
     },
     required: ['selector'],
   },
-  get_page_content: {
-    properties: { tabId: { type: 'string', description: '目标标签页 ID' } },
-  },
-  get_dom: {
-    properties: {
-      selector: { type: 'string', description: 'CSS 选择器' },
-      tabId: { type: 'string', description: '目标标签页 ID' },
-    },
-    required: ['selector'],
-  },
-  get_page_screenshot: {
-    properties: {
-      tabId: { type: 'string', description: '目标标签页 ID' },
-      format: { type: 'string', enum: ['png', 'jpeg'], description: '截图格式' },
-    },
-  },
-  get_page_summary: {
-    properties: { tabId: { type: 'string', description: '目标标签页 ID' } },
-  },
-  get_page_markdown: {
-    properties: {
-      tabId: { type: 'string', description: '目标标签页 ID' },
-      maxLength: { type: 'number', description: 'Markdown 内容最大字符数，默认 10000', default: 10000 },
-    },
-  },
-  get_interactive_nodes: {
-    properties: {
-      tabId: { type: 'string', description: '目标标签页 ID' },
-      viewportOnly: { type: 'boolean', description: '是否仅返回视口内元素，默认 true', default: true },
-    },
-  },
-  get_interactive_node_detail: {
-    properties: {
-      selector: { type: 'string', description: 'CSS 选择器' },
-      tabId: { type: 'string', description: '目标标签页 ID' },
-    },
-    required: ['selector'],
-  },
-  list_tabs: { properties: {} },
-  create_tab: {
-    properties: {
-      url: { type: 'string', description: '要打开的 URL（默认百度）' },
-      pageId: { type: 'string', description: '已有页面 ID，传入后使用页面名称和容器' },
-      containerId: { type: 'string', description: '容器 ID，无 pageId 时指定 Session 隔离' },
-      workspaceId: { type: 'string', description: '工作区 ID，不传则使用当前激活工作区' },
-      active: { type: 'boolean', description: '是否立即激活标签页（默认 true）' },
-    },
-  },
-  navigate_tab: {
-    properties: {
-      url: { type: 'string', description: '目标 URL' },
-      tabId: { type: 'string', description: '目标标签页 ID' },
-    },
-    required: ['url'],
-  },
-  switch_tab: {
-    properties: { tabId: { type: 'string', description: '要切换到的标签页 ID' } },
-    required: ['tabId'],
-  },
-  close_tab: {
-    properties: { tabId: { type: 'string', description: '要关闭的标签页 ID' } },
-    required: ['tabId'],
-  },
   create_window: {
     properties: {
       url: { type: 'string', description: '要打开的 URL' },
@@ -179,27 +116,6 @@ const toolSchemas: Record<string, { properties: Record<string, any>; required?: 
     properties: { windowId: { type: 'number', description: '目标窗口 ID' } },
     required: ['windowId'],
   },
-  list_workspaces: { properties: {} },
-  list_groups: { properties: {} },
-  list_pages: { properties: {} },
-  get_active_tab: { properties: {} },
-  write_skill: {
-    properties: {
-      name: { type: 'string', description: 'Skill 名称，小写英文+短横线' },
-      description: { type: 'string', description: 'Skill 一句话说明' },
-      content: { type: 'string', description: 'Skill 的 Markdown 正文' },
-    },
-    required: ['name', 'description', 'content'],
-  },
-  read_skill: {
-    properties: { name: { type: 'string', description: 'Skill 名称' } },
-    required: ['name'],
-  },
-  list_skills: { properties: {} },
-  search_skill: {
-    properties: { name: { type: 'string', description: '搜索关键词' } },
-    required: ['name'],
-  },
   inject_js: {
     properties: {
       webContentId: { type: 'number', description: '目标 WebContents ID（Electron webContents.id）' },
@@ -216,18 +132,6 @@ function getToolIcon(name: string): string {
     scroll_page: 'ArrowUpDown',
     select_option: 'List',
     hover_element: 'Pointer',
-    get_page_content: 'FileText',
-    get_dom: 'Code',
-    get_page_screenshot: 'Camera',
-    get_page_summary: 'ClipboardList',
-    get_page_markdown: 'BookOpen',
-    get_interactive_nodes: 'MousePointer',
-    get_interactive_node_detail: 'Search',
-    list_tabs: 'LayoutList',
-    create_tab: 'Plus',
-    navigate_tab: 'Navigation',
-    switch_tab: 'ArrowRightLeft',
-    close_tab: 'X',
     create_window: 'AppWindow',
     navigate_window: 'Navigation',
     close_window: 'X',
@@ -235,14 +139,6 @@ function getToolIcon(name: string): string {
     focus_window: 'Maximize',
     screenshot_window: 'Camera',
     get_window_detail: 'Info',
-    list_workspaces: 'Briefcase',
-    list_groups: 'FolderTree',
-    list_pages: 'Layers',
-    get_active_tab: 'AppWindow',
-    write_skill: 'Save',
-    read_skill: 'BookOpen',
-    list_skills: 'List',
-    search_skill: 'Search',
     inject_js: 'FileCode',
     run_code: 'Terminal',
     toast: 'Bell',

@@ -25,21 +25,6 @@ const NODE_TYPE_DEFINITIONS: NodeTypeDefinition[] = [
   { type: 'scroll_page', label: '滚动页面', category: '页面交互', description: '滚动页面到指定方向和距离' },
   { type: 'select_option', label: '选择下拉选项', category: '页面交互', description: '选择下拉框的选项' },
   { type: 'hover_element', label: '悬停元素', category: '页面交互', description: '鼠标悬停在元素上' },
-  // 页面信息
-  { type: 'get_page_content', label: '获取页面内容', category: '页面信息', description: '获取页面的文本内容' },
-  { type: 'get_dom', label: '获取 DOM', category: '页面信息', description: '获取指定元素的 outerHTML' },
-  { type: 'get_page_screenshot', label: '页面截图', category: '页面信息', description: '截取页面截图' },
-  { type: 'get_page_summary', label: '页面摘要', category: '页面信息', description: '获取页面结构化摘要（标题、heading、链接、meta）' },
-  { type: 'get_page_markdown', label: '页面 Markdown', category: '页面信息', description: '获取页面正文内容的 Markdown 表示' },
-  { type: 'get_interactive_nodes', label: '获取交互节点', category: '页面信息', description: '获取页面中可见的交互节点简要列表' },
-  { type: 'get_interactive_node_detail', label: '交互节点详情', category: '页面信息', description: '根据选择器获取单个交互节点的详细信息' },
-  // 标签页管理
-  { type: 'list_tabs', label: '列出标签页', category: '标签页管理', description: '列出所有打开的标签页' },
-  { type: 'create_tab', label: '创建标签页', category: '标签页管理', description: '创建新标签页' },
-  { type: 'navigate_tab', label: '导航标签页', category: '标签页管理', description: '在标签页中导航到指定 URL' },
-  { type: 'switch_tab', label: '切换标签页', category: '标签页管理', description: '切换到指定标签页' },
-  { type: 'close_tab', label: '关闭标签页', category: '标签页管理', description: '关闭指定标签页' },
-  { type: 'get_active_tab', label: '获取当前标签页', category: '标签页管理', description: '获取当前激活的标签页信息' },
   // 窗口管理
   { type: 'create_window', label: '创建窗口', category: '窗口管理', description: '创建独立浏览器窗口' },
   { type: 'navigate_window', label: '导航窗口', category: '窗口管理', description: '导航独立窗口到指定 URL' },
@@ -48,15 +33,6 @@ const NODE_TYPE_DEFINITIONS: NodeTypeDefinition[] = [
   { type: 'focus_window', label: '聚焦窗口', category: '窗口管理', description: '将指定窗口聚焦到前台' },
   { type: 'screenshot_window', label: '窗口截图', category: '窗口管理', description: '截取独立窗口的页面截图' },
   { type: 'get_window_detail', label: '窗口详情', category: '窗口管理', description: '获取窗口详细信息' },
-  // 工作区管理
-  { type: 'list_workspaces', label: '列出工作区', category: '工作区管理', description: '列出所有工作区' },
-  { type: 'list_groups', label: '列出分组', category: '工作区管理', description: '列出所有分组' },
-  { type: 'list_pages', label: '列出页面', category: '工作区管理', description: '列出所有页面' },
-  // 技能管理
-  { type: 'write_skill', label: '写入技能', category: '技能管理', description: '保存或更新一个 Skill' },
-  { type: 'read_skill', label: '读取技能', category: '技能管理', description: '按名称读取 Skill 内容' },
-  { type: 'list_skills', label: '列出技能', category: '技能管理', description: '列出所有已保存的 Skill' },
-  { type: 'search_skill', label: '搜索技能', category: '技能管理', description: '按名称模糊搜索 Skill' },
   // 辅助工具
   { type: 'inject_js', label: '注入 JS', category: '辅助工具', description: '向指定 WebContents 注入并执行 JavaScript 代码' },
 ]

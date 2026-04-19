@@ -15,7 +15,7 @@ export interface ToolDefinition {
   }
 }
 
-export type ToolCategoryName = 'workflow' | 'tab' | 'auto' | 'skill' | 'workspace' | 'page' | 'dom' | 'utils'
+export type ToolCategoryName = 'workflow' | 'tab' | 'auto' | 'page' | 'dom' | 'utils'
 export type ToolRiskLevel = 'low' | 'medium' | 'high'
 export type DiscoveryStage = 'category_list' | 'tool_list' | 'tool_detail' | 'execute'
 export type DiscoveryNextAction =
@@ -71,18 +71,6 @@ export const TOOL_CATEGORY_INFOS: ToolCategoryInfo[] = [
     scenario: '自动执行、批量执行和无人值守执行。',
     suitable_for: ['批量处理', '定时任务', '自动登录后执行', '自动重复操作'],
     not_suitable_for: ['单次人工交互', '精细 DOM 定位', '页面级信息读取'],
-  },
-  {
-    name: 'skill',
-    scenario: '高层抽象能力，类似任务技能包。',
-    suitable_for: ['业务任务封装', '复用型能力', '上层语义动作'],
-    not_suitable_for: ['低层页面操作', '原子 DOM 点击', '标签页管理'],
-  },
-  {
-    name: 'workspace',
-    scenario: '上下文、资源和项目空间管理。',
-    suitable_for: ['文件/任务/会话管理', '项目环境切换', '资源加载', '数据缓存'],
-    not_suitable_for: ['页面点击', 'DOM 查询', '浏览器标签页操作'],
   },
   {
     name: 'page',
@@ -152,78 +140,6 @@ export const BROWSER_TOOL_LIST: ToolMeta[] = [
     suitableFor: ['触发悬浮菜单', '查看 tooltip', '展开 hover 状态内容'],
   },
   {
-    name: 'get_page_content',
-    description: '获取页面文本内容',
-    category: '页面信息',
-    discoveryCategory: 'page',
-    tags: ['read', 'text', 'content'],
-    riskLevel: 'low',
-    suitableFor: ['读取页面整体文本', '快速提取页面可见内容'],
-  },
-  {
-    name: 'get_dom',
-    description: '获取指定元素 HTML',
-    category: '页面信息',
-    discoveryCategory: 'dom',
-    tags: ['read', 'html', 'selector'],
-    riskLevel: 'low',
-    suitableFor: ['查看元素结构', '调试 CSS 选择器', '读取局部 HTML'],
-  },
-  {
-    name: 'get_page_screenshot',
-    description: '截取页面截图',
-    category: '页面信息',
-    discoveryCategory: 'page',
-    tags: ['read', 'screenshot', 'visual'],
-    riskLevel: 'low',
-    suitableFor: ['获取页面视觉状态', '确认页面布局', '保存当前页面截图'],
-  },
-  {
-    name: 'list_tabs',
-    description: '列出所有标签页',
-    category: '标签页管理',
-    discoveryCategory: 'tab',
-    tags: ['read', 'tab', 'list'],
-    riskLevel: 'low',
-    suitableFor: ['查看当前打开的标签页', '定位目标标签页'],
-  },
-  {
-    name: 'create_tab',
-    description: '创建新标签页',
-    category: '标签页管理',
-    discoveryCategory: 'tab',
-    tags: ['action', 'tab', 'create'],
-    riskLevel: 'medium',
-    suitableFor: ['打开新页面', '创建新的浏览上下文'],
-  },
-  {
-    name: 'navigate_tab',
-    description: '导航到指定 URL',
-    category: '标签页管理',
-    discoveryCategory: 'page',
-    tags: ['action', 'navigate', 'url'],
-    riskLevel: 'medium',
-    suitableFor: ['让当前标签页跳转 URL', '打开指定网页'],
-  },
-  {
-    name: 'switch_tab',
-    description: '切换标签页',
-    category: '标签页管理',
-    discoveryCategory: 'tab',
-    tags: ['action', 'tab', 'switch'],
-    riskLevel: 'low',
-    suitableFor: ['切换到指定标签页', '改变当前操作目标'],
-  },
-  {
-    name: 'close_tab',
-    description: '关闭标签页',
-    category: '标签页管理',
-    discoveryCategory: 'tab',
-    tags: ['action', 'tab', 'destructive'],
-    riskLevel: 'high',
-    suitableFor: ['关闭明确指定的标签页', '清理不需要的页面'],
-  },
-  {
     name: 'create_window',
     description: '创建独立浏览器窗口',
     category: '窗口管理',
@@ -287,114 +203,6 @@ export const BROWSER_TOOL_LIST: ToolMeta[] = [
     suitableFor: ['查看窗口标题、URL、尺寸等详细信息'],
   },
   {
-    name: 'list_workspaces',
-    description: '列出所有工作区',
-    category: '工作区管理',
-    discoveryCategory: 'workspace',
-    tags: ['read', 'workspace', 'list'],
-    riskLevel: 'low',
-    suitableFor: ['查看工作区列表', '确认项目空间上下文'],
-  },
-  {
-    name: 'list_groups',
-    description: '列出所有分组',
-    category: '工作区管理',
-    discoveryCategory: 'workspace',
-    tags: ['read', 'group', 'list'],
-    riskLevel: 'low',
-    suitableFor: ['查看分组列表', '确认页面所属分组'],
-  },
-  {
-    name: 'list_pages',
-    description: '列出所有页面',
-    category: '工作区管理',
-    discoveryCategory: 'workspace',
-    tags: ['read', 'page-resource', 'list'],
-    riskLevel: 'low',
-    suitableFor: ['查看已保存页面', '定位页面资源'],
-  },
-  {
-    name: 'get_page_summary',
-    description: '获取页面结构化摘要（标题、heading、链接、meta）',
-    category: '页面信息',
-    discoveryCategory: 'page',
-    tags: ['read', 'summary', 'structure'],
-    riskLevel: 'low',
-    suitableFor: ['快速理解页面结构', '获取标题 URL heading 链接等摘要'],
-  },
-  {
-    name: 'get_page_markdown',
-    description: '获取页面正文内容的 Markdown 表示',
-    category: '页面信息',
-    discoveryCategory: 'page',
-    tags: ['read', 'markdown', 'article'],
-    riskLevel: 'low',
-    suitableFor: ['阅读文章正文', '提取文档内容', '生成页面摘要'],
-  },
-  {
-    name: 'get_interactive_nodes',
-    description: '获取页面中可见的交互节点简要列表（name, text, selector）',
-    category: '页面信息',
-    discoveryCategory: 'dom',
-    tags: ['query', 'locator', 'read'],
-    riskLevel: 'low',
-    suitableFor: ['查找按钮', '查找输入框', '获取可交互元素选择器'],
-  },
-  {
-    name: 'get_interactive_node_detail',
-    description: '根据选择器获取单个交互节点的详细信息',
-    category: '页面信息',
-    discoveryCategory: 'dom',
-    tags: ['query', 'detail', 'selector'],
-    riskLevel: 'low',
-    suitableFor: ['确认元素是否可见', '读取元素属性', '验证点击目标'],
-  },
-  {
-    name: 'get_active_tab',
-    description: '获取当前对话选中的目标标签页信息',
-    category: '标签页管理',
-    discoveryCategory: 'tab',
-    tags: ['read', 'tab', 'active'],
-    riskLevel: 'low',
-    suitableFor: ['确认当前操作标签页', '获取目标 tabId'],
-  },
-  {
-    name: 'write_skill',
-    description: '保存或更新一个 Skill（Markdown 格式）',
-    category: '技能管理',
-    discoveryCategory: 'skill',
-    tags: ['action', 'skill', 'write'],
-    riskLevel: 'medium',
-    suitableFor: ['创建技能', '保存复用任务步骤', '更新技能内容'],
-  },
-  {
-    name: 'read_skill',
-    description: '按名称读取 Skill 内容',
-    category: '技能管理',
-    discoveryCategory: 'skill',
-    tags: ['read', 'skill', 'detail'],
-    riskLevel: 'low',
-    suitableFor: ['查看技能内容', '确认技能实现'],
-  },
-  {
-    name: 'list_skills',
-    description: '列出所有已保存的 Skill（名称 + 说明）',
-    category: '技能管理',
-    discoveryCategory: 'skill',
-    tags: ['read', 'skill', 'list'],
-    riskLevel: 'low',
-    suitableFor: ['查看可用技能', '选择技能执行'],
-  },
-  {
-    name: 'search_skill',
-    description: '按名称模糊搜索 Skill',
-    category: '技能管理',
-    discoveryCategory: 'skill',
-    tags: ['read', 'skill', 'search'],
-    riskLevel: 'low',
-    suitableFor: ['按关键词查找技能', '不确定完整技能名时搜索'],
-  },
-  {
     name: 'delay',
     description: '延迟等待指定时间后继续执行，用于等待页面加载、AJAX 完成或动画结束',
     category: '辅助工具',
@@ -427,14 +235,6 @@ const TOOL_EXAMPLE_INPUTS: Record<string, Record<string, unknown>> = {
   scroll_page: { direction: 'down', amount: 500 },
   select_option: { selector: '#country', value: 'CN' },
   hover_element: { selector: '.menu-item' },
-  get_page_content: {},
-  get_dom: { selector: 'main' },
-  get_page_screenshot: { format: 'jpeg' },
-  list_tabs: {},
-  create_tab: { url: 'https://example.com' },
-  navigate_tab: { url: 'https://example.com' },
-  switch_tab: { tabId: 'tab-1' },
-  close_tab: { tabId: 'tab-1' },
   create_window: { url: 'https://example.com' },
   navigate_window: { windowId: 2, url: 'https://example.com' },
   close_window: { windowId: 2 },
@@ -442,22 +242,6 @@ const TOOL_EXAMPLE_INPUTS: Record<string, Record<string, unknown>> = {
   focus_window: { windowId: 2 },
   screenshot_window: { windowId: 2 },
   get_window_detail: { windowId: 2 },
-  list_workspaces: {},
-  list_groups: {},
-  list_pages: {},
-  get_page_summary: {},
-  get_page_markdown: { maxLength: 10000 },
-  get_interactive_nodes: { viewportOnly: true },
-  get_interactive_node_detail: { selector: '#submitBtn' },
-  get_active_tab: {},
-  write_skill: {
-    name: 'open-example',
-    description: '打开示例页面',
-    content: '打开 https://example.com 并读取标题。',
-  },
-  read_skill: { name: 'open-example' },
-  list_skills: {},
-  search_skill: { name: 'example' },
   delay: { milliseconds: 2000, reason: '等待页面加载完成' },
   inject_js: { webContentId: 5, code: 'return document.title' },
 }
@@ -482,29 +266,6 @@ function createDomInteractionTools(tabIdField: { type: 'string'; description: st
   ]
 }
 
-/** 页面信息工具：获取内容、DOM、截图、摘要、Markdown */
-function createPageInfoTools(tabIdField: { type: 'string'; description: string }): ToolDefinition[] {
-  return [
-    { name: 'get_page_content', description: '获取页面的文本内容。', input_schema: { type: 'object', properties: { tabId: tabIdField } } },
-    { name: 'get_dom', description: '获取指定元素的 outerHTML。', input_schema: { type: 'object', properties: { selector: { type: 'string', description: 'CSS 选择器' }, tabId: tabIdField }, required: ['selector'] } },
-    { name: 'get_page_screenshot', description: '截取页面截图。', input_schema: { type: 'object', properties: { tabId: tabIdField, format: { type: 'string', enum: ['png', 'jpeg'], description: '截图格式' } } } },
-    { name: 'get_page_summary', description: '获取页面结构化摘要，包括标题、URL、description、headings、links（最多 50 条）和 meta 信息。', input_schema: { type: 'object', properties: { tabId: tabIdField } } },
-    { name: 'get_page_markdown', description: '获取页面正文内容的 Markdown 表示。使用 Readability 提取正文，再转为 Markdown。适合阅读文章、博客、文档类页面。', input_schema: { type: 'object', properties: { tabId: tabIdField, maxLength: { type: 'number', description: 'Markdown 内容最大字符数，默认 10000', default: 10000 } } } },
-  ]
-}
-
-/** 标签页管理工具 */
-function createTabTools(tabIdField: { type: 'string'; description: string }): ToolDefinition[] {
-  return [
-    { name: 'list_tabs', description: '列出所有打开的标签页。', input_schema: { type: 'object', properties: {} } },
-    { name: 'create_tab', description: '创建新标签页。', input_schema: { type: 'object', properties: { url: { type: 'string', description: '要打开的 URL' }, pageId: { type: 'string', description: '已有页面 ID' } }, required: ['url'] } },
-    { name: 'navigate_tab', description: '在标签页中导航到指定 URL。', input_schema: { type: 'object', properties: { url: { type: 'string', description: '目标 URL' }, tabId: tabIdField }, required: ['url'] } },
-    { name: 'switch_tab', description: '切换到指定标签页。', input_schema: { type: 'object', properties: { tabId: { type: 'string', description: '要切换到的标签页 ID' } }, required: ['tabId'] } },
-    { name: 'close_tab', description: '关闭指定标签页。（破坏性操作，请谨慎使用）', input_schema: { type: 'object', properties: { tabId: { type: 'string', description: '要关闭的标签页 ID' } }, required: ['tabId'] } },
-    { name: 'get_active_tab', description: '获取当前对话中用户选中的目标标签页信息（BrowserViewPicker 中选择的标签页）。返回标签页 ID、标题、URL 等信息。当不确定应操作哪个标签页时，应先调用此工具确认目标。', input_schema: { type: 'object', properties: {} } },
-  ]
-}
-
 /** 窗口管理工具 */
 function createWindowTools(): ToolDefinition[] {
   const wid = { type: 'number' as const, description: '目标窗口 ID' }
@@ -516,33 +277,6 @@ function createWindowTools(): ToolDefinition[] {
     { name: 'focus_window', description: '将指定窗口聚焦到前台。如果窗口最小化则恢复。', input_schema: { type: 'object', properties: { windowId: wid }, required: ['windowId'] } },
     { name: 'screenshot_window', description: '截取独立窗口的页面截图。', input_schema: { type: 'object', properties: { windowId: wid }, required: ['windowId'] } },
     { name: 'get_window_detail', description: '获取窗口详细信息（标题、URL、尺寸、状态等）。', input_schema: { type: 'object', properties: { windowId: wid }, required: ['windowId'] } },
-  ]
-}
-
-/** 工作区/分组/页面资源管理工具 */
-function createWorkspaceTools(): ToolDefinition[] {
-  return [
-    { name: 'list_workspaces', description: '列出所有工作区。', input_schema: { type: 'object', properties: {} } },
-    { name: 'list_groups', description: '列出所有分组。', input_schema: { type: 'object', properties: {} } },
-    { name: 'list_pages', description: '列出所有页面。', input_schema: { type: 'object', properties: {} } },
-  ]
-}
-
-/** DOM 查询工具：交互节点列表与详情 */
-function createDomQueryTools(tabIdField: { type: 'string'; description: string }): ToolDefinition[] {
-  return [
-    { name: 'get_interactive_nodes', description: '获取页面中可见的交互节点简要列表（按钮、链接、输入框等），每个节点仅返回 name、text、selector。用于快速定位目标元素，再用 get_interactive_node_detail 获取详情。默认仅返回视口内元素。', input_schema: { type: 'object', properties: { tabId: tabIdField, viewportOnly: { type: 'boolean', description: '是否仅返回视口内元素，默认 true', default: true } } } },
-    { name: 'get_interactive_node_detail', description: '根据 CSS 选择器获取单个交互节点的详细信息，包括 tag、role、name、text、rect、visible、clickable、attributes、styles 等。先用 get_interactive_nodes 定位目标，再用本工具查看详情。', input_schema: { type: 'object', properties: { selector: { type: 'string', description: 'CSS 选择器，来自 get_interactive_nodes 返回的 selector' }, tabId: tabIdField }, required: ['selector'] } },
-  ]
-}
-
-/** 技能管理工具 */
-function createSkillTools(): ToolDefinition[] {
-  return [
-    { name: 'write_skill', description: '保存或更新一个 Skill。Skill 以 Markdown 格式存储，包含名称、说明和内容（步骤 + 代码）。`js` 代码块可直接写可执行代码，不要求注释；保存时会自动补齐统一返回对象，确保执行结果至少返回 { success: true/false }。当用户说"保存 skill"或"创建技能"时使用。如果同名 Skill 已存在则覆盖。', input_schema: { type: 'object', properties: { name: { type: 'string', description: 'Skill 名称，使用小写英文 + 短横线，如 "scrape-product"、"batch-download"。作为唯一标识和文件名。' }, description: { type: 'string', description: 'Skill 的一句话说明，用于 list/search 时展示。' }, content: { type: 'string', description: 'Skill 的 Markdown 正文，包含步骤、代码片段、参数说明等。支持 ```js 代码块，执行时会提取运行。代码块无需写注释；若未显式 return，保存时也会自动包装为返回对象。' } }, required: ['name', 'description', 'content'] } },
-    { name: 'read_skill', description: '按名称读取 Skill 的完整内容。返回 Markdown 正文。当用户说"查看 skill"、"读取技能"时使用。', input_schema: { type: 'object', properties: { name: { type: 'string', description: 'Skill 名称' } }, required: ['name'] } },
-    { name: 'list_skills', description: '列出所有已保存的 Skill，返回名称和说明。当用户说"列出 skill"、"有哪些技能"时使用。', input_schema: { type: 'object', properties: {} } },
-    { name: 'search_skill', description: '按名称模糊搜索 Skill。返回匹配的 Skill 列表（名称 + 说明）。当用户说"搜索 skill"或不确定完整名称时使用。', input_schema: { type: 'object', properties: { name: { type: 'string', description: '搜索关键词（支持模糊匹配）' } }, required: ['name'] } },
   ]
 }
 
@@ -563,12 +297,7 @@ export function createBrowserTools(_targetTabId: string | null): ToolDefinition[
 
   return [
     ...createDomInteractionTools(tabIdField),
-    ...createPageInfoTools(tabIdField),
-    ...createTabTools(tabIdField),
     ...createWindowTools(),
-    ...createWorkspaceTools(),
-    ...createDomQueryTools(tabIdField),
-    ...createSkillTools(),
     ...createUtilityTools(),
   ]
 }
