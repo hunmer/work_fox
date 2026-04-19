@@ -1,6 +1,7 @@
+import type { Ref } from 'vue'
 import type { WorkflowStore } from '@/stores/workflow'
 
-export function useEdgeInsert(store: WorkflowStore) {
+export function useEdgeInsert(store: WorkflowStore, nodeSelectOpen: Ref<boolean>) {
   let insertEdgeId: string | null = null
   let insertSourceId: string | null = null
   let insertTargetId: string | null = null
@@ -9,6 +10,7 @@ export function useEdgeInsert(store: WorkflowStore) {
     insertEdgeId = edgeId
     insertSourceId = sourceId
     insertTargetId = targetId
+    nodeSelectOpen.value = true
   }
 
   function onNodeSelectFromEdge(type: string) {

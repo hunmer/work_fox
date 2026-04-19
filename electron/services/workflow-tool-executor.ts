@@ -19,14 +19,6 @@ const NODE_TYPE_DEFINITIONS: NodeTypeDefinition[] = [
   { type: 'run_code', label: '运行 JS 代码', category: '流程控制', description: '执行自定义 JavaScript 代码，可通过 context 访问上游数据' },
   { type: 'toast', label: 'Toast 消息', category: '流程控制', description: '显示 Toast 通知消息' },
   { type: 'agent_chat', label: 'AI 对话', category: 'AI', description: '调用 AI 处理文本，prompt 支持 $context 变量替换' },
-  // 页面交互
-  { type: 'click_element', label: '点击页面元素', category: '页面交互', description: '通过 CSS 选择器点击页面元素' },
-  { type: 'input_text', label: '输入文字', category: '页面交互', description: '在输入框中输入文字' },
-  { type: 'scroll_page', label: '滚动页面', category: '页面交互', description: '滚动页面到指定方向和距离' },
-  { type: 'select_option', label: '选择下拉选项', category: '页面交互', description: '选择下拉框的选项' },
-  { type: 'hover_element', label: '悬停元素', category: '页面交互', description: '鼠标悬停在元素上' },
-  // 辅助工具
-  { type: 'inject_js', label: '注入 JS', category: '辅助工具', description: '向指定 WebContents 注入并执行 JavaScript 代码' },
 ]
 
 // ====== 接口定义 ======

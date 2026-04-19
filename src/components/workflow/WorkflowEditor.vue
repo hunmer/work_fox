@@ -78,7 +78,7 @@ const {
   onNodeSelectFromEdge,
   resetEdgeInsert,
   hasInsertContext,
-} = useEdgeInsert(store)
+} = useEdgeInsert(store, nodeSelectOpen)
 
 const {
   executionBarExpanded,

@@ -21,6 +21,8 @@ export const useTabStore = defineStore('tabs', () => {
   }
 
   async function restoreTabs() {
+    // 热加载时防止重复
+    if (tabs.value.length > 0) return
     const data = await (window as any).api.tabs.load() as { tabs: Tab[]; activeTabId: string | null }
     if (!data.tabs || data.tabs.length === 0) {
       addTab()

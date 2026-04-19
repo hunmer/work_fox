@@ -95,51 +95,6 @@ export const TOOL_CATEGORY_INFOS: ToolCategoryInfo[] = [
 /** 所有浏览器业务工具的元数据列表 */
 export const BROWSER_TOOL_LIST: ToolMeta[] = [
   {
-    name: 'click_element',
-    description: '点击页面元素',
-    category: '页面交互',
-    discoveryCategory: 'dom',
-    tags: ['action', 'click', 'interaction'],
-    riskLevel: 'medium',
-    suitableFor: ['点击按钮', '点击链接', '触发页面元素交互'],
-  },
-  {
-    name: 'input_text',
-    description: '在输入框中输入文字',
-    category: '页面交互',
-    discoveryCategory: 'dom',
-    tags: ['action', 'input', 'form'],
-    riskLevel: 'medium',
-    suitableFor: ['填写表单', '输入搜索词', '编辑文本框内容'],
-  },
-  {
-    name: 'scroll_page',
-    description: '滚动页面',
-    category: '页面交互',
-    discoveryCategory: 'page',
-    tags: ['action', 'scroll', 'viewport'],
-    riskLevel: 'low',
-    suitableFor: ['浏览页面上下文', '加载懒加载内容', '调整视口位置'],
-  },
-  {
-    name: 'select_option',
-    description: '选择下拉框选项',
-    category: '页面交互',
-    discoveryCategory: 'dom',
-    tags: ['action', 'select', 'form'],
-    riskLevel: 'medium',
-    suitableFor: ['选择 select 下拉框选项', '填写表单枚举项'],
-  },
-  {
-    name: 'hover_element',
-    description: '鼠标悬停在元素上',
-    category: '页面交互',
-    discoveryCategory: 'dom',
-    tags: ['action', 'hover', 'interaction'],
-    riskLevel: 'low',
-    suitableFor: ['触发悬浮菜单', '查看 tooltip', '展开 hover 状态内容'],
-  },
-  {
     name: 'delay',
     description: '延迟等待指定时间后继续执行，用于等待页面加载、AJAX 完成或动画结束',
     category: '辅助工具',
@@ -147,15 +102,6 @@ export const BROWSER_TOOL_LIST: ToolMeta[] = [
     tags: ['wait', 'delay', 'sleep', 'timing'],
     riskLevel: 'low',
     suitableFor: ['等待页面加载完成', '等待 AJAX 请求返回', '等待动画结束', '流程中插入固定间隔'],
-  },
-  {
-    name: 'inject_js',
-    description: '向指定 WebContents 注入并执行 JavaScript 代码',
-    category: '页面交互',
-    discoveryCategory: 'page',
-    tags: ['action', 'javascript', 'inject', 'execute'],
-    riskLevel: 'high',
-    suitableFor: ['注入自定义脚本', '执行页面内 JS 操作', '动态修改页面行为'],
   },
 ]
 
@@ -167,13 +113,7 @@ export const DISCOVERY_TOOL_NAMES = [
 ] as const
 
 const TOOL_EXAMPLE_INPUTS: Record<string, Record<string, unknown>> = {
-  click_element: { selector: '#submitBtn' },
-  input_text: { selector: '#searchInput', text: 'workfox' },
-  scroll_page: { direction: 'down', amount: 500 },
-  select_option: { selector: '#country', value: 'CN' },
-  hover_element: { selector: '.menu-item' },
   delay: { milliseconds: 2000, reason: '等待页面加载完成' },
-  inject_js: { webContentId: 5, code: 'return document.title' },
 }
 
 const GENERIC_OUTPUT_SCHEMA = {
@@ -185,22 +125,10 @@ const GENERIC_OUTPUT_SCHEMA = {
   },
 }
 
-/** DOM 交互工具：点击、输入、滚动、选择、悬停 */
-function createDomInteractionTools(tabIdField: { type: 'string'; description: string }): ToolDefinition[] {
-  return [
-    { name: 'click_element', description: '点击页面上的元素。通过 CSS 选择器定位目标元素。', input_schema: { type: 'object', properties: { selector: { type: 'string', description: 'CSS 选择器，例如 "#login-btn", ".submit-button"' }, tabId: tabIdField }, required: ['selector'] } },
-    { name: 'input_text', description: '在输入框中输入文字。', input_schema: { type: 'object', properties: { text: { type: 'string', description: '要输入的文字' }, selector: { type: 'string', description: 'CSS 选择器定位输入框' }, tabId: tabIdField }, required: ['text'] } },
-    { name: 'scroll_page', description: '滚动页面。', input_schema: { type: 'object', properties: { direction: { type: 'string', enum: ['up', 'down', 'left', 'right'], description: '滚动方向' }, amount: { type: 'number', description: '滚动像素数', default: 300 }, tabId: tabIdField }, required: ['direction'] } },
-    { name: 'select_option', description: '选择下拉框的选项。', input_schema: { type: 'object', properties: { selector: { type: 'string', description: 'select 元素的 CSS 选择器' }, value: { type: 'string', description: '要选中的选项值' }, tabId: tabIdField }, required: ['selector', 'value'] } },
-    { name: 'hover_element', description: '鼠标悬停在元素上。', input_schema: { type: 'object', properties: { selector: { type: 'string', description: 'CSS 选择器' }, tabId: tabIdField }, required: ['selector'] } },
-  ]
-}
-
-/** 辅助工具：延迟等待、JS 注入 */
+/** 辅助工具：延迟等待 */
 function createUtilityTools(): ToolDefinition[] {
   return [
     { name: 'delay', description: '延迟等待指定毫秒数后继续执行。用于等待页面加载、AJAX 请求返回、动画结束等场景。不依赖标签页。', input_schema: { type: 'object', properties: { milliseconds: { type: 'number', description: '等待时长（毫秒），范围 100-30000，默认 1000。建议根据场景选择：页面导航后等 2000-5000ms，动画结束后等 300-500ms。', default: 1000 }, reason: { type: 'string', description: '等待原因说明（可选），用于日志记录，例如 "等待搜索结果加载"。' } }, required: ['milliseconds'] } },
-    { name: 'inject_js', description: '向指定 WebContents 注入并执行 JavaScript 代码，返回代码执行结果。高风险工具，请确认代码安全后再执行。', input_schema: { type: 'object', properties: { webContentId: { type: 'number', description: '目标 WebContents ID（Electron webContents.id）' }, code: { type: 'string', description: '要执行的 JavaScript 代码，代码在页面上下文中运行，可使用 document、window 等对象。支持 return 返回结果。' } }, required: ['webContentId', 'code'] } },
   ]
 }
 
@@ -209,10 +137,7 @@ function createUtilityTools(): ToolDefinition[] {
  * @param _targetTabId 默认目标标签页 ID，由执行层兜底处理。
  */
 export function createBrowserTools(_targetTabId: string | null): ToolDefinition[] {
-  const tabIdField = { type: 'string' as const, description: '目标标签页 ID' }
-
   return [
-    ...createDomInteractionTools(tabIdField),
     ...createUtilityTools(),
   ]
 }

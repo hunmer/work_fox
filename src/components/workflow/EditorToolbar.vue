@@ -65,7 +65,9 @@ refreshMaximized()
 </script>
 
 <template>
-  <div class="flex items-center border-b border-border px-2 py-1 app-drag">
+  <div class="relative border-b border-border">
+    <div class="absolute inset-x-0 top-0 h-3 app-drag" />
+    <div class="relative flex items-center px-2 py-1">
     <Menubar class="border-0 bg-transparent h-7 no-drag">
       <MenubarMenu>
         <MenubarTrigger class="text-xs h-6 px-2">
@@ -174,7 +176,7 @@ refreshMaximized()
     <span
       v-else
       class="ml-3 text-xs text-muted-foreground truncate cursor-pointer hover:text-foreground"
-      @dblclick="emit('startEditName')"
+      @click="emit('startEditName')"
     >
       {{ workflowName || '未命名工作流' }}
     </span>
@@ -201,6 +203,7 @@ refreshMaximized()
       >
         <X class="w-3.5 h-3.5" />
       </button>
+    </div>
     </div>
   </div>
 </template>
