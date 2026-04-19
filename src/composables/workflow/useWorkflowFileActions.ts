@@ -1,12 +1,12 @@
 import { ref } from 'vue'
 import type { Ref } from 'vue'
-import { useWorkflowStore } from '@/stores/workflow'
+import type { WorkflowStore } from '@/stores/workflow'
 import { useNotification } from '@/composables/useNotification'
 
 export function useWorkflowFileActions(
+  store: WorkflowStore,
   listDialogOpen: Ref<boolean>,
 ) {
-  const store = useWorkflowStore()
   const notify = useNotification()
 
   const isEditingName = ref(false)

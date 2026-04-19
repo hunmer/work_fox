@@ -1,12 +1,12 @@
 import { defineStore } from 'pinia'
-import { ref, computed, watch, type Ref } from 'vue'
+import { ref, computed, watch, inject, provide, type Ref, type App } from 'vue'
 import type { Workflow, WorkflowFolder, WorkflowNode, ExecutionLog } from '@/lib/workflow/types'
 import { WorkflowEngine, type EngineStatus } from '@/lib/workflow/engine'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { executeRendererWorkflowTool } from '@/lib/agent/workflow-renderer-tools'
 import type { WorkflowToolExecuteRequest } from '../../preload'
 
-const DRAFT_KEY = 'workflow-draft'
+const DRAFT_KEY_PREFIX = 'workflow-draft'
 
 export interface WorkflowChanges {
   upsertNodes: any[]
@@ -15,9 +15,10 @@ export interface WorkflowChanges {
   deleteEdgeIds: string[]
 }
 
+export type WorkflowStore = ReturnType<typeof createWorkflowStore>
+
 // ====== 纯函数 ======
 
-/** BFS 检查从开始节点是否能到达结束节点，返回错误信息或 null */
 function validateWorkflowExecution(workflow: Workflow): string | null {
   const nodes = workflow.nodes
   const startNodes = nodes.filter((n) => n.type === 'start')
@@ -137,7 +138,6 @@ function createExecutionLogManager(currentWorkflow: Ref<Workflow | null>, api: (
     selectedExecutionLogId.value = null
   }
 
-  /** 将完成的执行日志追加到列表并持久化到磁盘 */
   function appendCompletedLog(log: ExecutionLog, workflowId: string) {
     log.id = `exec-${Date.now()}`
     log.workflowId = workflowId
@@ -195,19 +195,21 @@ function createVersionManager(currentWorkflow: Ref<Workflow | null>, api: () => 
 
 // ====== 草稿持久化 ======
 
-function createDraftManager(currentWorkflow: Ref<Workflow | null>) {
+function createDraftManager(currentWorkflow: Ref<Workflow | null>, tabId: string) {
+  const draftKey = `${DRAFT_KEY_PREFIX}-${tabId}`
+
   function saveDraft(): void {
     if (!currentWorkflow.value) return
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(currentWorkflow.value)) } catch { /* ignore */ }
+    try { localStorage.setItem(draftKey, JSON.stringify(currentWorkflow.value)) } catch { /* ignore */ }
   }
 
   function clearDraft(): void {
-    localStorage.removeItem(DRAFT_KEY)
+    localStorage.removeItem(draftKey)
   }
 
   function restoreDraft(): boolean {
     try {
-      const raw = localStorage.getItem(DRAFT_KEY)
+      const raw = localStorage.getItem(draftKey)
       if (!raw) return false
       const draft = JSON.parse(raw) as Workflow
       if (!draft?.id) return false
@@ -523,111 +525,113 @@ function createAIActions(
   return { mergeWorkflowChanges, listenForFileUpdates, listenForWorkflowToolRequests }
 }
 
-// ====== Store 定义 ======
+// ====== 工厂函数 ======
 
-export const useWorkflowStore = defineStore('workflow', () => {
-  const api = () => (window as any).api
+export function createWorkflowStore(tabId: string) {
+  const storeId = `workflow-tab-${tabId}`
+  const useStore = defineStore(storeId, () => {
+    const api = () => (window as any).api
 
-  // ====== 核心状态 ======
-  const workflows = ref<Workflow[]>([])
-  const workflowFolders = ref<WorkflowFolder[]>([])
-  const currentWorkflow = ref<Workflow | null>(null)
-  const selectedNodeId = ref<string | null>(null)
-  const executionStatus = ref<EngineStatus>('idle')
-  const executionLog = ref<ExecutionLog | null>(null)
-  const executionContext = ref<Record<string, any>>({})
-  const engine = ref<WorkflowEngine | null>(null)
+    const workflows = ref<Workflow[]>([])
+    const workflowFolders = ref<WorkflowFolder[]>([])
+    const currentWorkflow = ref<Workflow | null>(null)
+    const selectedNodeId = ref<string | null>(null)
+    const executionStatus = ref<EngineStatus>('idle')
+    const executionLog = ref<ExecutionLog | null>(null)
+    const executionContext = ref<Record<string, any>>({})
+    const engine = ref<WorkflowEngine | null>(null)
 
-  // ====== 组合子管理器 ======
-  const undoRedo = createUndoRedoManager(currentWorkflow)
-  const execLogMgr = createExecutionLogManager(currentWorkflow, api)
-  const versionMgr = createVersionManager(currentWorkflow, api)
-  const draftMgr = createDraftManager(currentWorkflow)
-  const crudActions = createCrudActions(workflows, workflowFolders, currentWorkflow, api, draftMgr, versionMgr)
-  const editActions = createEditActions(currentWorkflow, selectedNodeId, executionStatus, executionLog, executionContext, undoRedo, draftMgr)
-  const execActions = createExecutionActions(currentWorkflow, executionStatus, executionLog, executionContext, engine, execLogMgr)
-  const debugActions = createDebugActions(currentWorkflow, executionContext)
-  const aiActions = createAIActions(currentWorkflow, undoRedo)
+    const undoRedo = createUndoRedoManager(currentWorkflow)
+    const execLogMgr = createExecutionLogManager(currentWorkflow, api)
+    const versionMgr = createVersionManager(currentWorkflow, api)
+    const draftMgr = createDraftManager(currentWorkflow, tabId)
+    const crudActions = createCrudActions(workflows, workflowFolders, currentWorkflow, api, draftMgr, versionMgr)
+    const editActions = createEditActions(currentWorkflow, selectedNodeId, executionStatus, executionLog, executionContext, undoRedo, draftMgr)
+    const execActions = createExecutionActions(currentWorkflow, executionStatus, executionLog, executionContext, engine, execLogMgr)
+    const debugActions = createDebugActions(currentWorkflow, executionContext)
+    const aiActions = createAIActions(currentWorkflow, undoRedo)
 
-  // ====== 计算属性 ======
-  const rootFolders = computed(() =>
-    workflowFolders.value.filter((f) => f.parentId === null).sort((a, b) => a.order - b.order),
-  )
-  const selectedNode = computed(() => {
-    if (!selectedNodeId.value || !currentWorkflow.value) return null
-    return currentWorkflow.value.nodes.find((n) => n.id === selectedNodeId.value) || null
+    const rootFolders = computed(() =>
+      workflowFolders.value.filter((f) => f.parentId === null).sort((a, b) => a.order - b.order),
+    )
+    const selectedNode = computed(() => {
+      if (!selectedNodeId.value || !currentWorkflow.value) return null
+      return currentWorkflow.value.nodes.find((n) => n.id === selectedNodeId.value) || null
+    })
+    const selectedExecutionLog = computed<ExecutionLog | null>(() => {
+      const id = execLogMgr.selectedExecutionLogId.value
+      if (!id) return executionLog.value
+      return execLogMgr.executionLogs.value.find((l) => l.id === id) || executionLog.value
+    })
+    const executionValidationError = computed<string | null>(() => {
+      if (!currentWorkflow.value) return '未加载工作流'
+      return validateWorkflowExecution(currentWorkflow.value)
+    })
+
+    watch(() => currentWorkflow.value?.id, () => {
+      execLogMgr.loadExecutionLogs()
+      versionMgr.loadVersions()
+      undoRedo.reset()
+    })
+
+    function restoreDraft(): boolean {
+      if (!draftMgr.restoreDraft()) return false
+      selectedNodeId.value = null
+      executionStatus.value = 'idle'
+      executionLog.value = null
+      executionContext.value = {}
+      return true
+    }
+
+    return {
+      tabId,
+      workflows, workflowFolders, currentWorkflow, selectedNodeId,
+      rootFolders, selectedNode, executionValidationError,
+      executionStatus, executionLog, executionContext,
+      executionLogs: execLogMgr.executionLogs,
+      selectedExecutionLogId: execLogMgr.selectedExecutionLogId,
+      selectedExecutionLog,
+      loadExecutionLogs: execLogMgr.loadExecutionLogs,
+      deleteExecutionLog: execLogMgr.deleteExecutionLog,
+      clearExecutionLogs: execLogMgr.clearExecutionLogs,
+      ...crudActions,
+      ...editActions,
+      ...execActions,
+      debugNodeStatus: debugActions.debugNodeStatus,
+      debugNodeResult: debugActions.debugNodeResult,
+      debugNodeId: debugActions.debugNodeId,
+      debugSingleNode: debugActions.debugSingleNode,
+      undo: undoRedo.undo,
+      redo: undoRedo.redo,
+      canUndo: undoRedo.canUndo,
+      canRedo: undoRedo.canRedo,
+      undoStack: undoRedo.undoStack,
+      redoStack: undoRedo.redoStack,
+      operationLog: undoRedo.operationLog,
+      versions: versionMgr.versions,
+      loadVersions: versionMgr.loadVersions,
+      saveVersion: versionMgr.saveVersion,
+      deleteVersion: versionMgr.deleteVersion,
+      restoreVersion: (versionId: string) => versionMgr.restoreVersion(versionId, undoRedo.pushUndo),
+      saveDraft: draftMgr.saveDraft,
+      restoreDraft,
+      clearDraft: draftMgr.clearDraft,
+      ...aiActions,
+    }
   })
-  const selectedExecutionLog = computed<ExecutionLog | null>(() => {
-    const id = execLogMgr.selectedExecutionLogId.value
-    if (!id) return executionLog.value
-    return execLogMgr.executionLogs.value.find((l) => l.id === id) || executionLog.value
-  })
-  const executionValidationError = computed<string | null>(() => {
-    if (!currentWorkflow.value) return '未加载工作流'
-    return validateWorkflowExecution(currentWorkflow.value)
-  })
+  return useStore()
+}
 
-  // ====== watch ======
-  watch(() => currentWorkflow.value?.id, () => {
-    execLogMgr.loadExecutionLogs()
-    versionMgr.loadVersions()
-    undoRedo.reset()
-  })
+// ====== Provide / Inject ======
 
-  // ====== 草稿恢复（带状态重置） ======
-  function restoreDraft(): boolean {
-    if (!draftMgr.restoreDraft()) return false
-    selectedNodeId.value = null
-    executionStatus.value = 'idle'
-    executionLog.value = null
-    executionContext.value = {}
-    return true
-  }
+const WORKFLOW_STORE_KEY = Symbol('workflowStore')
 
-  return {
-    // 数据
-    workflows, workflowFolders, currentWorkflow, selectedNodeId,
-    // 计算属性
-    rootFolders, selectedNode, executionValidationError,
-    // 执行状态
-    executionStatus, executionLog, executionContext,
-    // 执行历史
-    executionLogs: execLogMgr.executionLogs,
-    selectedExecutionLogId: execLogMgr.selectedExecutionLogId,
-    selectedExecutionLog,
-    loadExecutionLogs: execLogMgr.loadExecutionLogs,
-    deleteExecutionLog: execLogMgr.deleteExecutionLog,
-    clearExecutionLogs: execLogMgr.clearExecutionLogs,
-    // CRUD
-    ...crudActions,
-    // 编辑
-    ...editActions,
-    // 执行
-    ...execActions,
-    // 单节点调试
-    debugNodeStatus: debugActions.debugNodeStatus,
-    debugNodeResult: debugActions.debugNodeResult,
-    debugNodeId: debugActions.debugNodeId,
-    debugSingleNode: debugActions.debugSingleNode,
-    // Undo/Redo
-    undo: undoRedo.undo,
-    redo: undoRedo.redo,
-    canUndo: undoRedo.canUndo,
-    canRedo: undoRedo.canRedo,
-    undoStack: undoRedo.undoStack,
-    redoStack: undoRedo.redoStack,
-    operationLog: undoRedo.operationLog,
-    // 版本管理
-    versions: versionMgr.versions,
-    loadVersions: versionMgr.loadVersions,
-    saveVersion: versionMgr.saveVersion,
-    deleteVersion: versionMgr.deleteVersion,
-    restoreVersion: (versionId: string) => versionMgr.restoreVersion(versionId, undoRedo.pushUndo),
-    // 草稿
-    saveDraft: draftMgr.saveDraft,
-    restoreDraft,
-    clearDraft: draftMgr.clearDraft,
-    // AI 助手
-    ...aiActions,
-  }
-})
+export function provideWorkflowStore(store: WorkflowStore) {
+  provide(WORKFLOW_STORE_KEY, store)
+}
+
+export function useWorkflowStore(): WorkflowStore {
+  const store = inject<WorkflowStore>(WORKFLOW_STORE_KEY)
+  if (!store) throw new Error('useWorkflowStore() must be called inside a WorkflowEditor')
+  return store
+}

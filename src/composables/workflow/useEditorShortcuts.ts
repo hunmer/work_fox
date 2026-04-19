@@ -1,19 +1,20 @@
 import { onMounted, onUnmounted } from 'vue'
-import { useWorkflowStore } from '@/stores/workflow'
+import type { WorkflowStore } from '@/stores/workflow'
 
-export function useEditorShortcuts(deps: {
-  saveWorkflow: () => Promise<void>
-  copySelectedNodes: () => void
-  pasteClipboardNodes: () => void
-  deleteSelected: () => void
-  addSelectedNodes: (nodes: any[]) => void
-  getNodes: { value: any[] }
-  zoomIn: () => void
-  zoomOut: () => void
-  zoomTo: (level: number) => void
-}) {
-  const store = useWorkflowStore()
-
+export function useEditorShortcuts(
+  store: WorkflowStore,
+  deps: {
+    saveWorkflow: () => Promise<void>
+    copySelectedNodes: () => void
+    pasteClipboardNodes: () => void
+    deleteSelected: () => void
+    addSelectedNodes: (nodes: any[]) => void
+    getNodes: { value: any[] }
+    zoomIn: () => void
+    zoomOut: () => void
+    zoomTo: (level: number) => void
+  },
+) {
   function handleKeyDown(e: KeyboardEvent) {
     if (!store.currentWorkflow) return
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {

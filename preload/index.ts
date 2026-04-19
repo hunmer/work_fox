@@ -116,6 +116,11 @@ const api = {
     isMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:isMaximized'),
   },
 
+  tabs: {
+    load: (): Promise<{ tabs: any[]; activeTabId: string | null }> => ipcRenderer.invoke('tabs:load'),
+    save: (data: { tabs: any[]; activeTabId: string | null }): Promise<void> => ipcRenderer.invoke('tabs:save', data),
+  },
+
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
 
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion'),

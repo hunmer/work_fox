@@ -1,13 +1,12 @@
 import type { Ref } from 'vue'
-import { useWorkflowStore } from '@/stores/workflow'
+import type { WorkflowStore } from '@/stores/workflow'
 
 export function useConnectionDrop(
+  store: WorkflowStore,
   project: (pos: { x: number; y: number }) => { x: number; y: number },
   vueFlowRef: Ref<HTMLElement | null | undefined>,
   nodeSelectOpen: Ref<boolean>,
 ) {
-  const store = useWorkflowStore()
-
   let connectSource: { nodeId: string; handleId: string | null } | null = null
   let connectSucceeded = false
   let connectDropPosition: { x: number; y: number } | null = null

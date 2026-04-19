@@ -62,16 +62,25 @@ export interface ShortcutBinding {
   enabled: boolean
 }
 
+// ===== App Tab 类型 =====
+export interface AppTab {
+  id: string
+  workflowId: string | null
+  name: string
+}
+
 // ===== Store 实例 =====
 interface StoreSchema {
   aiProviders: AIProvider[]
   shortcutBindings: ShortcutBinding[]
+  appTabs: { tabs: AppTab[]; activeTabId: string | null }
 }
 
 const store = new Store<StoreSchema>({
   defaults: {
     aiProviders: [],
-    shortcutBindings: []
+    shortcutBindings: [],
+    appTabs: { tabs: [], activeTabId: null },
   }
 })
 
@@ -113,4 +122,13 @@ export function getShortcutBindings(): ShortcutBinding[] {
 
 export function setShortcutBindings(bindings: ShortcutBinding[]): void {
   store.set('shortcutBindings', bindings)
+}
+
+// ===== App Tabs =====
+export function getAppTabs(): { tabs: AppTab[]; activeTabId: string | null } {
+  return store.get('appTabs', { tabs: [], activeTabId: null })
+}
+
+export function setAppTabs(data: { tabs: AppTab[]; activeTabId: string | null }): void {
+  store.set('appTabs', data)
 }

@@ -1,4 +1,4 @@
-import { useWorkflowStore } from '@/stores/workflow'
+import type { WorkflowStore } from '@/stores/workflow'
 import { useNotification } from '@/composables/useNotification'
 
 interface ClipboardNode {
@@ -17,14 +17,16 @@ interface ClipboardEdge {
   targetHandle: string | null
 }
 
-export function useClipboard(deps: {
-  getSelectedNodes: { value: any[] }
-  getSelectedEdges: { value: any[] }
-  getNodes: { value: any[] }
-  addSelectedNodes: (nodes: any[]) => void
-  nodesSelectionActive: { value: boolean }
-}) {
-  const store = useWorkflowStore()
+export function useClipboard(
+  store: WorkflowStore,
+  deps: {
+    getSelectedNodes: { value: any[] }
+    getSelectedEdges: { value: any[] }
+    getNodes: { value: any[] }
+    addSelectedNodes: (nodes: any[]) => void
+    nodesSelectionActive: { value: boolean }
+  },
+) {
   const notify = useNotification()
 
   let clipboardNodes: ClipboardNode[] = []

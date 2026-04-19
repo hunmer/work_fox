@@ -11,7 +11,8 @@ import '@vue-flow/minimap/dist/style.css'
 import '@vue-flow/node-resizer/dist/style.css'
 
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable'
-import { useWorkflowStore } from '@/stores/workflow'
+import { provideWorkflowStore, type WorkflowStore } from '@/stores/workflow'
+import { useTabStore, type Tab } from '@/stores/tab'
 import CustomNodeWrapper from './CustomNodeWrapper.vue'
 import CustomEdge from './CustomEdge.vue'
 import NodeSidebar from './NodeSidebar.vue'
@@ -35,13 +36,21 @@ import { useWorkflowFileActions } from '@/composables/workflow/useWorkflowFileAc
 import { useClipboard } from '@/composables/workflow/useClipboard'
 import { useEditorShortcuts } from '@/composables/workflow/useEditorShortcuts'
 
-const store = useWorkflowStore()
+const props = defineProps<{
+  tab: Tab
+  store: WorkflowStore
+}>()
+
+provideWorkflowStore(props.store)
+
+const tabStore = useTabStore()
+const store = props.store
 const listDialogOpen = ref(false)
 const nodeSelectOpen = ref(false)
 const pluginsDialogOpen = ref(false)
 const settingsDialogOpen = ref(false)
 const pluginPickerOpen = ref(false)
-const FLOW_ID = 'workflow-editor-flow'
+const FLOW_ID = `workflow-editor-flow-${props.tab.id}`
 
 const {
   project,
@@ -62,14 +71,14 @@ const {
   onNodeSelectFromDialog,
   resetConnectionDrop,
   markConnectSucceeded,
-} = useConnectionDrop(project, vueFlowRef, nodeSelectOpen)
+} = useConnectionDrop(store, project, vueFlowRef, nodeSelectOpen)
 
 const {
   onEdgeInsertNode,
   onNodeSelectFromEdge,
   resetEdgeInsert,
   hasInsertContext,
-} = useEdgeInsert()
+} = useEdgeInsert(store)
 
 const {
   executionBarExpanded,
@@ -85,7 +94,7 @@ const {
   edges,
   handleConnect,
   handleNodesInitialized,
-} = useFlowCanvas(FLOW_ID)
+} = useFlowCanvas(store, FLOW_ID)
 
 const {
   isEditingName,
@@ -98,13 +107,13 @@ const {
   exportWorkflow,
   importWorkflow,
   onListSelect,
-} = useWorkflowFileActions(listDialogOpen)
+} = useWorkflowFileActions(store, listDialogOpen)
 
 const {
   copySelectedNodes,
   pasteClipboardNodes,
   deleteSelected,
-} = useClipboard({
+} = useClipboard(store, {
   getSelectedNodes,
   getSelectedEdges,
   getNodes,
@@ -112,7 +121,7 @@ const {
   nodesSelectionActive,
 })
 
-const { handleKeyDown } = useEditorShortcuts({
+const { handleKeyDown } = useEditorShortcuts(store, {
   saveWorkflow,
   copySelectedNodes,
   pasteClipboardNodes,

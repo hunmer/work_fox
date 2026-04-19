@@ -7,6 +7,7 @@ import { registerExecutionLogIpcHandlers } from './ipc/execution-log'
 import { registerChatIpcHandlers } from './ipc/chat'
 import { registerShortcutIpcHandlers, registerGlobalShortcuts, unregisterGlobalShortcuts } from './ipc/shortcut'
 import { registerPluginIpcHandlers } from './ipc/plugin'
+import { registerTabsIpcHandlers } from './ipc/tabs'
 import { pluginManager } from './services/plugin-manager'
 
 let mainWindow: BrowserWindow | null = null
@@ -48,6 +49,7 @@ app.whenReady().then(() => {
   registerChatIpcHandlers()
   registerShortcutIpcHandlers()
   registerPluginIpcHandlers()
+  registerTabsIpcHandlers()
   pluginManager.loadAll()
 
   ipcMain.on('window:minimize', () => mainWindow?.minimize())

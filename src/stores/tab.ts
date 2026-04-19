@@ -1,0 +1,114 @@
+import { defineStore } from 'pinia'
+import { ref, computed, watch, type Ref } from 'vue'
+import { createWorkflowStore, type WorkflowStore } from './workflow'
+
+export interface Tab {
+  id: string
+  workflowId: string | null
+  name: string
+}
+
+export const useTabStore = defineStore('tabs', () => {
+  const tabs = ref<Tab[]>([])
+  const activeTabId = ref<string | null>(null)
+  const storeMap = new Map<string, WorkflowStore>()
+
+  const activeTab = computed(() => tabs.value.find(t => t.id === activeTabId.value) || null)
+  const activeStore = computed(() => activeTabId.value ? storeMap.get(activeTabId.value) ?? null : null)
+
+  function getStore(tabId: string): WorkflowStore | undefined {
+    return storeMap.get(tabId)
+  }
+
+  async function restoreTabs() {
+    const data = await (window as any).api.tabs.load() as { tabs: Tab[]; activeTabId: string | null }
+    if (!data.tabs || data.tabs.length === 0) {
+      addTab()
+      return
+    }
+    for (const tab of data.tabs) {
+      const store = createWorkflowStore(tab.id)
+      storeMap.set(tab.id, store)
+      if (tab.workflowId) {
+        await store.loadData()
+        const wf = store.workflows.find(w => w.id === tab.workflowId)
+        if (wf) store.currentWorkflow = JSON.parse(JSON.stringify(wf))
+        else store.restoreDraft()
+      } else {
+        await store.loadData()
+        store.restoreDraft()
+      }
+      tabs.value.push(tab)
+    }
+    activeTabId.value = data.activeTabId || data.tabs[0]?.id || null
+  }
+
+  function addTab(workflowId: string | null = null, name: string = '未命名工作流'): string {
+    const id = crypto.randomUUID()
+    const store = createWorkflowStore(id)
+    storeMap.set(id, store)
+
+    if (workflowId) {
+      const existingStore = activeStore.value
+      const wf = existingStore?.workflows.find(w => w.id === workflowId)
+      if (wf) {
+        store.currentWorkflow = JSON.parse(JSON.stringify(wf))
+        store.loadData()
+        name = wf.name
+      }
+    } else {
+      store.loadData()
+      store.newWorkflow()
+    }
+
+    tabs.value.push({ id, workflowId, name })
+    activeTabId.value = id
+    persistTabs()
+    return id
+  }
+
+  function closeTab(tabId: string) {
+    const idx = tabs.value.findIndex(t => t.id === tabId)
+    if (idx === -1) return
+    tabs.value.splice(idx, 1)
+    storeMap.delete(tabId)
+
+    if (tabs.value.length === 0) {
+      addTab()
+      return
+    }
+
+    if (activeTabId.value === tabId) {
+      const newIdx = Math.min(idx, tabs.value.length - 1)
+      activeTabId.value = tabs.value[newIdx].id
+    }
+    persistTabs()
+  }
+
+  function switchTab(tabId: string) {
+    if (tabId === activeTabId.value) return
+    activeTabId.value = tabId
+    persistTabs()
+  }
+
+  function persistTabs() {
+    ;(window as any).api.tabs.save({
+      tabs: tabs.value.map(t => ({ id: t.id, workflowId: t.workflowId, name: t.name })),
+      activeTabId: activeTabId.value,
+    })
+  }
+
+  function updateTabWorkflow(tabId: string, workflowId: string | null, name: string) {
+    const tab = tabs.value.find(t => t.id === tabId)
+    if (tab) {
+      tab.workflowId = workflowId
+      tab.name = name
+      persistTabs()
+    }
+  }
+
+  return {
+    tabs, activeTabId, activeTab, activeStore,
+    getStore, restoreTabs, addTab, closeTab, switchTab, updateTabWorkflow, persistTabs,
+  }
+})

@@ -1,10 +1,8 @@
 import { computed, watch, nextTick } from 'vue'
 import { useVueFlow, MarkerType } from '@vue-flow/core'
-import { useWorkflowStore } from '@/stores/workflow'
+import type { WorkflowStore } from '@/stores/workflow'
 
-export function useFlowCanvas(flowId: string) {
-  const store = useWorkflowStore()
-
+export function useFlowCanvas(store: WorkflowStore, flowId: string) {
   const {
     onNodesChange,
     onEdgesChange,

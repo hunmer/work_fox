@@ -15,7 +15,7 @@ import {
 } from '@/lib/chat-db'
 import { useAIProviderStore } from './ai-provider'
 import { useChatUIStore } from './chat-ui'
-import { useWorkflowStore } from './workflow'
+import { useTabStore } from './tab'
 import { runAgentStream } from '@/lib/agent/agent'
 
 // ====== 辅助函数 ======
@@ -55,9 +55,9 @@ function buildWorkflowOptions(
   sessions: { value: ChatSession[] },
   currentSessionId: { value: string | null },
 ) {
-  const workflowStore = useWorkflowStore()
+  const workflowStore = useTabStore().activeStore
   const sessionData = sessions.value.find((s) => s.id === currentSessionId.value)
-  if (!sessionData?.workflowId || !workflowStore.currentWorkflow) return undefined
+  if (!sessionData?.workflowId || !workflowStore?.currentWorkflow) return undefined
   return {
     mode: 'workflow' as const,
     workflowId: workflowStore.currentWorkflow.id,

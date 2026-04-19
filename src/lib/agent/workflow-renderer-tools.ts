@@ -1,4 +1,4 @@
-import { useWorkflowStore } from '@/stores/workflow'
+import { useTabStore } from '@/stores/tab'
 import type { Workflow, ExecutionLog } from '@/lib/workflow/types'
 
 interface ToolResult {
@@ -44,7 +44,7 @@ const asyncExecutions = new Map<string, {
 }>()
 
 function getCurrentWorkflow(args: Record<string, unknown> = {}): ToolResult {
-  const workflowStore = useWorkflowStore()
+  const workflowStore = useTabStore().activeStore
   const workflow = workflowStore.currentWorkflow
   if (!workflow) {
     return { success: false, message: '当前没有加载工作流画布' }
@@ -108,7 +108,7 @@ export function executeRendererWorkflowTool(
 }
 
 async function executeWorkflowSync(): Promise<ToolResult> {
-  const workflowStore = useWorkflowStore()
+  const workflowStore = useTabStore().activeStore
   const workflow = workflowStore.currentWorkflow
   if (!workflow) {
     return { success: false, message: '当前没有加载工作流画布' }
@@ -142,7 +142,7 @@ async function executeWorkflowSync(): Promise<ToolResult> {
 }
 
 async function executeWorkflowAsync(): Promise<ToolResult> {
-  const workflowStore = useWorkflowStore()
+  const workflowStore = useTabStore().activeStore
   const workflow = workflowStore.currentWorkflow
   if (!workflow) {
     return { success: false, message: '当前没有加载工作流画布' }
@@ -195,7 +195,7 @@ function getWorkflowResult(args: Record<string, unknown>): ToolResult {
   const steps = formatExecutionResult(record.log, nodeId)
 
   // 从 workflowStore 获取实时状态（如果对应的执行仍在运行）
-  const workflowStore = useWorkflowStore()
+  const workflowStore = useTabStore().activeStore
   if (workflowStore.executionStatus === 'running' && record.workflowId === workflowStore.currentWorkflow?.id) {
     const currentLog = workflowStore.executionLog
     if (currentLog) {

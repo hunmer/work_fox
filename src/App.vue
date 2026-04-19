@@ -3,23 +3,29 @@ import { onMounted, ref } from 'vue'
 import { Toaster } from '@/components/ui/sonner'
 import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import CommandPaletteDialog from '@/components/command-palette/CommandPaletteDialog.vue'
-import { useWorkflowStore } from '@/stores/workflow'
+import { useTabStore } from '@/stores/tab'
 import { usePluginStore } from '@/stores/plugin'
 
-const store = useWorkflowStore()
+const tabStore = useTabStore()
 const pluginStore = usePluginStore()
 
 const commandPaletteOpen = ref(false)
 
 onMounted(async () => {
-  await store.loadData()
   await pluginStore.init()
+  await tabStore.restoreTabs()
 })
 </script>
 
 <template>
   <div class="h-screen w-screen flex flex-col bg-background text-foreground" :class="{ 'light': true }">
-    <WorkflowEditor />
+    <WorkflowEditor
+      v-for="tab in tabStore.tabs"
+      :key="tab.id"
+      v-show="tab.id === tabStore.activeTabId"
+      :tab="tab"
+      :store="tabStore.getStore(tab.id)!"
+    />
     <Toaster />
     <CommandPaletteDialog
       :open="commandPaletteOpen"

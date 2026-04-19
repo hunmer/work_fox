@@ -1,8 +1,6 @@
-import { useWorkflowStore } from '@/stores/workflow'
+import type { WorkflowStore } from '@/stores/workflow'
 
-export function useEdgeInsert() {
-  const store = useWorkflowStore()
-
+export function useEdgeInsert(store: WorkflowStore) {
   let insertEdgeId: string | null = null
   let insertSourceId: string | null = null
   let insertTargetId: string | null = null
