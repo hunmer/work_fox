@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { allNodeDefinitions, searchNodeDefinitions, type NodeTypeDefinition } from '@/lib/workflow/nodeRegistry'
+import { allNodeDefinitions, searchNodeDefinitions, registerPluginNodeDefinitions, type NodeTypeDefinition } from '@/lib/workflow/nodeRegistry'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
 import { usePluginStore } from '@/stores/plugin'
 import { Input } from '@/components/ui/input'
@@ -30,6 +30,7 @@ const openCategories = ref<Record<string, boolean>>({})
 async function loadPluginNodes() {
   if (!props.enabledPlugins?.length) {
     pluginNodes.value = []
+    registerPluginNodeDefinitions([])
     return
   }
   const allNodes: any[] = []
@@ -38,6 +39,7 @@ async function loadPluginNodes() {
     allNodes.push(...nodes)
   }
   pluginNodes.value = allNodes
+  registerPluginNodeDefinitions(allNodes)
 }
 
 watch(() => props.enabledPlugins, loadPluginNodes, { immediate: true, deep: true })

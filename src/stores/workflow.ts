@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch, type Ref } from 'vue'
 import type { Workflow, WorkflowFolder, WorkflowNode, ExecutionLog } from '@/lib/workflow/types'
 import { WorkflowEngine, type EngineStatus } from '@/lib/workflow/engine'
+import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { executeRendererWorkflowTool } from '@/lib/agent/workflow-renderer-tools'
 import type { WorkflowToolExecuteRequest } from '../../preload'
 
@@ -312,7 +313,9 @@ function createEditActions(
 
   function addNode(type: string, position: { x: number; y: number }): WorkflowNode {
     undoRedo.pushUndo(`添加节点: ${type}`)
-    const node: WorkflowNode = { id: crypto.randomUUID(), type, label: type, position, data: {} }
+    const def = getNodeDefinition(type)
+    const label = def?.label || type
+    const node: WorkflowNode = { id: crypto.randomUUID(), type, label, position, data: {} }
     currentWorkflow.value!.nodes.push(node)
     return node
   }

@@ -133,7 +133,6 @@ watch(activeTab, async (tab) => {
       >
         <ChatPanel
           :chat="workflowChat"
-          embedded
         />
       </TabsContent>
     </Tabs>

@@ -258,10 +258,27 @@ export const allNodeDefinitions: NodeTypeDefinition[] = [
   ...customNodeDefinitions,
 ]
 
+/** 插件注册的额外节点定义 */
+const pluginNodeDefinitions: NodeTypeDefinition[] = []
+
+/** 注册插件节点定义（供 NodeSidebar 调用） */
+export function registerPluginNodeDefinitions(nodes: any[]): void {
+  for (const node of nodes) {
+    if (!pluginNodeDefinitions.find((d) => d.type === node.type)) {
+      pluginNodeDefinitions.push(node)
+    }
+  }
+}
+
+/** 清除插件节点定义 */
+export function clearPluginNodeDefinitions(): void {
+  pluginNodeDefinitions.length = 0
+}
+
 /** 按类别分组 */
 export function getNodeDefinitionsByCategory(): Record<string, NodeTypeDefinition[]> {
   const groups: Record<string, NodeTypeDefinition[]> = {}
-  for (const def of allNodeDefinitions) {
+  for (const def of [...allNodeDefinitions, ...pluginNodeDefinitions]) {
     if (!groups[def.category]) groups[def.category] = []
     groups[def.category].push(def)
   }
@@ -271,12 +288,13 @@ export function getNodeDefinitionsByCategory(): Record<string, NodeTypeDefinitio
 /** 按类型查找定义 */
 export function getNodeDefinition(type: string): NodeTypeDefinition | undefined {
   return allNodeDefinitions.find((d) => d.type === type)
+    || pluginNodeDefinitions.find((d) => d.type === type)
 }
 
 /** 搜索节点 */
 export function searchNodeDefinitions(query: string): NodeTypeDefinition[] {
   const q = query.toLowerCase()
-  return allNodeDefinitions.filter(
+  return [...allNodeDefinitions, ...pluginNodeDefinitions].filter(
     (d) => d.label.toLowerCase().includes(q) || d.type.toLowerCase().includes(q),
   )
 }
