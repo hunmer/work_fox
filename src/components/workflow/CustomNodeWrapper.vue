@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/context-menu'
 
 const props = defineProps<NodeProps>()
+defineEmits<{ (e: 'updateNodeInternals'): void }>()
 const store = useWorkflowStore()
 const { updateNodeInternals } = useVueFlow()
 

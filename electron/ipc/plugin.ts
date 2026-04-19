@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { pluginManager } from '../services/plugin-manager'
+import { workflowNodeRegistry } from '../services/workflow-node-registry'
 
 export function registerPluginIpcHandlers(): void {
   ipcMain.handle('plugin:list', () => {
@@ -39,12 +40,10 @@ export function registerPluginIpcHandlers(): void {
   })
 
   ipcMain.handle('plugin:get-workflow-nodes', (_e, pluginId: string) => {
-    const { workflowNodeRegistry } = require('../services/workflow-node-registry')
     return workflowNodeRegistry.getPluginNodes(pluginId)
   })
 
   ipcMain.handle('plugin:list-workflow-plugins', () => {
-    const { workflowNodeRegistry } = require('../services/workflow-node-registry')
     const allPluginMeta = pluginManager.list()
     const workflowPlugins = allPluginMeta.filter((p) => {
       return workflowNodeRegistry.getPluginNodes(p.id).length > 0

@@ -6,6 +6,7 @@ import { pluginEventBus } from './plugin-event-bus'
 import { PluginStorage } from './plugin-storage'
 import { createPluginContext } from './plugin-context'
 import type { PluginInfo, PluginMeta, PluginInstance } from './plugin-types'
+import { workflowNodeRegistry } from './workflow-node-registry'
 
 class PluginManager {
   private plugins: Map<string, PluginInstance> = new Map()
@@ -17,8 +18,8 @@ class PluginManager {
   constructor() {
     this.userDataPath = app.getPath('userData')
     this.pluginsDir = app.isPackaged
-      ? join(this.userDataPath, 'plugins')
-      : join(__dirname, '../../resources/plugins')
+      ? join(process.resourcesPath, 'plugins')
+      : join(app.getAppPath(), 'resources/plugins')
     this.loadDisabledList()
   }
 
@@ -109,7 +110,6 @@ class PluginManager {
         try {
           const workflowModule = require(workflowPath)
           if (workflowModule?.nodes) {
-            const { workflowNodeRegistry } = require('./workflow-node-registry')
             workflowNodeRegistry.register(info.id, workflowModule)
           }
         } catch (err) {
@@ -142,7 +142,6 @@ class PluginManager {
     }
     // 注销工作流节点
     if (instance.info.hasWorkflow) {
-      const { workflowNodeRegistry } = require('./workflow-node-registry')
       workflowNodeRegistry.unregister(pluginId)
     }
     instance.cleanupEvents()

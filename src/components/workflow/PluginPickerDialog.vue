@@ -12,10 +12,12 @@ import { Checkbox } from '@/components/ui/checkbox'
 
 const props = defineProps<{
   enabledPlugins: string[]
+  open: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'update:enabledPlugins', value: string[]): void
+  (e: 'update:open', value: boolean): void
 }>()
 
 const pluginStore = usePluginStore()
@@ -43,7 +45,7 @@ function togglePlugin(pluginId: string) {
 </script>
 
 <template>
-  <Dialog>
+  <Dialog :open="open" @update:open="emit('update:open', $event)">
     <DialogContent class="sm:max-w-[400px]">
       <DialogHeader>
         <DialogTitle>工作流插件</DialogTitle>

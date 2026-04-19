@@ -329,7 +329,9 @@ function onConnect(params: any) {
     />
     <PluginPickerDialog
       v-if="store.currentWorkflow"
+      :open="pluginPickerOpen"
       :enabled-plugins="store.currentWorkflow.enabledPlugins || []"
+      @update:open="pluginPickerOpen = $event"
       @update:enabled-plugins="store.currentWorkflow!.enabledPlugins = $event"
     />
   </div>
