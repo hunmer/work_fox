@@ -1,0 +1,97 @@
+import Store from 'electron-store'
+import { randomUUID } from 'crypto'
+
+// ===== AI Provider 类型 =====
+export interface AIModel {
+  id: string
+  name: string
+  maxTokens?: number
+  supportsVision?: boolean
+  supportsThinking?: boolean
+}
+
+export interface AIProvider {
+  id: string
+  name: string
+  apiBase: string
+  apiKey: string
+  models: AIModel[]
+  enabled?: boolean
+}
+
+// ===== Workflow 类型 =====
+export interface WorkflowFolder {
+  id: string
+  name: string
+  parentId?: string | null
+  order: number
+  createdAt: number
+}
+
+export interface WorkflowNode {
+  id: string
+  type: string
+  label: string
+  position: { x: number; y: number }
+  data: Record<string, any>
+  nodeState?: 'normal' | 'disabled' | 'skipped'
+}
+
+export interface WorkflowEdge {
+  id: string
+  source: string
+  target: string
+}
+
+export interface Workflow {
+  id: string
+  name: string
+  folderId?: string | null
+  description?: string
+  nodes: WorkflowNode[]
+  edges: WorkflowEdge[]
+  createdAt: number
+  updatedAt: number
+}
+
+// ===== Store 实例 =====
+interface StoreSchema {
+  aiProviders: AIProvider[]
+}
+
+const store = new Store<StoreSchema>({
+  defaults: {
+    aiProviders: []
+  }
+})
+
+// ===== AI Provider CRUD =====
+export function listAIProviders(): AIProvider[] {
+  return store.get('aiProviders', [])
+}
+
+export function getAIProvider(id: string): AIProvider | undefined {
+  return listAIProviders().find(p => p.id === id)
+}
+
+export function createAIProvider(data: Omit<AIProvider, 'id'>): AIProvider {
+  const providers = listAIProviders()
+  const provider: AIProvider = { ...data, id: randomUUID() }
+  providers.push(provider)
+  store.set('aiProviders', providers)
+  return provider
+}
+
+export function updateAIProvider(id: string, data: Partial<Omit<AIProvider, 'id'>>): void {
+  const providers = listAIProviders()
+  const idx = providers.findIndex(p => p.id === id)
+  if (idx >= 0) {
+    providers[idx] = { ...providers[idx], ...data }
+    store.set('aiProviders', providers)
+  }
+}
+
+export function deleteAIProvider(id: string): void {
+  const providers = listAIProviders().filter(p => p.id !== id)
+  store.set('aiProviders', providers)
+}

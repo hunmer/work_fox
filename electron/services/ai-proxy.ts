@@ -1,0 +1,357 @@
+import { BrowserWindow } from 'electron'
+import { getAIProvider } from './store'
+import {
+  buildCategoryListResponse,
+  buildToolDetailResponse,
+  buildToolListResponse,
+  isBrowserBusinessToolName,
+} from '../../src/lib/agent/tools'
+import { dispatchWorkflowTool, rejectPendingRendererToolsForRequest } from './workflow-tool-dispatcher'
+
+interface ProxyRequest {
+  _requestId: string
+  providerId: string
+  modelId: string
+  system?: string
+  messages: Array<{ role: string; content: string | Array<Record<string, unknown>> }>
+  tools?: Array<Record<string, unknown>>
+  stream: boolean
+  maxTokens?: number
+  thinking?: { type: 'enabled'; budgetTokens: number }
+  targetTabId?: string
+  enabledToolNames?: string[]
+  _mode?: string
+  _workflowId?: string
+}
+
+const RETRYABLE_STATUS_CODES = new Set([429, 529, 500, 502, 503, 504])
+const MAX_RETRIES = 3
+const INITIAL_RETRY_DELAY_MS = 2000
+
+export const activeRequests = new Map<string, AbortController>()
+
+function isRetryableError(status: number): boolean {
+  return RETRYABLE_STATUS_CODES.has(status)
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * 将渲染进程的聊天请求代理到 LLM 供应商 API。
+ * API Key 仅在主进程内存中组装，不暴露给渲染进程。
+ */
+export async function proxyChatCompletions(
+  mainWindow: BrowserWindow,
+  params: ProxyRequest,
+): Promise<void> {
+  const { _requestId, providerId, modelId, system, messages, tools, stream, maxTokens, thinking, enabledToolNames, _mode, _workflowId } = params
+
+  const abortController = new AbortController()
+  activeRequests.set(_requestId, abortController)
+
+  const send = (channel: string, data: unknown) => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(channel, data)
+    }
+  }
+
+  try {
+    const provider = getAIProvider(providerId)
+    if (!provider) {
+      send('on:chat:error', { requestId: _requestId, error: `Provider not found: ${providerId}` })
+      return
+    }
+    if (!provider.apiKey) {
+      send('on:chat:error', { requestId: _requestId, error: `Provider has no API key: ${providerId}` })
+      return
+    }
+
+    const apiUrl = `${provider.apiBase.replace(/\/$/, '')}/v1/messages`
+    const MAX_TOOL_ROUNDS = 100
+    const currentMessages = [...messages]
+    const cumulativeUsage = { inputTokens: 0, outputTokens: 0 }
+    let contentBlockOffset = 0
+
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      console.log(`[ai-proxy] round ${round + 1}, messages count: ${currentMessages.length}`)
+
+      const body: Record<string, unknown> = {
+        model: modelId, messages: currentMessages, max_tokens: maxTokens ?? 4096, stream: true,
+      }
+      if (system) body.system = system
+      if (tools && tools.length > 0) body.tools = tools
+      if (thinking) {
+        body.thinking = thinking
+        if (!maxTokens || maxTokens < (thinking.budgetTokens + 1024)) body.max_tokens = (thinking.budgetTokens + 4096)
+      }
+
+      let response: Response | null = null
+      let lastErrorText = ''
+
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': provider.apiKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true',
+          },
+          body: JSON.stringify(body),
+          signal: abortController.signal,
+        })
+        if (response.ok) break
+        lastErrorText = await response.text()
+        if (attempt < MAX_RETRIES && isRetryableError(response.status)) {
+          const retryDelay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt)
+          send('on:chat:retry', { requestId: _requestId, attempt: attempt + 1, maxRetries: MAX_RETRIES, delayMs: retryDelay, status: response.status })
+          await delay(retryDelay)
+          continue
+        }
+        send('on:chat:error', { requestId: _requestId, error: `API error ${response.status}: ${lastErrorText}` })
+        return
+      }
+
+      if (!response || !response.body) {
+        send('on:chat:error', { requestId: _requestId, error: 'No response body' })
+        return
+      }
+
+      const parsed = await parseSSEStream(response.body, send, _requestId, cumulativeUsage, contentBlockOffset)
+      contentBlockOffset += parsed.blockCount
+
+      if (parsed.stopReason !== 'tool_use' || parsed.toolCalls.length === 0) {
+        send('on:chat:done', { requestId: _requestId, usage: cumulativeUsage })
+        return
+      }
+
+      // === 工具执行阶段 ===
+      const assistantContent: Array<Record<string, unknown>> = []
+      if (parsed.textContent) assistantContent.push({ type: 'text', text: parsed.textContent })
+      for (const tc of parsed.toolCalls) {
+        assistantContent.push({ type: 'tool_use', id: tc.id, name: tc.name, input: tc.args })
+      }
+
+      const toolResults: Array<Record<string, unknown>> = []
+      for (const tc of parsed.toolCalls) {
+        let result: any
+        if (_mode === 'workflow' && _workflowId) {
+          result = await dispatchWorkflowTool(mainWindow, _requestId, tc.id, tc.name, tc.args, _workflowId)
+        } else {
+          result = await executeTool(tc.name, tc.args, enabledToolNames)
+        }
+
+        const toolResultContent = typeof result === 'string' ? result : JSON.stringify(result)
+        const safeResult = typeof result === 'string' ? result : JSON.parse(JSON.stringify(result))
+        send('on:chat:tool-result', { requestId: _requestId, toolUseId: tc.id, name: tc.name, result: safeResult })
+        toolResults.push({ type: 'tool_result', tool_use_id: tc.id, content: toolResultContent })
+      }
+
+      currentMessages.push({ role: 'assistant', content: assistantContent })
+      currentMessages.push({ role: 'user', content: toolResults })
+    }
+
+    console.warn(`[ai-proxy] reached max tool rounds (${MAX_TOOL_ROUNDS}), stopping`)
+    send('on:chat:done', { requestId: _requestId })
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.log(`[ai-proxy] request ${_requestId} aborted by user`)
+      return
+    }
+    send('on:chat:error', { requestId: _requestId, error: error instanceof Error ? error.message : String(error) })
+  } finally {
+    rejectPendingRendererToolsForRequest(_requestId, new Error('请求已结束'))
+    activeRequests.delete(_requestId)
+  }
+}
+
+function forwardSSEEvent(
+  send: (channel: string, data: unknown) => void,
+  requestId: string,
+  event: Record<string, unknown>,
+  indexOffset = 0,
+): void {
+  const type = event.type as string
+  switch (type) {
+    case 'content_block_delta': {
+      const delta = event.delta as Record<string, unknown> | undefined
+      if (delta?.type === 'text_delta') {
+        send('on:chat:chunk', { requestId, token: delta.text })
+      } else if (delta?.type === 'thinking_delta') {
+        send('on:chat:thinking', { requestId, content: delta.thinking, index: (event.index as number) + indexOffset })
+      } else if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+        send('on:chat:tool-call-args-delta', { requestId, index: event.index, delta: delta.partial_json })
+      }
+      break
+    }
+    case 'content_block_start': {
+      const contentBlock = event.content_block as Record<string, unknown> | undefined
+      if (contentBlock?.type === 'tool_use') {
+        send('on:chat:tool-call', { requestId, toolCall: { id: contentBlock.id, name: contentBlock.name, args: {}, status: 'running', startedAt: Date.now() } })
+      }
+      break
+    }
+    case 'content_block_stop':
+      send('on:chat:tool-call-update', { requestId, index: event.index, status: 'completed', completedAt: Date.now() })
+      break
+    case 'message_delta': {
+      const delta = event.delta as Record<string, unknown> | undefined
+      if (delta?.stop_reason) send('on:chat:stop-reason', { requestId, stopReason: delta.stop_reason })
+      break
+    }
+    case 'error':
+      send('on:chat:error', { requestId, error: event.error })
+      break
+  }
+}
+
+interface ParsedToolCall { id: string; name: string; args: Record<string, unknown> }
+
+async function parseSSEStream(
+  body: NodeJS.ReadableStream,
+  send: (channel: string, data: unknown) => void,
+  requestId: string,
+  cumulativeUsage: { inputTokens: number; outputTokens: number },
+  indexOffset = 0,
+): Promise<{ textContent: string; toolCalls: ParsedToolCall[]; stopReason: string | null; blockCount: number }> {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let textContent = ''
+  let stopReason: string | null = null
+  let maxIndex = -1
+  const toolCalls: ParsedToolCall[] = []
+  const toolJsonBuffers = new Map<number, { callIndex: number; json: string }>()
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const data = line.slice(6).trim()
+      if (data === '[DONE]') continue
+      let event: Record<string, unknown>
+      try { event = JSON.parse(data) } catch { continue }
+
+      forwardSSEEvent(send, requestId, event, indexOffset)
+      if (typeof event.index === 'number') maxIndex = Math.max(maxIndex, event.index)
+
+      if ((event.type as string) === 'content_block_delta') {
+        const delta = event.delta as Record<string, unknown> | undefined
+        if (delta?.type === 'text_delta' && typeof delta.text === 'string') textContent += delta.text
+        if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+          const buf = toolJsonBuffers.get(event.index as number)
+          if (buf) buf.json += delta.partial_json
+        }
+      }
+      if ((event.type as string) === 'content_block_start') {
+        const cb = event.content_block as Record<string, unknown> | undefined
+        if (cb?.type === 'tool_use') {
+          const idx = event.index as number
+          toolJsonBuffers.set(idx, { callIndex: toolCalls.length, json: '' })
+          toolCalls.push({ id: cb.id as string, name: cb.name as string, args: {} })
+        }
+      }
+      if ((event.type as string) === 'content_block_stop') {
+        const buf = toolJsonBuffers.get(event.index as number)
+        if (buf) {
+          try {
+            toolCalls[buf.callIndex].args = JSON.parse(buf.json || '{}')
+            send('on:chat:tool-call-args', { requestId, toolUseId: toolCalls[buf.callIndex].id, args: toolCalls[buf.callIndex].args })
+          } catch { /* ignore parse error */ }
+          toolJsonBuffers.delete(event.index as number)
+        }
+      }
+      if ((event.type as string) === 'message_delta') {
+        const delta = event.delta as Record<string, unknown> | undefined
+        if (delta?.stop_reason) stopReason = delta.stop_reason as string
+        const usage = event.usage as Record<string, unknown> | undefined
+        if (usage && typeof usage.output_tokens === 'number') {
+          cumulativeUsage.outputTokens += usage.output_tokens
+          send('on:chat:usage', { requestId, ...cumulativeUsage })
+        }
+      }
+      if ((event.type as string) === 'message_start') {
+        const msg = event.message as Record<string, unknown> | undefined
+        const usage = msg?.usage as Record<string, unknown> | undefined
+        if (usage && typeof usage.input_tokens === 'number') {
+          cumulativeUsage.inputTokens += usage.input_tokens
+          send('on:chat:usage', { requestId, ...cumulativeUsage })
+        }
+      }
+    }
+  }
+  return { textContent, toolCalls, stopReason, blockCount: maxIndex + 1 }
+}
+
+/** 工具执行（去除浏览器特定工具） */
+export async function executeTool(
+  name: string,
+  args: Record<string, unknown>,
+  enabledToolNames?: string[],
+): Promise<unknown> {
+  try {
+    switch (name) {
+      case 'list_categories': return buildCategoryListResponse()
+      case 'list_tools_by_category': {
+        const category = args.category as string
+        if (!category) return { error: 'category is required' }
+        return buildToolListResponse(category, enabledToolNames)
+      }
+      case 'get_tool_detail': {
+        const toolName = (args.tool_name || args.toolName || args.name) as string
+        if (!toolName) return { error: 'tool_name is required' }
+        return buildToolDetailResponse(toolName, enabledToolNames)
+      }
+      case 'execute_tool': {
+        const toolName = (args.tool_name || args.toolName || args.name) as string
+        const toolArgs = isRecord(args.args) ? args.args : {}
+        if (!toolName) return { error: 'tool_name is required' }
+        if (!isBrowserBusinessToolName(toolName)) return { error: `Unknown tool: ${toolName}` }
+        return executeTool(toolName, toolArgs, enabledToolNames)
+      }
+      default:
+        return { error: `Tool not available in WorkFox: ${name}` }
+    }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+export async function testProviderConnection(providerId: string): Promise<{ success: boolean; error?: string }> {
+  const provider = getAIProvider(providerId)
+  if (!provider) return { success: false, error: `Provider not found: ${providerId}` }
+  try {
+    const apiUrl = `${provider.apiBase.replace(/\/$/, '')}/v1/messages`
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': provider.apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: provider.models[0]?.id ?? 'claude-sonnet-4-6-20250514',
+        messages: [{ role: 'user', content: 'Hi' }],
+        max_tokens: 10,
+        stream: false,
+      }),
+    })
+    if (response.ok) return { success: true }
+    const errorText = await response.text()
+    return { success: false, error: `HTTP ${response.status}: ${errorText}` }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}
