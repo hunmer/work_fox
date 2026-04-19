@@ -1,22 +1,24 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import {
-  Settings, Palette, Keyboard, Info
+  Settings, Palette, Keyboard, Info, Bot
 } from 'lucide-vue-next'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import SettingsShortcut from './SettingsShortcut.vue'
 import SettingsTheme from './SettingsTheme.vue'
 import SettingsAbout from './SettingsAbout.vue'
+import SettingsModels from './SettingsModels.vue'
 
 const props = defineProps<{ open: boolean; initialTab?: string }>()
 const emit = defineEmits<{ 'update:open': [value: boolean] }>()
 
 const tabs = [
+  { key: 'models', label: '模型', icon: Bot },
   { key: 'theme', label: '主题', icon: Palette },
   { key: 'shortcuts', label: '快捷键', icon: Keyboard },
   { key: 'about', label: '关于', icon: Info }
 ]
-const activeTab = ref('theme')
+const activeTab = ref('models')
 
 watch(() => props.open, (open) => {
   if (open && props.initialTab) {
@@ -58,7 +60,8 @@ watch(() => props.open, (open) => {
         </nav>
 
         <div class="flex-1 p-6 overflow-y-auto">
-          <SettingsTheme v-if="activeTab === 'theme'" />
+          <SettingsModels v-if="activeTab === 'models'" />
+          <SettingsTheme v-else-if="activeTab === 'theme'" />
           <SettingsShortcut v-else-if="activeTab === 'shortcuts'" />
           <SettingsAbout v-else-if="activeTab === 'about'" />
         </div>

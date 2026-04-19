@@ -173,6 +173,25 @@ function onDrop(event: DragEvent) {
 
 const enabledPlugins = computed(() => store.currentWorkflow?.enabledPlugins || [])
 
+const recentWorkflows = computed(() =>
+  [...store.workflows]
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, 10)
+    .map(wf => ({ id: wf.id, name: wf.name, updatedAt: wf.updatedAt })),
+)
+
+function goHome() {
+  store.currentWorkflow = null
+}
+
+function openRecentWorkflow(id: string) {
+  const wf = store.workflows.find(w => w.id === id)
+  if (wf) {
+    store.currentWorkflow = JSON.parse(JSON.stringify(wf))
+    store.selectedNodeId = null
+  }
+}
+
 watch(() => store.currentWorkflow, (val) => {
   if (val) store.saveDraft()
 }, { deep: true })
@@ -201,6 +220,8 @@ function onConnect(params: any) {
       :is-editing-name="isEditingName"
       :editing-name="editingName"
       :workflow-name="store.currentWorkflow?.name || ''"
+      :hide-tab-switcher="!store.currentWorkflow"
+      :recent-workflows="recentWorkflows"
       @new="store.newWorkflow()"
       @open="openWorkflow"
       @save="saveWorkflow"
@@ -212,6 +233,8 @@ function onConnect(params: any) {
       @cancel-edit-name="cancelEditName"
       @open-plugins="pluginsDialogOpen = true"
       @open-settings="settingsDialogOpen = true"
+      @go-home="goHome"
+      @open-recent="openRecentWorkflow"
     />
 
     <WelcomePage

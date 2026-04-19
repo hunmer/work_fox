@@ -9,9 +9,9 @@ import ChatMessageList from './ChatMessageList.vue'
 import ChatInput from './ChatInput.vue'
 import ModelSelector from './ModelSelector.vue'
 import SessionManager from './SessionManager.vue'
-import ProviderManager from './ProviderManager.vue'
 import { Button } from '@/components/ui/button'
 import { Settings, X } from 'lucide-vue-next'
+import SettingsDialog from '@/components/settings/SettingsDialog.vue'
 
 const props = defineProps<{
   chat: ChatStoreInstance
@@ -20,7 +20,7 @@ const props = defineProps<{
 
 const providerStore = useAIProviderStore()
 const uiStore = useChatUIStore()
-const showProviderManager = ref(false)
+const showSettings = ref(false)
 const pluginTools = ref<ToolDisplayItem[]>([])
 
 async function loadPluginTools(pluginIds: string[]) {
@@ -89,7 +89,7 @@ function handleEdit(messageId: string, newContent: string) {
         variant="ghost"
         size="icon"
         class="h-7 w-7"
-        @click="showProviderManager = true"
+        @click="showSettings = true"
       >
         <Settings class="h-4 w-4" />
       </Button>
@@ -130,7 +130,11 @@ function handleEdit(messageId: string, newContent: string) {
       @toggle-tool="handleToggleTool"
     />
 
-    <!-- 供应商管理对话框 -->
-    <ProviderManager v-model:open="showProviderManager" />
+    <!-- 设置对话框 -->
+    <SettingsDialog
+      :open="showSettings"
+      initial-tab="models"
+      @update:open="showSettings = $event"
+    />
   </div>
 </template>

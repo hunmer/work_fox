@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
-import { Minus, Square, X, Maximize2, ChevronDown, Plus } from 'lucide-vue-next'
+import { Minus, Square, X, Maximize2, ChevronDown, Plus, Home } from 'lucide-vue-next'
 import {
   Menubar,
   MenubarMenu,
   MenubarTrigger,
   MenubarContent,
   MenubarItem,
+  MenubarSub,
+  MenubarSubTrigger,
+  MenubarSubContent,
 } from '@/components/ui/menubar'
 import {
   DropdownMenu,
@@ -20,6 +23,8 @@ const props = defineProps<{
   isEditingName: boolean
   editingName: string
   workflowName: string
+  hideTabSwitcher?: boolean
+  recentWorkflows: { id: string; name: string; updatedAt: number }[]
 }>()
 
 const emit = defineEmits<{
@@ -34,6 +39,8 @@ const emit = defineEmits<{
   cancelEditName: []
   openPlugins: []
   openSettings: []
+  goHome: []
+  openRecent: [id: string]
 }>()
 
 const tabStore = useTabStore()
@@ -70,6 +77,15 @@ refreshMaximized()
     <div class="relative flex items-center px-2 py-1">
     <Menubar class="border-0 bg-transparent h-7 no-drag">
       <MenubarMenu>
+        <MenubarTrigger
+          class="text-xs h-6 px-2 flex items-center gap-1"
+          @click="emit('goHome')"
+        >
+          <Home class="w-3 h-3" />
+          主页
+        </MenubarTrigger>
+      </MenubarMenu>
+      <MenubarMenu>
         <MenubarTrigger class="text-xs h-6 px-2">
           文件
         </MenubarTrigger>
@@ -86,6 +102,21 @@ refreshMaximized()
           >
             打开...
           </MenubarItem>
+          <MenubarSub v-if="recentWorkflows.length > 0">
+            <MenubarSubTrigger class="text-xs">
+              最近打开
+            </MenubarSubTrigger>
+            <MenubarSubContent>
+              <MenubarItem
+                v-for="wf in recentWorkflows"
+                :key="wf.id"
+                class="text-xs"
+                @click="emit('openRecent', wf.id)"
+              >
+                {{ wf.name }}
+              </MenubarItem>
+            </MenubarSubContent>
+          </MenubarSub>
           <MenubarItem
             v-if="workflowName"
             class="text-xs"
@@ -130,7 +161,7 @@ refreshMaximized()
     </Menubar>
 
     <!-- Tab switcher -->
-    <div class="flex items-center gap-1 ml-2 no-drag">
+    <div v-if="!hideTabSwitcher" class="flex items-center gap-1 ml-2 no-drag">
       <DropdownMenu>
         <DropdownMenuTrigger class="flex items-center gap-1 text-xs px-2 py-1 rounded hover:bg-muted transition-colors max-w-40">
           <span class="truncate">{{ workflowName || '未命名工作流' }}</span>
@@ -163,6 +194,7 @@ refreshMaximized()
       </button>
     </div>
 
+    <template v-if="!hideTabSwitcher">
     <input
       v-if="isEditingName"
       ref="nameInput"
@@ -180,6 +212,7 @@ refreshMaximized()
     >
       {{ workflowName || '未命名工作流' }}
     </span>
+    </template>
 
     <div class="flex-1" />
 

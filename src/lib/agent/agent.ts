@@ -74,7 +74,7 @@ export async function runAgentStream(
   // 工作流模式：合并已启用插件的 Agent 工具
   if (isWorkflow && options?.enabledPlugins?.length) {
     try {
-      const pluginTools = await window.api.plugin.getAgentTools(options.enabledPlugins)
+      const pluginTools = await window.api.plugin.getAgentTools(JSON.parse(JSON.stringify(options.enabledPlugins)))
       if (pluginTools?.length) {
         tools = [...tools, ...pluginTools]
       }
