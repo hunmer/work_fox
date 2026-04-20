@@ -60,6 +60,19 @@
   - `/Users/Zhuanz/Documents/work_fox/findings.md` (updated)
   - `/Users/Zhuanz/Documents/work_fox/progress.md` (updated)
 
+### Phase 6: Runtime PoC Implementation
+- **Status:** in_progress
+- Actions taken:
+  - 按 `.claude/skills/planning-with-files` 恢复上下文，读取根目录 `task_plan.md`、`progress.md`、`findings.md`
+  - 运行本地 `session-catchup.py`，确认本轮没有未同步上下文输出
+  - 阅读 `docs/superpowers/plans/2026-04-20-claude-agent-sdk-migration.md`，决定先实施 Batch 1：替换 chat 主执行链路
+  - 补扫 `electron/ipc/chat.ts`、`preload/index.ts`、`src/lib/agent/agent.ts`、`src/lib/agent/stream.ts`、`src/stores/chat.ts`、`electron/services/workflow-node-registry.ts`
+  - 检索并确认 Claude Agent SDK 官方关键约束：项目级 `CLAUDE.md` 需 `systemPrompt preset=claude_code` + `settingSources: ["project"]`；实时流输出需 `includePartialMessages`
+  - 更新 `task_plan.md`，将规划阶段扩展为实施阶段并明确后续 Phase 6-10
+- Files created/modified:
+  - `/Users/Zhuanz/Documents/work_fox/task_plan.md` (updated)
+  - `/Users/Zhuanz/Documents/work_fox/progress.md` (updated)
+
 ## Test Results
 | Test | Input | Expected | Actual | Status |
 |------|-------|----------|--------|--------|
@@ -67,6 +80,7 @@
 | 代码上下文扫描 | 搜索 `workflow`、`agent`、`skill`、`tools` 相关代码 | 找到当前替换范围和耦合点 | 已确认主要链路与 skills UI 耦合点 | ✓ |
 | 官方文档核对 | 检索 Claude Agent SDK TypeScript 文档 | 确认目录与规则加载能力 | 已确认 `cwd`/`additionalDirectories`/`settingSources` 等能力 | ✓ |
 | 迁移设计落盘 | 生成详细迁移文档 | 有一份可直接实施的批次化计划 | 已生成 `docs/superpowers/plans/2026-04-20-claude-agent-sdk-migration.md` | ✓ |
+| 计划恢复 | 读取三份 planning 文件并运行 session catchup | 恢复到当前实施阶段 | 已将计划从 Phase 5 扩展到 Phase 6-10 | ✓ |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |

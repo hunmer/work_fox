@@ -22,6 +22,11 @@
 - 当前 `electron/services/workflow-tool-dispatcher.ts` 已把 workflow 工具分成 main/renderer 两类 owner，说明 workflow tools 不需要重写，只需要在 Claude runtime 中做包装。
 - 当前 provider 模型 `src/stores/ai-provider.ts` 假设的是通用 provider/model 列表，而 Claude Agent SDK 实际上是特定 runtime，后续更适合引入 `runtimeType` 概念。
 - 当前 Electron main 构建采用 `electron-vite` + `moduleResolution: bundler`，引入 Claude Agent SDK 时需要提前验证依赖打包兼容性。
+- `preload/index.ts` 目前只暴露 `chat.completions` / `chat.abort`，因此 Batch 1 最稳妥的替换方式是保持 `chat:*` IPC 名称不变，先替换其主进程实现。
+- `src/lib/agent/stream.ts` 当前监听的前端事件协议存在细节不一致：主进程发送 `chat:tool-call-args-delta` / `chat:tool-call-update`，而 renderer 主要消费 `chat:tool-call-args` / `chat:tool-result`；新 runtime 需要尽量对齐 renderer 实际消费面。
+- Claude Agent SDK 官方行为约束已确认：默认 `settingSources` 为空，不会主动加载配置文件；要让 session 读取项目级 `CLAUDE.md`，需要 `systemPrompt: { type: "preset", preset: "claude_code" }` 且包含 `settingSources: ["project"]`。
+- Claude Agent SDK 的实时流式文本/工具状态面向 `query()` 异步流输出，若要保留当前 token 级渲染，需要启用 `includePartialMessages` 并消费 `stream_event`。
+- Claude Agent SDK 的自定义工具路径更适合通过 in-process MCP 暴露；因此在 Batch 1 中不应同时强行迁移现有 tool schema，而应先打通无工具或最小工具集的运行时主链路。
 
 ## Technical Decisions
 | Decision | Rationale |
@@ -34,6 +39,8 @@
 | 第一阶段 tools 兼容采用本地 adapter，不优先使用 MCP | 现有主进程已经掌握执行能力和 plugin registry，适配成本最低 |
 | 前端事件协议暂时保留 `chat:*` 命名 | 当前 `ChatStore` 和消息渲染已经围绕这套协议实现，短期内保留可减少改动 |
 | 单独新增详细迁移文档到 `docs/superpowers/plans/` | 方便后续直接按批次实施，而不是只依赖根目录摘要型 planning 文件 |
+| Batch 1 继续复用 `chat:completions` / `chat:abort` IPC | 这能让前端最小改动切换到 Claude runtime |
+| Batch 1 不引入 Claude SDK 工具适配 | 先验证 runtime、事件流和 Electron 打包，再进入工具兼容层 |
 
 ## Issues Encountered
 | Issue | Resolution |
@@ -44,6 +51,7 @@
 
 ## Resources
 - Claude Agent SDK TypeScript 文档: https://platform.claude.com/docs/en/agent-sdk/typescript
+- Claude Agent SDK Streaming Output: https://docs.claude.com/en/docs/claude-code/sdk/sdk-typescript
 - Claude Agent SDK 仓库: https://github.com/anthropics/claude-agent-sdk-typescript
 - 当前主进程代理实现: `/Users/Zhuanz/Documents/work_fox/electron/services/ai-proxy.ts`
 - 当前 agent 入口: `/Users/Zhuanz/Documents/work_fox/src/lib/agent/agent.ts`

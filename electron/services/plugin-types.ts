@@ -71,12 +71,18 @@ export interface FetchBuffersItem {
   error?: string
 }
 
+/** POST 请求选项 */
+export interface PostOptions extends FetchOptions {
+  body?: any
+}
+
 /** 内置网络请求 API */
 export interface FetchApi {
   fetchText(url: string, options?: FetchOptions): Promise<string>
   fetchJson<T = any>(url: string, options?: FetchOptions): Promise<T>
   fetchBuffer(url: string, options?: FetchOptions): Promise<FetchBufferResult>
   fetchBuffers(urls: string[], options?: FetchOptions): Promise<FetchBuffersItem[]>
+  postJson<T = any>(url: string, options?: PostOptions): Promise<T>
 }
 
 /** 列举文件结果项 */

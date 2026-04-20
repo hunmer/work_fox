@@ -1,7 +1,7 @@
 import https from 'https'
 import http from 'http'
 import { URL } from 'url'
-import type { FetchApi, FetchOptions, FetchBufferResult, FetchBuffersItem } from './plugin-types'
+import type { FetchApi, FetchOptions, FetchBufferResult, FetchBuffersItem, PostOptions } from './plugin-types'
 
 function httpGet(url: string, options: FetchOptions & { timeout: number }): Promise<http.IncomingMessage> {
   return new Promise((resolve, reject) => {
@@ -46,6 +46,37 @@ function collectBuffer(res: http.IncomingMessage): Promise<Buffer> {
   })
 }
 
+function httpPost(url: string, options: PostOptions & { timeout: number }): Promise<http.IncomingMessage> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url)
+    const mod = parsed.protocol === 'https:' ? https : http
+    const body = options.body ? JSON.stringify(options.body) : ''
+    const req = mod.request(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        'User-Agent': options.userAgent || 'WorkFox/1.0',
+        ...options.headers,
+      },
+      timeout: options.timeout,
+    }, (res) => {
+      if (res.statusCode! >= 300 && res.statusCode! < 400 && res.headers.location) {
+        return httpGet(res.headers.location, options).then(resolve, reject)
+      }
+      if (res.statusCode! >= 400) {
+        collectBody(res).then(text => reject(new Error(`HTTP ${res.statusCode}: ${text.slice(0, 200)}`)))
+        return
+      }
+      resolve(res)
+    })
+    req.on('error', reject)
+    req.on('timeout', () => { req.destroy(); reject(new Error('请求超时')) })
+    req.write(body)
+    req.end()
+  })
+}
+
 export function createBuiltinFetchApi(): FetchApi {
   return {
     async fetchText(url, options = {}): Promise<string> {
@@ -79,6 +110,12 @@ export function createBuiltinFetchApi(): FetchApi {
         }
       }
       return results
+    },
+
+    async postJson<T = any>(url: string, options: PostOptions = {}): Promise<T> {
+      const res = await httpPost(url, { ...options, timeout: options.timeout || 60000 })
+      const text = await collectBody(res)
+      return JSON.parse(text)
     },
   }
 }
