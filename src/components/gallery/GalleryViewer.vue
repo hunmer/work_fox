@@ -1,5 +1,5 @@
 <template>
-  <Lightgallery :settings="lgSettings" :onInit="onInit" :class="containerClass">
+  <div ref="containerRef" :class="containerClass">
     <a
       v-for="item in items"
       :key="item.id"
@@ -15,12 +15,12 @@
       </div>
       <div v-if="item.caption" class="gallery-caption">{{ item.caption }}</div>
     </a>
-  </Lightgallery>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import Lightgallery from 'lightgallery/vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import lightGallery from 'lightgallery'
 import lgThumbnail from 'lightgallery/plugins/thumbnail'
 import lgZoom from 'lightgallery/plugins/zoom'
 import lgVideo from 'lightgallery/plugins/video'
@@ -55,6 +55,7 @@ const emit = defineEmits<{
   init: [instance: any]
 }>()
 
+const containerRef = ref<HTMLElement | null>(null)
 const lgInstance = ref<any>(null)
 const defaultPlugins = [lgThumbnail, lgZoom, lgVideo]
 
@@ -74,10 +75,39 @@ const lgSettings = computed(() => ({
   },
 }))
 
-const onInit = (detail: any) => {
-  lgInstance.value = detail.instance
-  emit('init', detail.instance)
+const initGallery = async () => {
+  await nextTick()
+
+  if (!containerRef.value || lgInstance.value) {
+    return
+  }
+
+  lgInstance.value = lightGallery(containerRef.value, lgSettings.value)
+  emit('init', lgInstance.value)
 }
+
+const destroyGallery = () => {
+  lgInstance.value?.destroy?.()
+  lgInstance.value = null
+}
+
+onMounted(() => {
+  void initGallery()
+})
+
+watch(lgSettings, async () => {
+  destroyGallery()
+  await initGallery()
+}, { deep: true })
+
+watch(() => props.items, async () => {
+  await nextTick()
+  lgInstance.value?.refresh?.()
+}, { deep: true })
+
+onBeforeUnmount(() => {
+  destroyGallery()
+})
 </script>
 
 <style scoped>
