@@ -7,8 +7,6 @@ import { executeRendererWorkflowTool } from '@/lib/agent/workflow-renderer-tools
 import type { WorkflowToolExecuteRequest } from '../../preload'
 import { useAgentSettingsStore, createWorkflowAgentConfigFromGlobal } from './agent-settings'
 
-const DRAFT_KEY_PREFIX = 'workflow-draft'
-
 export interface WorkflowChanges {
   upsertNodes: any[]
   deleteNodeIds: string[]
@@ -227,39 +225,13 @@ function createVersionManager(currentWorkflow: Ref<Workflow | null>, api: () => 
   return { versions, loadVersions, saveVersion, deleteVersion, restoreVersion }
 }
 
-// ====== 草稿持久化 ======
+// ====== 脏标记（仅内存） ======
 
-function createDraftManager(currentWorkflow: Ref<Workflow | null>, tabId: string) {
-  const draftKey = `${DRAFT_KEY_PREFIX}-${tabId}`
+function createDirtyTracker() {
   const isDirty = ref(false)
-  let suppressUntil = 0
-
-  function saveDraft(): void {
-    if (!currentWorkflow.value) return
-    if (Date.now() < suppressUntil) return
-    try { localStorage.setItem(draftKey, JSON.stringify(currentWorkflow.value)) } catch { /* ignore */ }
-    isDirty.value = true
-  }
-
-  function clearDraft(): void {
-    localStorage.removeItem(draftKey)
-    isDirty.value = false
-    suppressUntil = Date.now() + 500
-  }
-
-  function restoreDraft(): boolean {
-    try {
-      const raw = localStorage.getItem(draftKey)
-      if (!raw) return false
-      const draft = JSON.parse(raw) as Workflow
-      if (!draft?.id) return false
-      currentWorkflow.value = draft
-      isDirty.value = true
-      return true
-    } catch { return false }
-  }
-
-  return { saveDraft, clearDraft, restoreDraft, isDirty }
+  function markDirty(): void { isDirty.value = true }
+  function markClean(): void { isDirty.value = false }
+  return { isDirty, markDirty, markClean }
 }
 
 // ====== 数据 CRUD ======
@@ -269,7 +241,7 @@ function createCrudActions(
   workflowFolders: Ref<WorkflowFolder[]>,
   currentWorkflow: Ref<Workflow | null>,
   api: () => any,
-  draftMgr: ReturnType<typeof createDraftManager>,
+  dirtyTracker: ReturnType<typeof createDirtyTracker>,
   versionMgr: ReturnType<typeof createVersionManager>,
 ) {
   async function loadData() {
@@ -289,7 +261,7 @@ function createCrudActions(
       workflows.value.push(created)
       currentWorkflow.value = created
     }
-    draftMgr.clearDraft()
+    dirtyTracker.markClean()
     await versionMgr.saveVersion()
   }
 
@@ -298,7 +270,7 @@ function createCrudActions(
     workflows.value = workflows.value.filter((w) => w.id !== id)
     if (currentWorkflow.value?.id === id) {
       currentWorkflow.value = null
-      draftMgr.clearDraft()
+      dirtyTracker.markClean()
     }
   }
 
@@ -334,7 +306,6 @@ function createEditActions(
   executionLog: Ref<ExecutionLog | null>,
   executionContext: Ref<Record<string, any>>,
   undoRedo: ReturnType<typeof createUndoRedoManager>,
-  draftMgr: ReturnType<typeof createDraftManager>,
 ) {
   function newWorkflow(folderId: string | null, name = '新工作流') {
     const startNodeId = crypto.randomUUID()
@@ -357,7 +328,6 @@ function createEditActions(
     executionStatus.value = 'idle'
     executionLog.value = null
     executionContext.value = {}
-    draftMgr.saveDraft()
   }
 
   function addNode(type: string, position: { x: number; y: number }): WorkflowNode {
@@ -617,9 +587,9 @@ export function createWorkflowStore(tabId: string) {
     const undoRedo = createUndoRedoManager(currentWorkflow, api)
     const execLogMgr = createExecutionLogManager(currentWorkflow, api)
     const versionMgr = createVersionManager(currentWorkflow, api)
-    const draftMgr = createDraftManager(currentWorkflow, tabId)
-    const crudActions = createCrudActions(workflows, workflowFolders, currentWorkflow, api, draftMgr, versionMgr)
-    const editActions = createEditActions(currentWorkflow, selectedNodeId, executionStatus, executionLog, executionContext, undoRedo, draftMgr)
+    const dirtyTracker = createDirtyTracker()
+    const crudActions = createCrudActions(workflows, workflowFolders, currentWorkflow, api, dirtyTracker, versionMgr)
+    const editActions = createEditActions(currentWorkflow, selectedNodeId, executionStatus, executionLog, executionContext, undoRedo)
     const execActions = createExecutionActions(currentWorkflow, executionStatus, executionLog, executionContext, engine, execLogMgr)
     const debugActions = createDebugActions(currentWorkflow, executionContext)
     const aiActions = createAIActions(currentWorkflow, undoRedo)
@@ -647,15 +617,6 @@ export function createWorkflowStore(tabId: string) {
       undoRedo.reset()
       undoRedo.loadOperationHistory()
     })
-
-    function restoreDraft(): boolean {
-      if (!draftMgr.restoreDraft()) return false
-      selectedNodeId.value = null
-      executionStatus.value = 'idle'
-      executionLog.value = null
-      executionContext.value = {}
-      return true
-    }
 
     return {
       tabId,
@@ -688,10 +649,8 @@ export function createWorkflowStore(tabId: string) {
       saveVersion: versionMgr.saveVersion,
       deleteVersion: versionMgr.deleteVersion,
       restoreVersion: (versionId: string) => versionMgr.restoreVersion(versionId, undoRedo.pushUndo),
-      isDirty: draftMgr.isDirty,
-      saveDraft: draftMgr.saveDraft,
-      restoreDraft,
-      clearDraft: draftMgr.clearDraft,
+      isDirty: dirtyTracker.isDirty,
+      markDirty: dirtyTracker.markDirty,
       ...aiActions,
     }
   })

@@ -14,11 +14,10 @@ onMounted(() => {
   store.loadData()
 })
 
-// 监听 open 变化：打开时恢复草稿（比 @update:open 更可靠）
+// 监听 open 变化：打开时加载数据
 watch(open, (val) => {
   if (val) {
     store.loadData()
-    store.restoreDraft()
   }
 })
 </script>

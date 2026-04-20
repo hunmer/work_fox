@@ -222,7 +222,7 @@ let skipDraft = true
 watch(() => store.currentWorkflow, (val) => {
   tabStore.updateTabWorkflow(props.tab.id, val?.id ?? null, val?.name || '')
   if (skipDraft) { skipDraft = false; return }
-  if (val) store.saveDraft()
+  if (val) store.markDirty()
 }, { deep: true, immediate: true })
 
 // 定时自动保存：10秒内有变更则保存

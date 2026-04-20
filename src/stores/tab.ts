@@ -47,12 +47,9 @@ export const useTabStore = defineStore('tabs', () => {
         const wf = store.workflows.find(w => w.id === tab.workflowId)
         if (wf) {
           store.currentWorkflow = JSON.parse(JSON.stringify(wf))
-        } else {
-          store.restoreDraft()
         }
       } else {
         await store.loadData()
-        store.restoreDraft()
       }
       tabs.value.push(tab)
     }
