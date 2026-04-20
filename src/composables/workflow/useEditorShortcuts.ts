@@ -40,6 +40,7 @@ export function useEditorShortcuts(
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
       if (isInputElement(e.target as HTMLElement)) return
+      if (store.isPreview) return
       e.preventDefault()
       deps.pasteClipboardNodes()
       return
@@ -52,6 +53,7 @@ export function useEditorShortcuts(
     }
     if (e.key === 'Delete' || e.key === 'Backspace') {
       if (isInputElement(e.target as HTMLElement)) return
+      if (store.isPreview) return
       e.preventDefault()
       deps.deleteSelected()
     }

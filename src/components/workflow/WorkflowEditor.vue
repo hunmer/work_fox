@@ -166,12 +166,14 @@ function onPaneClick() {
 
 function onDragOver(event: DragEvent) {
   event.preventDefault()
+  if (store.isPreview) return
   if (event.dataTransfer) {
     event.dataTransfer.dropEffect = 'move'
   }
 }
 
 function onDrop(event: DragEvent) {
+  if (store.isPreview) return
   const type = event.dataTransfer?.getData('application/vueflow')
   if (!type) return
   const bounds = vueFlowRef.value?.getBoundingClientRect()
@@ -263,6 +265,7 @@ onUnmounted(() => {
 })
 
 function onConnect(params: any) {
+  if (store.isPreview) return
   markConnectSucceeded()
   handleConnect(params)
 }
@@ -337,6 +340,9 @@ function onConnect(params: any) {
                 :min-zoom="0.2"
                 :max-zoom="4"
                 :connection-mode="ConnectionMode.Loose"
+                :nodes-draggable="!store.isPreview"
+                :nodes-connectable="!store.isPreview"
+                :edges-updatable="!store.isPreview"
                 class="h-full"
                 @connect="onConnect"
                 @connect-start="onConnectStart"

@@ -159,6 +159,10 @@ export interface ExecutionLog {
   finishedAt?: number
   status: 'running' | 'completed' | 'paused' | 'error'
   steps: ExecutionStep[]
+  snapshot?: {
+    nodes: WorkflowNode[]
+    edges: WorkflowEdge[]
+  }
 }
 
 /** 工作流版本快照 */

@@ -185,9 +185,10 @@ function createExecutionLogManager(currentWorkflow: Ref<Workflow | null>, api: (
     selectedExecutionLogId.value = null
   }
 
-  function appendCompletedLog(log: ExecutionLog, workflowId: string) {
+  function appendCompletedLog(log: ExecutionLog, workflowId: string, snapshot?: { nodes: any[]; edges: any[] }) {
     log.id = `exec-${Date.now()}`
     log.workflowId = workflowId
+    if (snapshot) log.snapshot = JSON.parse(JSON.stringify(snapshot))
     executionLogs.value.unshift(log)
     if (executionLogs.value.length > 100) executionLogs.value.length = 100
     selectedExecutionLogId.value = log.id
@@ -459,7 +460,8 @@ function createExecutionActions(
     executionLog.value = log
 
     if ((log.status === 'completed' || log.status === 'error') && currentWorkflow.value) {
-      execLogMgr.appendCompletedLog(log, currentWorkflow.value.id)
+      const { nodes, edges } = currentWorkflow.value
+      execLogMgr.appendCompletedLog(log, currentWorkflow.value.id, { nodes, edges })
     }
   }
 
@@ -473,7 +475,8 @@ function createExecutionActions(
     executionLog.value = log
 
     if ((log.status === 'completed' || log.status === 'error') && currentWorkflow.value) {
-      execLogMgr.appendCompletedLog(log, currentWorkflow.value!.id)
+      const { nodes, edges } = currentWorkflow.value
+      execLogMgr.appendCompletedLog(log, currentWorkflow.value!.id, { nodes, edges })
     }
   }
 
@@ -612,6 +615,9 @@ export function createWorkflowStore(tabId: string) {
     const debugActions = createDebugActions(currentWorkflow, executionContext)
     const aiActions = createAIActions(currentWorkflow, undoRedo)
 
+    const isPreview = ref(false)
+    let _prePreviewWorkflow: Workflow | null = null
+
     const rootFolders = computed(() =>
       workflowFolders.value.filter((f) => f.parentId === null).sort((a, b) => a.order - b.order),
     )
@@ -652,6 +658,25 @@ export function createWorkflowStore(tabId: string) {
       executionLogs: execLogMgr.executionLogs,
       selectedExecutionLogId: execLogMgr.selectedExecutionLogId,
       selectedExecutionLog,
+      isPreview,
+      enterPreview: (log: ExecutionLog) => {
+        if (isPreview.value) return
+        if (!log.snapshot || !currentWorkflow.value) return
+        _prePreviewWorkflow = JSON.parse(JSON.stringify(currentWorkflow.value))
+        currentWorkflow.value.nodes = JSON.parse(JSON.stringify(log.snapshot.nodes))
+        currentWorkflow.value.edges = JSON.parse(JSON.stringify(log.snapshot.edges))
+        isPreview.value = true
+      },
+      exitPreview: () => {
+        if (!isPreview.value) return
+        if (_prePreviewWorkflow && currentWorkflow.value) {
+          currentWorkflow.value.nodes = _prePreviewWorkflow.nodes
+          currentWorkflow.value.edges = _prePreviewWorkflow.edges
+          _prePreviewWorkflow = null
+        }
+        execLogMgr.selectedExecutionLogId.value = null
+        isPreview.value = false
+      },
       loadExecutionLogs: execLogMgr.loadExecutionLogs,
       deleteExecutionLog: execLogMgr.deleteExecutionLog,
       clearExecutionLogs: execLogMgr.clearExecutionLogs,

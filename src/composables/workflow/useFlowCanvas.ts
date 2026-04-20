@@ -19,6 +19,7 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
   })
 
   onNodesChange((changes) => {
+    if (store.isPreview) return
     let nextSelectedNodeIds: string[] | null = null
 
     for (const change of changes) {
@@ -42,6 +43,7 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
   })
 
   onEdgesChange((changes) => {
+    if (store.isPreview) return
     for (const change of changes) {
       if (change.type === 'remove') {
         store.removeEdge(change.id)

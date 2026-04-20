@@ -184,6 +184,7 @@ onMounted(() => {
 
 <template>
   <NodeResizer
+    v-if="!store.isPreview"
     :is-visible="props.selected"
     min-width="140"
     min-height="60"
@@ -205,9 +206,9 @@ onMounted(() => {
           class="!z-10 !w-3 !h-3 !bg-blue-500 !border-2 !border-blue-300"
         />
 
-        <!-- 悬浮删除按钮（开始/结束节点隐藏） -->
+        <!-- 悬浮删除按钮（开始/结束节点隐藏，预览模式下隐藏） -->
         <button
-          v-if="!isBoundaryNode"
+          v-if="!isBoundaryNode && !store.isPreview"
           class="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-opacity hover:bg-destructive/80 z-10"
           @click.stop="handleDelete"
         >
@@ -276,7 +277,7 @@ onMounted(() => {
             v-else
             class="text-xs truncate hover:bg-muted/50 rounded px-1 py-0.5"
             :class="{ 'opacity-50 line-through': currentNodeState === 'disabled' }"
-            @dblclick.stop="startEdit"
+            @dblclick.stop="!store.isPreview && startEdit()"
           >
             {{ displayLabel }}
           </div>
@@ -323,7 +324,7 @@ onMounted(() => {
       </div>
     </ContextMenuTrigger>
 
-    <ContextMenuContent class="w-48">
+    <ContextMenuContent v-if="!store.isPreview" class="w-48">
       <ContextMenuItem @click="setNodeState('normal')">
         <CircleSlash class="w-4 h-4 mr-2 text-green-500" />
         正常

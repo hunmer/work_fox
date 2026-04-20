@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { RotateCcw, RotateCw, LayoutGrid } from 'lucide-vue-next'
+import { RotateCcw, RotateCw, LayoutGrid, EyeOff } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useWorkflowStore } from '@/stores/workflow'
@@ -38,6 +38,20 @@ function handleAutoLayout() {
 <template>
   <div v-if="store" class="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 rounded-lg border border-border bg-background/90 backdrop-blur-sm px-2 py-1 shadow-sm">
     <TooltipProvider :delay-duration="400">
+      <Tooltip v-if="store.isPreview">
+        <TooltipTrigger as-child>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-7 gap-1 px-2 text-orange-500 hover:text-orange-600"
+            @click="store.exitPreview()"
+          >
+            <EyeOff class="w-3.5 h-3.5" />
+            <span class="text-xs">退出预览</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top" class="text-xs">退出执行记录预览</TooltipContent>
+      </Tooltip>
       <Tooltip>
         <TooltipTrigger as-child>
           <Button

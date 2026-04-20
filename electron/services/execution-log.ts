@@ -27,6 +27,10 @@ export interface ExecutionLog {
   finishedAt?: number
   status: 'running' | 'completed' | 'paused' | 'error'
   steps: ExecutionStep[]
+  snapshot?: {
+    nodes: any[]
+    edges: any[]
+  }
 }
 
 const MAX_LOGS_PER_WORKFLOW = 100
