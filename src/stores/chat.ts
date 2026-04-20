@@ -193,6 +193,33 @@ function createStreamCallbacks(
 ) {
   let streamingRenderOrder = 0
   let pausedForUserQuestion = false
+  const pendingToolArgs = new Map<string, Record<string, unknown>>()
+  const pendingToolResults = new Map<string, { name: string; result: unknown }>()
+
+  function applyToolResult(call: ToolCall, result: unknown) {
+    if (call.completedAt && call.status === 'completed') {
+      return
+    }
+    call.status = 'completed'
+    call.result = result
+    call.completedAt = Date.now()
+  }
+
+  function applyPendingToolEvents(call: ToolCall) {
+    const args = pendingToolArgs.get(call.id)
+    if (args) {
+      call.args = args
+      pendingToolArgs.delete(call.id)
+    }
+
+    const result = pendingToolResults.get(call.id)
+    if (result) {
+      applyToolResult(call, result.result)
+      pendingToolResults.delete(call.id)
+    }
+
+    maybePauseForUserQuestion(call)
+  }
 
   function maybePauseForUserQuestion(call: ToolCall | undefined) {
     if (call && (isAskUserQuestionToolName(call.name) || call.name.toLowerCase().includes('question'))) {
@@ -231,7 +258,7 @@ function createStreamCallbacks(
       call.textPosition = streamingToken.value.length
       call.renderOrder = streamingRenderOrder++
       streamingToolCalls.value.push(call)
-      maybePauseForUserQuestion(call)
+      applyPendingToolEvents(call)
     },
     onToolCallArgs: (event: { toolUseId: string; args: Record<string, unknown> }) => {
       const tc = streamingToolCalls.value.find((t) => t.id === event.toolUseId)
@@ -246,6 +273,8 @@ function createStreamCallbacks(
       if (tc) {
         tc.args = event.args
         maybePauseForUserQuestion(tc)
+      } else {
+        pendingToolArgs.set(event.toolUseId, event.args)
       }
     },
     onToolResult: (event: { toolUseId: string; name: string; result: unknown }) => {
@@ -258,10 +287,10 @@ function createStreamCallbacks(
         isAskUserQuestion: isAskUserQuestionToolName(event.name) || (tc ? isAskUserQuestionToolName(tc.name) : false),
         result: event.result,
       })
-      if (tc && !(tc.completedAt && tc.status === 'completed')) {
-        tc.status = 'completed'
-        tc.result = event.result
-        tc.completedAt = Date.now()
+      if (tc) {
+        applyToolResult(tc, event.result)
+      } else {
+        pendingToolResults.set(event.toolUseId, { name: event.name, result: event.result })
       }
     },
     onThinking: (thinkContent: string, blockIndex: number) => {

@@ -2,7 +2,14 @@ import { constants as fsConstants } from 'node:fs'
 import { access, readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
-import { AbortError, query, type PermissionMode, type Query } from '@anthropic-ai/claude-agent-sdk'
+import {
+  AbortError,
+  query,
+  type PermissionMode,
+  type PostToolUseFailureHookInput,
+  type PostToolUseHookInput,
+  type Query,
+} from '@anthropic-ai/claude-agent-sdk'
 import { BrowserWindow } from 'electron'
 import { createClaudeToolAdapter } from './claude-tool-adapter'
 import { getAIProvider } from './store'
@@ -60,6 +67,7 @@ interface StreamBridgeState {
   usage: UsageState
   toolJsonBuffers: Map<number, { toolUseId: string; json: string }>
   tools: Map<string, ToolCallState>
+  completedToolResults: Map<string, { name: string; result: unknown }>
   emittedText: boolean
 }
 
@@ -87,6 +95,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function cloneJson<T>(value: T): T {
+  if (value === undefined) {
+    return value
+  }
   return JSON.parse(JSON.stringify(value)) as T
 }
 
@@ -331,6 +342,50 @@ function completeToolCall(
   })
 }
 
+function completePendingToolCalls(
+  mainWindow: BrowserWindow,
+  requestId: string,
+  state: StreamBridgeState,
+  getToolResult: (toolUseId: string) => unknown,
+  fallbackResult: unknown,
+): void {
+  for (const tool of state.tools.values()) {
+    if (tool.completed) {
+      continue
+    }
+    tool.completed = true
+    completeToolCall(
+      mainWindow,
+      requestId,
+      tool.id,
+      tool.name,
+      getToolResult(tool.id) ?? fallbackResult,
+    )
+  }
+}
+
+function emitToolResultIfNeeded(
+  mainWindow: BrowserWindow,
+  requestId: string,
+  state: StreamBridgeState,
+  toolUseId: string,
+  toolName: string,
+  result: unknown,
+): void {
+  if (state.completedToolResults.has(toolUseId)) {
+    return
+  }
+
+  state.completedToolResults.set(toolUseId, { name: toolName, result })
+
+  const tool = state.tools.get(toolUseId)
+  if (tool) {
+    tool.completed = true
+  }
+
+  completeToolCall(mainWindow, requestId, toolUseId, toolName, result)
+}
+
 function bridgePartialMessage(
   mainWindow: BrowserWindow,
   requestId: string,
@@ -502,6 +557,58 @@ export async function startClaudeAgentRun(
       loadRuleMd: runtime?.loadRuleMd,
     })
 
+    const streamState: StreamBridgeState = {
+      blockIndexOffset: 0,
+      currentMessageMaxIndex: -1,
+      usage: { inputTokens: 0, outputTokens: 0 },
+      toolJsonBuffers: new Map(),
+      tools: new Map(),
+      completedToolResults: new Map(),
+      emittedText: false,
+    }
+
+    const toolHooks = {
+      PostToolUse: [{
+        hooks: [async (input: PostToolUseHookInput) => {
+          // MCP tools emit their own results in the adapter; hooks here fill the gap for built-in tools.
+          if (toolAdapter.getToolResult(input.tool_use_id) !== undefined) {
+            return { continue: true }
+          }
+
+          emitToolResultIfNeeded(
+            mainWindow,
+            _requestId,
+            streamState,
+            input.tool_use_id,
+            toolAdapter.resolveDisplayToolName(input.tool_name),
+            input.tool_response,
+          )
+          return { continue: true }
+        }],
+      }],
+      PostToolUseFailure: [{
+        hooks: [async (input: PostToolUseFailureHookInput) => {
+          if (toolAdapter.getToolResult(input.tool_use_id) !== undefined) {
+            return { continue: true }
+          }
+
+          emitToolResultIfNeeded(
+            mainWindow,
+            _requestId,
+            streamState,
+            input.tool_use_id,
+            toolAdapter.resolveDisplayToolName(input.tool_name),
+            {
+              success: false,
+              message: input.error,
+              isInterrupt: input.is_interrupt === true,
+            },
+          )
+          return { continue: true }
+        }],
+      }],
+    }
+
     const agentQuery = query({
       prompt: buildPrompt(params.messages),
       options: {
@@ -521,6 +628,7 @@ export async function startClaudeAgentRun(
         systemPrompt: buildSystemPrompt(params, ruleInstructions),
         mcpServers: mcpServerNames.length > 0 ? toolAdapter.mcpServers : undefined,
         canUseTool: toolAdapter.canUseTool,
+        hooks: toolHooks,
         env: {
           ...process.env,
           ANTHROPIC_API_KEY: provider.apiKey,
@@ -535,16 +643,19 @@ export async function startClaudeAgentRun(
       queryHandle: agentQuery,
     })
 
-    const streamState: StreamBridgeState = {
-      blockIndexOffset: 0,
-      currentMessageMaxIndex: -1,
-      usage: { inputTokens: 0, outputTokens: 0 },
-      toolJsonBuffers: new Map(),
-      tools: new Map(),
-      emittedText: false,
-    }
-
     for await (const message of agentQuery) {
+      console.debug('[ClaudeAgentRuntime] stream message:', {
+        requestId: _requestId,
+        type: message.type,
+        subtype: 'subtype' in message ? message.subtype : undefined,
+        toolUseId: 'tool_use_id' in message ? message.tool_use_id : undefined,
+        toolName: 'tool_name' in message ? message.tool_name : undefined,
+        precedingToolUseIds: 'preceding_tool_use_ids' in message ? message.preceding_tool_use_ids : undefined,
+        hasMessage: 'message' in message,
+        eventType: message.type === 'stream_event' && isRecord(message.event) ? message.event.type : undefined,
+        eventIndex: message.type === 'stream_event' && isRecord(message.event) ? message.event.index : undefined,
+      })
+
       if (message.type === 'stream_event') {
         bridgePartialMessage(mainWindow, _requestId, streamState, message.event, toolAdapter.resolveDisplayToolName)
         continue
@@ -569,7 +680,7 @@ export async function startClaudeAgentRun(
             id: message.tool_use_id,
             name: displayName,
             args,
-            completed: false,
+            completed: streamState.completedToolResults.has(message.tool_use_id),
           })
           emitToolCall(mainWindow, _requestId, message.tool_use_id, displayName, args)
         }
@@ -582,14 +693,15 @@ export async function startClaudeAgentRun(
           if (!tool || tool.completed) {
             continue
           }
-          tool.completed = true
-          const knownResult = toolAdapter.getToolResult(toolUseId)
-          completeToolCall(
+          emitToolResultIfNeeded(
             mainWindow,
             _requestId,
+            streamState,
             toolUseId,
             tool.name,
-            knownResult ?? { summary: message.summary },
+            streamState.completedToolResults.get(toolUseId)?.result
+              ?? toolAdapter.getToolResult(toolUseId)
+              ?? { summary: message.summary },
           )
         }
         continue
@@ -600,6 +712,13 @@ export async function startClaudeAgentRun(
         emitUsage(mainWindow, _requestId, streamState.usage)
 
         if (message.subtype === 'success') {
+          completePendingToolCalls(
+            mainWindow,
+            _requestId,
+            streamState,
+            (toolUseId) => streamState.completedToolResults.get(toolUseId)?.result ?? toolAdapter.getToolResult(toolUseId),
+            { success: true },
+          )
           send(mainWindow, 'chat:done', {
             requestId: _requestId,
             usage: {
@@ -608,6 +727,13 @@ export async function startClaudeAgentRun(
             },
           })
         } else {
+          completePendingToolCalls(
+            mainWindow,
+            _requestId,
+            streamState,
+            (toolUseId) => streamState.completedToolResults.get(toolUseId)?.result ?? toolAdapter.getToolResult(toolUseId),
+            { success: false, message: message.errors.join('\n') || 'Claude agent runtime failed' },
+          )
           const errorText = message.errors.join('\n') || 'Claude agent runtime failed'
           console.debug('[ClaudeAgentRuntime] result error:', {
             requestId: _requestId,

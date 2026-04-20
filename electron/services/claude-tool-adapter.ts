@@ -38,6 +38,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
 function sanitizeToolName(name: string): string {
   return name
     .replace(/[^a-zA-Z0-9_]/g, '_')
@@ -191,6 +195,7 @@ export function createClaudeToolAdapter(context: ToolAdapterContext): {
 } {
   const toolExecutions = new Map<string, ToolExecutionContext>()
   const toolResults = new Map<string, unknown>()
+  const emittedToolResults = new Set<string>()
   const pendingToolUseIds = new Map<string, string[]>()
   const mcpNameToDisplayName = new Map<string, string>()
   const mcpServers: Record<string, McpServerConfig> = {}
@@ -225,13 +230,54 @@ export function createClaudeToolAdapter(context: ToolAdapterContext): {
     return toolUseId
   }
 
+  function completeToolUse(toolUseId: string, displayName: string, result: unknown): void {
+    toolResults.set(toolUseId, result)
+    if (emittedToolResults.has(toolUseId)) {
+      return
+    }
+    emittedToolResults.add(toolUseId)
+    if (context.mainWindow.isDestroyed() || context.mainWindow.webContents.isDestroyed()) {
+      return
+    }
+    context.mainWindow.webContents.send('chat:tool-result', {
+      requestId: context.requestId,
+      toolUseId,
+      name: displayName,
+      result: cloneJson(result),
+    })
+  }
+
+  async function executeTrackedTool(
+    displayName: string,
+    args: Record<string, unknown>,
+    executor: () => Promise<unknown>,
+  ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
+    const toolUseId = shiftPendingToolUse(displayName) ?? `${context.requestId}:${displayName}:${Date.now()}`
+    try {
+      const result = await executor()
+      completeToolUse(toolUseId, displayName, result)
+      return toToolResult(result)
+    } catch (error) {
+      const result = {
+        success: false,
+        message: error instanceof Error ? error.message : String(error),
+      }
+      completeToolUse(toolUseId, displayName, result)
+      return toToolResult(result)
+    }
+  }
+
   if (context.mode === 'browser') {
     const browserTools = [
       tool(
         'list_categories',
         '列出可用能力分类及场景说明。',
         {},
-        async () => toToolResult(await executeBrowserTool('list_categories', {}, context.enabledToolNames)),
+        async (args) => executeTrackedTool(
+          'list_categories',
+          args,
+          () => executeBrowserTool('list_categories', {}, context.enabledToolNames),
+        ),
       ),
       tool(
         'list_tools_by_category',
@@ -239,7 +285,11 @@ export function createClaudeToolAdapter(context: ToolAdapterContext): {
         {
           category: z.string().describe('能力分类名称'),
         },
-        async (args) => toToolResult(await executeBrowserTool('list_tools_by_category', args, context.enabledToolNames)),
+        async (args) => executeTrackedTool(
+          'list_tools_by_category',
+          args,
+          () => executeBrowserTool('list_tools_by_category', args, context.enabledToolNames),
+        ),
       ),
       tool(
         'get_tool_detail',
@@ -247,7 +297,11 @@ export function createClaudeToolAdapter(context: ToolAdapterContext): {
         {
           tool_name: z.string().describe('工具名，必须来自 list_tools_by_category 返回结果。'),
         },
-        async (args) => toToolResult(await executeBrowserTool('get_tool_detail', args, context.enabledToolNames)),
+        async (args) => executeTrackedTool(
+          'get_tool_detail',
+          args,
+          () => executeBrowserTool('get_tool_detail', args, context.enabledToolNames),
+        ),
       ),
       tool(
         'execute_tool',
@@ -256,7 +310,11 @@ export function createClaudeToolAdapter(context: ToolAdapterContext): {
           tool_name: z.string().describe('要执行的业务工具名。'),
           args: z.record(z.string(), z.unknown()).optional().describe('业务工具参数。'),
         },
-        async (args) => toToolResult(await executeBrowserTool('execute_tool', args, context.enabledToolNames)),
+        async (args) => executeTrackedTool(
+          'execute_tool',
+          args,
+          () => executeBrowserTool('execute_tool', args, context.enabledToolNames),
+        ),
       ),
       tool(
         'delay',
@@ -265,7 +323,11 @@ export function createClaudeToolAdapter(context: ToolAdapterContext): {
           milliseconds: z.number().min(100).max(30_000).describe('等待时长（毫秒）。'),
           reason: z.string().optional().describe('等待原因说明（可选）。'),
         },
-        async (args) => toToolResult(await executeBrowserTool('delay', args, context.enabledToolNames)),
+        async (args) => executeTrackedTool(
+          'delay',
+          args,
+          () => executeBrowserTool('delay', args, context.enabledToolNames),
+        ),
       ),
     ]
 
@@ -323,7 +385,7 @@ export function createClaudeToolAdapter(context: ToolAdapterContext): {
               args,
               context.workflowId!,
             )
-            toolResults.set(toolUseId, result)
+            completeToolUse(toolUseId, definition.name, result)
             console.debug('[ClaudeToolAdapter] workflow tool result:', {
               requestId: context.requestId,
               workflowId: context.workflowId,
@@ -365,7 +427,7 @@ export function createClaudeToolAdapter(context: ToolAdapterContext): {
 
               if (!resolved) {
                 const result = { success: false, message: `插件工具不存在: ${definition.name}` }
-                toolResults.set(toolUseId, result)
+                completeToolUse(toolUseId, definition.name, result)
                 console.debug('[ClaudeToolAdapter] plugin tool missing:', {
                   requestId: context.requestId,
                   pluginId: definition.pluginId,
@@ -377,7 +439,7 @@ export function createClaudeToolAdapter(context: ToolAdapterContext): {
 
               try {
                 const result = await resolved.handler(definition.name, args, resolved.api)
-                toolResults.set(toolUseId, result)
+                completeToolUse(toolUseId, definition.name, result)
                 console.debug('[ClaudeToolAdapter] plugin tool result:', {
                   requestId: context.requestId,
                   pluginId: definition.pluginId,
@@ -391,7 +453,7 @@ export function createClaudeToolAdapter(context: ToolAdapterContext): {
                   success: false,
                   message: error instanceof Error ? error.message : String(error),
                 }
-                toolResults.set(toolUseId, result)
+                completeToolUse(toolUseId, definition.name, result)
                 console.debug('[ClaudeToolAdapter] plugin tool error:', {
                   requestId: context.requestId,
                   pluginId: definition.pluginId,
@@ -442,7 +504,8 @@ export function createClaudeToolAdapter(context: ToolAdapterContext): {
       return toolExecutions.get(toolUseId)
     },
     setToolResult(toolUseId, result) {
-      toolResults.set(toolUseId, result)
+      const executionContext = toolExecutions.get(toolUseId)
+      completeToolUse(toolUseId, executionContext?.displayName ?? toolUseId, result)
     },
     getToolResult(toolUseId) {
       return toolResults.get(toolUseId)
