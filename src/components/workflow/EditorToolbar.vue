@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
-import { Minus, Square, X, Maximize2, ChevronDown, Plus, Home } from 'lucide-vue-next'
+import { Minus, Square, X, Maximize2, ChevronDown, Plus, Home, Save } from 'lucide-vue-next'
 import {
   Menubar,
   MenubarMenu,
@@ -24,6 +24,7 @@ const props = defineProps<{
   editingName: string
   workflowName: string
   hideTabSwitcher?: boolean
+  isDirty?: boolean
   recentWorkflows: { id: string; name: string; updatedAt: number }[]
 }>()
 
@@ -215,6 +216,17 @@ refreshMaximized()
     </template>
 
     <div class="flex-1" />
+
+    <div class="flex items-center no-drag">
+      <button
+        v-if="isDirty"
+        class="inline-flex items-center justify-center w-7 h-7 rounded hover:bg-muted text-orange-400 hover:text-orange-500 transition-colors"
+        title="未保存的更改，点击保存"
+        @click="emit('save')"
+      >
+        <Save class="w-3.5 h-3.5" />
+      </button>
+    </div>
 
     <div class="flex items-center no-drag">
       <button

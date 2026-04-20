@@ -222,6 +222,7 @@ function onConnect(params: any) {
       :editing-name="editingName"
       :workflow-name="store.currentWorkflow?.name || ''"
       :hide-tab-switcher="!store.currentWorkflow"
+      :is-dirty="store.isDirty"
       :recent-workflows="recentWorkflows"
       @new="store.newWorkflow()"
       @open="openWorkflow"

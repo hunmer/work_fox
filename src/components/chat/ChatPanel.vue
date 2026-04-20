@@ -4,6 +4,7 @@ import type { ChatStoreInstance } from '@/stores/chat'
 import { useAIProviderStore } from '@/stores/ai-provider'
 import { useChatUIStore } from '@/stores/chat-ui'
 import { BROWSER_TOOL_LIST } from '@/lib/agent/tools'
+import { WORKFLOW_TOOL_DEFINITIONS } from '@/lib/agent/workflow-tools'
 import type { ToolDisplayItem } from '@/types'
 import ChatMessageList from './ChatMessageList.vue'
 import ChatInput from './ChatInput.vue'
@@ -44,6 +45,13 @@ async function loadPluginTools(pluginIds: string[]) {
 watch(() => props.enabledPlugins, (ids) => loadPluginTools(ids || []), { immediate: true })
 
 const toolDisplayItems = computed<ToolDisplayItem[]>(() => {
+  if (isWorkflowContext.value && uiStore.workflowEditMode) {
+    return WORKFLOW_TOOL_DEFINITIONS.map((t) => ({
+      name: t.name,
+      description: t.description,
+      category: '工作流编辑',
+    }))
+  }
   const base = BROWSER_TOOL_LIST.map((t) => ({
     name: t.name,
     description: t.description,

@@ -197,14 +197,17 @@ function createVersionManager(currentWorkflow: Ref<Workflow | null>, api: () => 
 
 function createDraftManager(currentWorkflow: Ref<Workflow | null>, tabId: string) {
   const draftKey = `${DRAFT_KEY_PREFIX}-${tabId}`
+  const isDirty = ref(false)
 
   function saveDraft(): void {
     if (!currentWorkflow.value) return
     try { localStorage.setItem(draftKey, JSON.stringify(currentWorkflow.value)) } catch { /* ignore */ }
+    isDirty.value = true
   }
 
   function clearDraft(): void {
     localStorage.removeItem(draftKey)
+    isDirty.value = false
   }
 
   function restoreDraft(): boolean {
@@ -214,11 +217,12 @@ function createDraftManager(currentWorkflow: Ref<Workflow | null>, tabId: string
       const draft = JSON.parse(raw) as Workflow
       if (!draft?.id) return false
       currentWorkflow.value = draft
+      isDirty.value = true
       return true
     } catch { return false }
   }
 
-  return { saveDraft, clearDraft, restoreDraft }
+  return { saveDraft, clearDraft, restoreDraft, isDirty }
 }
 
 // ====== 数据 CRUD ======
@@ -613,6 +617,7 @@ export function createWorkflowStore(tabId: string) {
       saveVersion: versionMgr.saveVersion,
       deleteVersion: versionMgr.deleteVersion,
       restoreVersion: (versionId: string) => versionMgr.restoreVersion(versionId, undoRedo.pushUndo),
+      isDirty: draftMgr.isDirty,
       saveDraft: draftMgr.saveDraft,
       restoreDraft,
       clearDraft: draftMgr.clearDraft,

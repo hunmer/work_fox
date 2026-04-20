@@ -308,27 +308,21 @@ async function confirmDelete() {
           >
             <DropdownMenuLabel class="flex items-center justify-between">
               <span>工具列表</span>
-              <span class="text-xs font-normal text-muted-foreground">
-                {{ enabledCount }}/{{ toolList.length }}
+              <span class="flex items-center gap-2">
+                <span v-if="isWorkflowContext" class="flex items-center gap-1.5 text-xs font-normal">
+                  <span class="text-muted-foreground">节点编辑</span>
+                  <Switch
+                    :model-value="workflowEditMode !== false"
+                    class="scale-75 origin-right"
+                    @update:model-value="emit('toggleWorkflowEdit', $event)"
+                  />
+                </span>
+                <span class="text-xs font-normal text-muted-foreground">
+                  {{ enabledCount }}/{{ toolList.length }}
+                </span>
               </span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              v-if="isWorkflowContext"
-              class="flex items-center justify-between gap-3"
-              @select.prevent
-            >
-              <div class="flex flex-col gap-0.5 min-w-0">
-                <span class="text-xs font-medium">工作流编辑模式</span>
-                <span class="text-[11px] text-muted-foreground leading-tight">AI 创建节点而非直接运行工具</span>
-              </div>
-              <Switch
-                :model-value="workflowEditMode !== false"
-                class="shrink-0"
-                @update:model-value="emit('toggleWorkflowEdit', $event)"
-              />
-            </DropdownMenuItem>
-            <DropdownMenuSeparator v-if="isWorkflowContext" />
             <template
               v-for="([category, categoryTools], gi) in groupedTools"
               :key="category"
