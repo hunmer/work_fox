@@ -1,6 +1,6 @@
 import { join } from 'path'
 import { app } from 'electron'
-import { JsonStore } from '../utils/json-store'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync, statSync } from 'node:fs'
 
 export interface ExecutionStep {
   nodeId: string
@@ -11,6 +11,13 @@ export interface ExecutionStep {
   input?: any
   output?: any
   error?: string
+  logs?: ExecutionLogEntry[]
+}
+
+export interface ExecutionLogEntry {
+  level: 'info' | 'warning' | 'error'
+  message: string
+  timestamp: number
 }
 
 export interface ExecutionLog {
@@ -22,35 +29,85 @@ export interface ExecutionLog {
   steps: ExecutionStep[]
 }
 
-const MAX_LOGS_PER_WORKFLOW = 50
+const MAX_LOGS_PER_WORKFLOW = 100
 
 export class ExecutionLogStore {
-  private store: JsonStore<Record<string, ExecutionLog[]>>
+  private baseDir: string
 
   constructor() {
-    const filePath = join(app.getPath('userData'), 'workflow-data', 'execution-logs.json')
-    this.store = new JsonStore(filePath)
+    this.baseDir = join(app.getPath('userData'), 'agent-workflows')
+  }
+
+  private historyDir(workflowId: string): string {
+    return join(this.baseDir, workflowId, 'execution_history')
+  }
+
+  private ensureDir(workflowId: string): string {
+    const dir = this.historyDir(workflowId)
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+    return dir
   }
 
   list(workflowId: string): ExecutionLog[] {
-    return this.store.get(workflowId) || []
+    const dir = this.historyDir(workflowId)
+    if (!existsSync(dir)) return []
+
+    const files = readdirSync(dir)
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => {
+        const filePath = join(dir, f)
+        try {
+          const log: ExecutionLog = JSON.parse(readFileSync(filePath, 'utf-8'))
+          return { log, mtime: statSync(filePath).mtimeMs }
+        } catch {
+          return null
+        }
+      })
+      .filter(Boolean) as { log: ExecutionLog; mtime: number }[]
+
+    // 按 mtime 降序（最新在前）
+    files.sort((a, b) => b.mtime - a.mtime)
+    return files.map((f) => f.log)
   }
 
   add(workflowId: string, log: ExecutionLog): ExecutionLog {
-    const logs = this.list(workflowId)
-    logs.unshift(log)
-    if (logs.length > MAX_LOGS_PER_WORKFLOW) logs.length = MAX_LOGS_PER_WORKFLOW
-    this.store.set(workflowId, logs)
+    const dir = this.ensureDir(workflowId)
+    const filePath = join(dir, `${log.id}.json`)
+    writeFileSync(filePath, JSON.stringify(log), 'utf-8')
+
+    // 清理超出限制的旧文件
+    this.enforceLimit(workflowId)
+
     return log
   }
 
   delete(workflowId: string, logId: string): void {
-    const logs = this.list(workflowId).filter((l) => l.id !== logId)
-    this.store.set(workflowId, logs)
+    const filePath = join(this.historyDir(workflowId), `${logId}.json`)
+    if (existsSync(filePath)) unlinkSync(filePath)
   }
 
   clear(workflowId: string): void {
-    this.store.delete(workflowId)
+    const dir = this.historyDir(workflowId)
+    if (!existsSync(dir)) return
+    readdirSync(dir)
+      .filter((f) => f.endsWith('.json'))
+      .forEach((f) => unlinkSync(join(dir, f)))
+  }
+
+  private enforceLimit(workflowId: string): void {
+    const dir = this.historyDir(workflowId)
+    if (!existsSync(dir)) return
+
+    const files = readdirSync(dir)
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => ({ name: f, path: join(dir, f), mtime: statSync(join(dir, f)).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime)
+
+    if (files.length > MAX_LOGS_PER_WORKFLOW) {
+      files.slice(MAX_LOGS_PER_WORKFLOW).forEach((f) => {
+        try { unlinkSync(f.path) } catch { /* ignore */ }
+      })
+    }
   }
 }
 

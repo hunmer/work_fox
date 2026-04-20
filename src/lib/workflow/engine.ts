@@ -117,7 +117,8 @@ export class WorkflowEngine {
     if (!this.context.__data__) this.context.__data__ = {}
     const startTime = Date.now()
     try {
-      const result = await this.dispatchNode(node)
+      const resolvedData = this.resolveContextVariables(node.data)
+      const result = await this.dispatchNode(node, resolvedData)
       return { status: 'completed', output: result, duration: Date.now() - startTime }
     } catch (err: any) {
       return { status: 'error', error: err?.message || String(err), duration: Date.now() - startTime }
@@ -206,18 +207,20 @@ export class WorkflowEngine {
       if (this.stopRequested || this.pauseRequested) return
     }
 
+    const resolvedData = this.resolveContextVariables(node.data)
     const step: ExecutionStep = {
       nodeId: node.id,
       nodeLabel: node.label,
       startedAt: Date.now(),
       status: 'running',
+      input: resolvedData,
     }
     this.steps.push(step)
     this.onNodeStatusChange?.(node.id, 'running')
     this.emitLogUpdate()
 
     try {
-      const result = await this.dispatchNode(node)
+      const result = await this.dispatchNode(node, resolvedData)
       step.finishedAt = Date.now()
       step.status = 'completed'
       // 提取 handler 日志
@@ -247,11 +250,9 @@ export class WorkflowEngine {
     this.emitLogUpdate()
   }
 
-  private async dispatchNode(node: WorkflowNode): Promise<any> {
+  private async dispatchNode(node: WorkflowNode, resolvedData: Record<string, any>): Promise<any> {
     const def = getNodeDefinition(node.type)
     if (!def) throw new Error(`未知节点类型: ${node.type}`)
-
-    const resolvedData = this.resolveContextVariables(node.data)
 
     switch (node.type) {
       case 'start':

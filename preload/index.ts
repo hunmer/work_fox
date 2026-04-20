@@ -115,8 +115,8 @@ const api = {
 
   executionLog: {
     list: (workflowId: string): Promise<any[]> => ipcRenderer.invoke('executionLog:list', workflowId),
-    save: (log: any): Promise<any> => ipcRenderer.invoke('executionLog:save', log),
-    delete: (id: string): Promise<void> => ipcRenderer.invoke('executionLog:delete', id),
+    save: (workflowId: string, log: any): Promise<any> => ipcRenderer.invoke('executionLog:save', workflowId, log),
+    delete: (workflowId: string, id: string): Promise<void> => ipcRenderer.invoke('executionLog:delete', workflowId, id),
     clear: (workflowId: string): Promise<void> => ipcRenderer.invoke('executionLog:clear', workflowId),
   },
 

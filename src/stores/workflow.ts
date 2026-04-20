@@ -126,7 +126,7 @@ function createExecutionLogManager(currentWorkflow: Ref<Workflow | null>, api: (
   async function deleteExecutionLog(logId: string): Promise<void> {
     const workflowId = currentWorkflow.value?.id
     if (!workflowId) return
-    await api().executionLog.delete(logId)
+    await api().executionLog.delete(workflowId, logId)
     executionLogs.value = executionLogs.value.filter((l) => l.id !== logId)
     if (selectedExecutionLogId.value === logId) selectedExecutionLogId.value = null
   }
@@ -143,7 +143,7 @@ function createExecutionLogManager(currentWorkflow: Ref<Workflow | null>, api: (
     log.id = `exec-${Date.now()}`
     log.workflowId = workflowId
     executionLogs.value.unshift(log)
-    if (executionLogs.value.length > 50) executionLogs.value.length = 50
+    if (executionLogs.value.length > 100) executionLogs.value.length = 100
     selectedExecutionLogId.value = log.id
     api().executionLog.save(workflowId, log).catch(() => {})
   }

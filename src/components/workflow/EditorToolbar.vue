@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { Minus, Square, X, Maximize2, ChevronDown, Plus, Home, Save } from 'lucide-vue-next'
 import {
   Menubar,
@@ -18,6 +19,15 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useTabStore } from '@/stores/tab'
+
+const router = useRouter()
+const tabStore = useTabStore()
+
+function closeTab(tabId: string) {
+  const isLast = tabStore.tabs.length === 1
+  tabStore.closeTab(tabId)
+  if (isLast) router.push('/home')
+}
 
 const props = defineProps<{
   isEditingName: boolean
@@ -44,7 +54,6 @@ const emit = defineEmits<{
   openRecent: [id: string]
 }>()
 
-const tabStore = useTabStore()
 const nameInput = ref<HTMLInputElement | null>(null)
 const isMaximized = ref(false)
 
@@ -179,7 +188,7 @@ refreshMaximized()
             <span class="truncate">{{ tab.name || '未命名工作流' }}</span>
             <button
               class="shrink-0 p-0.5 rounded hover:bg-destructive/20 hover:text-destructive"
-              @click.stop="tabStore.closeTab(tab.id)"
+              @click.stop="closeTab(tab.id)"
             >
               <X class="w-3 h-3" />
             </button>
