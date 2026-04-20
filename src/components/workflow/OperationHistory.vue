@@ -33,7 +33,7 @@ function clearHistory() {
         清空
       </button>
     </div>
-    <ScrollArea class="flex-1">
+    <ScrollArea class="flex-1 overflow-hidden">
       <div class="p-2 space-y-0.5">
         <div
           v-for="(op, index) in store.operationLog"

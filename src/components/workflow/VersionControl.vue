@@ -40,7 +40,7 @@ async function handleDeleteVersion(versionId: string) {
         保存当前版本
       </Button>
     </div>
-    <ScrollArea class="flex-1">
+    <ScrollArea class="flex-1 overflow-hidden">
       <div class="p-2 space-y-1">
         <div
           v-for="version in store.versions"

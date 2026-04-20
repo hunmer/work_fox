@@ -76,6 +76,25 @@ function handleAutoLayout() {
           重做 (Ctrl+Shift+Z)
         </TooltipContent>
       </Tooltip>
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-7 w-7 p-0"
+            :disabled="!store.currentWorkflow?.nodes.length"
+            @click="handleAutoLayout"
+          >
+            <LayoutGrid class="w-3.5 h-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent
+          side="top"
+          class="text-xs"
+        >
+          智能布局
+        </TooltipContent>
+      </Tooltip>
     </TooltipProvider>
     <span class="text-[10px] text-muted-foreground ml-0.5 select-none">
       {{ store.canUndo ? `${store.undoStack.length} 步可撤销` : '' }}
