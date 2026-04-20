@@ -67,12 +67,20 @@ function buildNodeUsageNotes(def: any): string[] {
   }
 
   if (Array.isArray(def.properties) && def.properties.some((prop: any) => prop.type === 'array')) {
-    notes.push('array 类型字段应保持数组结构，在数组项的字符串字段中写变量。')
+    notes.push('array 类型字段应保持数组/对象结构；如果上游字段本身已经是目标数组，优先把整个字段写成纯变量引用。')
+    notes.push('只有在需要手动构造数组项时，才在数组项的字符串字段中写变量。')
   }
 
   if (def.type === 'gallery_preview') {
     notes.push('gallery_preview.items 是数组；数组项通常包含 src、thumb、type、caption。')
-    notes.push('若上游输出结构不一致，建议先插入 run_code 节点做映射，再由 gallery_preview 逐字段引用。')
+    notes.push('如果上游 JS 节点已经返回完整 items 数组，gallery_preview.data.items 应直接写成纯变量引用，例如 {{ __data__["JS节点ID"].items }}。')
+    notes.push('若上游输出结构不一致，建议先插入 run_code 节点做映射，再由 gallery_preview 直接引用映射后的完整 items 数组。')
+    notes.push('gallery_preview 是展示节点，不是外部工具节点；执行时只消费 items 供画布渲染。')
+  }
+
+  if (def.type === 'jimeng_text_to_image' || def.type === 'jimeng_image_to_image') {
+    notes.push('该节点执行结果的真实结构是 { success, message, data: { images: string[], created } }。')
+    notes.push('在 run_code 中读取图片列表时应使用 context["节点ID"].data.images，不要使用 context["节点ID"].images 或 img.url。')
   }
 
   return notes
@@ -92,7 +100,13 @@ function buildNodeUsageExamples(def: any): Array<Record<string, any>> {
 
   if (def.type === 'gallery_preview') {
     examples.push({
-      scene: '引用上游 JS 节点输出的第一个资源',
+      scene: '引用上游 JS 节点输出的完整资源数组',
+      data: {
+        items: '{{ __data__["js-node-id"].items }}',
+      },
+    })
+    examples.push({
+      scene: '仅在需要手动构造单个数组项时逐字段引用',
       data: {
         items: [
           {
@@ -102,6 +116,15 @@ function buildNodeUsageExamples(def: any): Array<Record<string, any>> {
             caption: '{{ __data__["js-node-id"].items.0.caption }}',
           },
         ],
+      },
+    })
+  }
+
+  if (def.type === 'jimeng_text_to_image') {
+    examples.push({
+      scene: '在 run_code 中把即梦文生图结果转换为 gallery_preview.items',
+      data: {
+        code: 'const jimeng = context["即梦节点ID"] || {}\nconst images = Array.isArray(jimeng?.data?.images) ? jimeng.data.images : []\nreturn {\n  items: images.map((url, index) => ({\n    id: `image-${index + 1}`,\n    src: url || "",\n    thumb: url || "",\n    type: "image",\n    caption: `图片 ${index + 1}`\n  }))\n}',
       },
     })
   }

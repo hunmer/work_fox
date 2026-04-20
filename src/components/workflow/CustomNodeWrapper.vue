@@ -147,7 +147,9 @@ const CustomViewComponent = computed(() => definition.value?.customView)
 const customViewProps = computed(() => {
   if (!CustomViewComponent.value) return {}
   if (definition.value?.type === 'gallery_preview') {
-    return { items: props.data?.items || [] }
+    const items = props.data?.items
+    const validItems = Array.isArray(items) ? items : []
+    return { items: nodeStatus.value === 'completed' ? validItems : [] }
   }
   return props.data || {}
 })

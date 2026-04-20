@@ -259,6 +259,9 @@ export class WorkflowEngine {
         return null
       case 'end':
         return null
+      case 'gallery_preview':
+        // 展示节点仅消费已解析的数据供画布渲染，不调用外部工具。
+        return { items: Array.isArray(resolvedData.items) ? resolvedData.items : [] }
       case 'run_code':
         return this.executeCode(resolvedData.code || '')
       case 'toast':

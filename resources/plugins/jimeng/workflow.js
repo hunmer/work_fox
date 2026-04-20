@@ -37,10 +37,12 @@ module.exports = {
         { key: 'baseUrl', label: 'API地址', type: 'text', default: 'http://localhost:5100', tooltip: '即梦API服务地址' },
       ],
       outputs: [
-        { key: 'images', type: 'object', children: [
-          { key: 'url', type: 'string' },
+        { key: 'success', type: 'boolean' },
+        { key: 'message', type: 'string' },
+        { key: 'data', type: 'object', children: [
+          { key: 'images', type: 'object', children: [] },
+          { key: 'created', type: 'number' },
         ] },
-        { key: 'created', type: 'number' },
       ],
       handler: async (ctx, args) => {
         const baseUrl = args.baseUrl || 'http://localhost:5100'
@@ -97,10 +99,13 @@ module.exports = {
         { key: 'baseUrl', label: 'API地址', type: 'text', default: 'http://localhost:5100', tooltip: '即梦API服务地址' },
       ],
       outputs: [
-        { key: 'images', type: 'object', children: [
-          { key: 'url', type: 'string' },
+        { key: 'success', type: 'boolean' },
+        { key: 'message', type: 'string' },
+        { key: 'data', type: 'object', children: [
+          { key: 'images', type: 'object', children: [] },
+          { key: 'created', type: 'number' },
+          { key: 'inputImages', type: 'object', children: [] },
         ] },
-        { key: 'created', type: 'number' },
       ],
       handler: async (ctx, args) => {
         const baseUrl = args.baseUrl || 'http://localhost:5100'

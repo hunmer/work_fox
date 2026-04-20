@@ -80,7 +80,8 @@ function insertVariable(propKey: string, variablePath: string) {
 
 /** array 类型：获取数组 */
 function getArrayItems(key: string): Record<string, any>[] {
-  return getFieldValue(key) || []
+  const value = getFieldValue(key)
+  return Array.isArray(value) ? value : []
 }
 
 /** array 类型：添加项 */
