@@ -1,6 +1,6 @@
 import { join } from 'path'
 import { app } from 'electron'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
 
 export interface OperationEntry {
   description: string
@@ -37,6 +37,11 @@ export class OperationHistoryStore {
   save(workflowId: string, entries: OperationEntry[]): void {
     this.ensureDir(workflowId)
     writeFileSync(this.filePath(workflowId), JSON.stringify(entries, null, 2), 'utf-8')
+  }
+
+  clear(workflowId: string): void {
+    const file = this.filePath(workflowId)
+    if (existsSync(file)) unlinkSync(file)
   }
 }
 

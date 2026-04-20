@@ -9,6 +9,7 @@ const props = defineProps<DialogCloseProps>()
   <DialogClose
     data-slot="dialog-close"
     v-bind="props"
+    class="rounded-md transition-colors hover:bg-muted"
   >
     <slot />
   </DialogClose>

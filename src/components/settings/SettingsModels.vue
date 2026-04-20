@@ -90,9 +90,13 @@ async function handleAddModel(providerId: string) {
     supportsThinking: newModelSupportsThinking.value,
   }
 
-  await providerStore.updateProvider(providerId, {
-    models: [...provider.models.map((m) => ({ ...m })), newModel],
-  })
+  try {
+    await providerStore.updateProvider(providerId, {
+      models: [...provider.models.map((m) => ({ ...m })), newModel],
+    })
+  } catch (e) {
+    console.error('handleAddModel failed:', e)
+  }
 
   newModelId.value = ''
   newModelName.value = ''
@@ -155,14 +159,6 @@ async function handleToggleProvider(provider: AIProvider) {
                 v-else
                 class="h-3 w-3"
               />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              class="h-6 w-6"
-              @click="startEditProvider(provider)"
-            >
-              <Pencil class="h-3 w-3" />
             </Button>
             <Button
               variant="ghost"

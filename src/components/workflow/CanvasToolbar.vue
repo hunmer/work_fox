@@ -11,7 +11,7 @@ function handleAutoLayout() {
   const wf = store.currentWorkflow
   if (!wf) return
 
-  store.undoRedo.pushUndo('智能布局')
+  store.pushUndo('智能布局')
 
   const g = new dagre.graphlib.Graph()
   g.setDefaultEdgeLabel(() => ({}))
@@ -36,7 +36,7 @@ function handleAutoLayout() {
 </script>
 
 <template>
-  <div class="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 rounded-lg border border-border bg-background/90 backdrop-blur-sm px-2 py-1 shadow-sm">
+  <div v-if="store" class="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 rounded-lg border border-border bg-background/90 backdrop-blur-sm px-2 py-1 shadow-sm">
     <TooltipProvider :delay-duration="400">
       <Tooltip>
         <TooltipTrigger as-child>

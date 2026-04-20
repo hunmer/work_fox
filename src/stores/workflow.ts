@@ -76,24 +76,27 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () =>
     undoStack.value.push(snapshot)
     if (undoStack.value.length > MAX_HISTORY) undoStack.value.shift()
     redoStack.value = []
-    operationLog.value.unshift({ description, timestamp: Date.now(), snapshot })
+    const entry: { description: string; timestamp: number; snapshot?: string } = { description, timestamp: Date.now() }
+    operationLog.value.unshift(entry)
     if (operationLog.value.length > MAX_HISTORY) operationLog.value.length = MAX_HISTORY
+    // Capture AFTER state — caller modifies state synchronously after this call
+    Promise.resolve().then(() => { entry.snapshot = captureSnapshot() })
     persistLog()
   }
 
-  function restoreToStep(index: number): void {
-    const entry = operationLog.value[index]
-    if (!entry?.snapshot) return
-    undoStack.value.push(captureSnapshot())
+  async function restoreToStep(index: number): Promise<void> {
+    if (index < 0 || !currentWorkflow.value) return
+    const target = index + 1
+    for (let i = 1; i <= target && i < operationLog.value.length; i++) {
+      const entry = operationLog.value[i]
+      if (entry?.snapshot) {
+        applySnapshot(entry.snapshot)
+        if (i < target) await new Promise(r => setTimeout(r, 100))
+      }
+    }
+    operationLog.value.splice(0, target)
+    undoStack.value = []
     redoStack.value = []
-    applySnapshot(entry.snapshot)
-    operationLog.value.unshift({
-      description: `恢复到: ${entry.description}`,
-      timestamp: Date.now(),
-      snapshot: captureSnapshot(),
-    })
-    if (operationLog.value.length > MAX_HISTORY) operationLog.value.length = MAX_HISTORY
-    persistLog()
   }
 
   function undo(): void {
@@ -653,6 +656,7 @@ export function createWorkflowStore(tabId: string) {
       debugSingleNode: debugActions.debugSingleNode,
       cancelDebug: debugActions.cancelDebug,
       undo: undoRedo.undo,
+      pushUndo: undoRedo.pushUndo,
       redo: undoRedo.redo,
       canUndo: undoRedo.canUndo,
       canRedo: undoRedo.canRedo,
@@ -683,6 +687,10 @@ export function provideWorkflowStore(store: WorkflowStore) {
 
 export function useWorkflowStore(): WorkflowStore {
   const store = inject<WorkflowStore>(WORKFLOW_STORE_KEY)
-  if (!store) throw new Error('useWorkflowStore() must be called inside a WorkflowEditor')
+  if (!store) {
+    // HMR 期间 provide/inject 可能丢失，返回 null 代替抛错
+    if (import.meta.hot) return null as unknown as WorkflowStore
+    throw new Error('useWorkflowStore() must be called inside a WorkflowEditor')
+  }
   return store
 }

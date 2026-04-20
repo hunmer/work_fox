@@ -1,0 +1,30 @@
+directories:
+  output: dist-app
+  buildResources: build
+appId: com.work-fox.app
+productName: WorkFox
+files:
+  - filter:
+      - out/**/*
+      - package.json
+      - node_modules/**/*
+      - '!node_modules/**/{README.md,readme.md,README,readme,CHANGELOG.md,CHANGELOG,LICENSE,license,LICENSE.md,.npmignore,.editorconfig,.eslintrc,.eslintrc.js,.eslintrc.json,.eslintrc.yml}'
+      - '!node_modules/.bin'
+      - '!node_modules/**/*.{md,ts,map,d.ts}'
+      - '!node_modules/**/{test,tests,__tests__,example,examples,docs,doc,website,.github,.vscode}'
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  category: public.app-category.productivity
+win:
+  artifactName: ${productName}-Setup-${version}.${ext}
+  target:
+    - target: nsis
+      arch:
+        - x64
+compression: store
+asar: true
+electronVersion: 35.7.5

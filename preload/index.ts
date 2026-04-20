@@ -123,6 +123,7 @@ const api = {
   operationHistory: {
     load: (workflowId: string): Promise<any[]> => ipcRenderer.invoke('operationHistory:load', workflowId),
     save: (workflowId: string, entries: any[]): Promise<void> => ipcRenderer.invoke('operationHistory:save', workflowId, entries),
+    clear: (workflowId: string): Promise<void> => ipcRenderer.invoke('operationHistory:clear', workflowId),
   },
 
   shortcut: {

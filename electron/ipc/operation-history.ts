@@ -9,4 +9,8 @@ export function registerOperationHistoryIpcHandlers(): void {
   ipcMain.handle('operationHistory:save', (_e, workflowId: string, entries: any[]) => {
     operationHistoryStore.save(workflowId, entries)
   })
+
+  ipcMain.handle('operationHistory:clear', (_e, workflowId: string) => {
+    operationHistoryStore.clear(workflowId)
+  })
 }
