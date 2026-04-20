@@ -14,6 +14,16 @@ export interface ChatCompletionParams {
   enabledToolNames?: string[]
   _mode?: 'workflow'
   _workflowId?: string
+  runtime?: {
+    cwd?: string
+    additionalDirectories?: string[]
+    permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk' | 'auto'
+    allowedTools?: string[]
+    extraInstructions?: string
+    loadProjectClaudeMd?: boolean
+    loadRuleMd?: boolean
+    ruleFileNames?: string[]
+  }
 }
 
 export interface WorkflowToolExecuteRequest {

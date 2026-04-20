@@ -97,10 +97,15 @@ export async function runAgentStream(
   const toolNames = tools.map((t: any) => t.name)
   console.log(`[Agent] 模式: ${isWorkflow ? 'workflow' : 'browser'}, 工作流编辑: ${workflowEditMode}, 工具数量: ${toolNames.length}`)
   console.log(`[Agent] 工具列表:`, toolNames)
-  console.log(`[Agent] 系统提示词前200字:`, systemPrompt.slice(0, 200))
+    console.log(`[Agent] 系统提示词前200字:`, systemPrompt.slice(0, 200))
 
   // 监听流式回调
   const cleanup = listenToChatStream(requestId, callbacks)
+
+  const normalizedHistory = history.filter((item, index, list) => {
+    if (index !== list.length - 1) return true
+    return item.role !== 'user' || item.content !== input
+  })
 
   // 发送请求到主进程
   try {
@@ -109,7 +114,13 @@ export async function runAgentStream(
       providerId: provider.id,
       modelId: model.id,
       system: systemPrompt,
-      messages,
+      messages: [
+        ...normalizedHistory.map((h) => ({
+          role: h.role,
+          content: h.content,
+        })),
+        { role: 'user', content: userContent },
+      ],
       tools: tools as unknown as Array<Record<string, unknown>>,
       stream: true,
       maxTokens: model.maxTokens || 4096,

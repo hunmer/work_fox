@@ -252,6 +252,16 @@ export interface ChatCompletionParams {
   _workflowId?: string
   targetTabId?: string
   enabledToolNames?: string[]
+  runtime?: {
+    cwd?: string
+    additionalDirectories?: string[]
+    permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk' | 'auto'
+    allowedTools?: string[]
+    extraInstructions?: string
+    loadProjectClaudeMd?: boolean
+    loadRuleMd?: boolean
+    ruleFileNames?: string[]
+  }
 }
 
 /** ChatInput 工具下拉展示项 */

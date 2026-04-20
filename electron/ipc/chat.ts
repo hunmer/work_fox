@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow } from 'electron'
-import { proxyChatCompletions, activeRequests } from '../services/ai-proxy'
+import { abortClaudeAgentRun, startClaudeAgentRun } from '../services/claude-agent-runtime'
 import { resolvePendingRendererTool } from '../services/workflow-tool-dispatcher'
 import { listAIProviders, getAIProvider, createAIProvider, updateAIProvider, deleteAIProvider } from '../services/store'
 import { testProviderConnection } from '../services/ai-proxy'
@@ -31,7 +31,7 @@ export function registerChatIpcHandlers(): void {
   ipcMain.handle('chat:completions', async (event, params) => {
     const mainWindow = BrowserWindow.fromWebContents(event.sender)
     if (!mainWindow) throw new Error('No main window found')
-    proxyChatCompletions(mainWindow, params).catch((err) => {
+    startClaudeAgentRun(mainWindow, params).catch((err) => {
       if (!mainWindow.isDestroyed()) {
         mainWindow.webContents.send('chat:error', {
           requestId: params._requestId,
@@ -43,13 +43,7 @@ export function registerChatIpcHandlers(): void {
   })
 
   ipcMain.handle('chat:abort', (_event, requestId: string) => {
-    const controller = activeRequests.get(requestId)
-    if (controller) {
-      controller.abort()
-      activeRequests.delete(requestId)
-      return { aborted: true }
-    }
-    return { aborted: false, reason: 'not found' }
+    return abortClaudeAgentRun(requestId)
   })
 
   ipcMain.handle('workflow-tool:respond', (_event, requestId: string, result: unknown) => {

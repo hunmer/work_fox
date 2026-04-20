@@ -4,7 +4,7 @@
 用 Claude Agent SDK 替换当前基于 Anthropic Messages API 的自建 agent/chat 执行链路，使 workflow 下的 agent 拥有真实执行能力、支持工作区目录与 `CLAUDE.md` 规则加载、兼容现有 tools/plugin tools 调用，并移除旧的应用内 skills 模块。
 
 ## Current Phase
-Phase 6
+Phase 7
 
 ## Phases
 
@@ -39,16 +39,16 @@ Phase 6
 ### Phase 5: Delivery
 - [x] 输出详细规划文件
 - [x] 确保规划内容可直接转化为实施任务
-- [ ] 向用户说明规划产物位置和建议下一步
-- **Status:** in_progress
+- [x] 向用户说明规划产物位置和建议下一步
+- **Status:** complete
 
 ### Phase 6: Runtime PoC Implementation
-- [ ] 将根目录 planning 文件从“规划完成”扩展为“实施开始”
-- [ ] 引入 Claude Agent SDK 依赖并核对实际 TypeScript 导出与事件类型
-- [ ] 新增主进程 Claude runtime PoC，复用现有 `chat:*` 流式事件协议
-- [ ] 将 renderer 入口切换到 Claude runtime，保持当前 Chat UI 不重写
-- [ ] 运行类型检查或构建验证主链路可编译
-- **Status:** in_progress
+- [x] 将根目录 planning 文件从“规划完成”扩展为“实施开始”
+- [x] 引入 Claude Agent SDK 依赖并核对实际 TypeScript 导出与事件类型
+- [x] 新增主进程 Claude runtime PoC，复用现有 `chat:*` 流式事件协议
+- [x] 将 renderer 入口切换到 Claude runtime，保持当前 Chat UI 不重写
+- [x] 运行类型检查或构建验证主链路可编译
+- **Status:** complete
 
 ### Phase 7: Tool Adapter Integration
 - [ ] 设计并实现内置工具、workflow tools、plugin tools 的 Claude 兼容适配层
@@ -97,6 +97,8 @@ Phase 6
 | Claude runtime 默认使用 `systemPrompt: { type: "preset", preset: "claude_code" }` + `settingSources: ["project"]` | 这是加载项目级 `CLAUDE.md` 的官方要求 |
 | Claude runtime 需要开启 `includePartialMessages` 以映射现有增量 UI 协议 | 否则无法在主进程稳定转发实时文本/工具流事件 |
 | Claude SDK 自定义工具先不在 Batch 1 落地 | 官方 Node SDK 走 in-process MCP 暴露更合适，首批先聚焦 runtime 切换与打包验证 |
+| Batch 1 的聊天历史先折叠成 transcript prompt，而不是直接迁移为 Claude session persistence | 这样可以最小改动打通主链路，后续再升级到 resume/session 模式 |
+| Batch 1 先使用内置 Claude Code 工具的只读/最小权限模式，不接入现有 workflow/plugin tools | 当前目标是验证 runtime 和打包集成，工具兼容层放到 Phase 7 |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
@@ -109,3 +111,4 @@ Phase 6
 - 后续如果用户要求继续实施，需要先读取本文件与 `findings.md`、`progress.md`
 - 详细迁移设计文档已写入 `docs/superpowers/plans/2026-04-20-claude-agent-sdk-migration.md`
 - 2026-04-20 已确认 Claude Agent SDK 关键约束：`settingSources` 默认不会加载文件系统配置；要启用项目级 `CLAUDE.md` 需配合 `systemPrompt preset=claude_code`；实时流式 UI 需依赖 `includePartialMessages`
+- 2026-04-20 已完成 Batch 1 PoC：`chat:completions` 已切到 Claude Agent SDK，`pnpm build` 通过；下一阶段重点是把 workflow tools / plugin tools 经 adapter 接回 Claude runtime

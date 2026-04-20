@@ -27,6 +27,10 @@
 - Claude Agent SDK 官方行为约束已确认：默认 `settingSources` 为空，不会主动加载配置文件；要让 session 读取项目级 `CLAUDE.md`，需要 `systemPrompt: { type: "preset", preset: "claude_code" }` 且包含 `settingSources: ["project"]`。
 - Claude Agent SDK 的实时流式文本/工具状态面向 `query()` 异步流输出，若要保留当前 token 级渲染，需要启用 `includePartialMessages` 并消费 `stream_event`。
 - Claude Agent SDK 的自定义工具路径更适合通过 in-process MCP 暴露；因此在 Batch 1 中不应同时强行迁移现有 tool schema，而应先打通无工具或最小工具集的运行时主链路。
+- 实测 `pnpm build` 已在当前 `electron-vite` 配置下通过，说明 Claude Agent SDK 至少在当前开发环境中的 main/preload/renderer 打包链路没有立刻阻塞。
+- 现有聊天入口可在不重写 UI 的前提下切换到 Claude runtime：只需保留 `chat:completions` / `chat:abort` IPC 名称，并在主进程桥接 `stream_event` -> `chat:*`。
+- 现有 `runAgentStream()` 会把最后一条用户消息同时出现在 `history` 和 `input` 中；切换到 transcript prompt 模式后需要显式去重，否则 Claude 会看到重复用户请求。
+- Batch 1 暂未迁移旧 tool schema；当前 runtime 仅启用 Claude Code 内置工具的最小权限模式，因此“兼容现有 tools/plugin tools”仍属于后续 Phase 7 范围。
 
 ## Technical Decisions
 | Decision | Rationale |
@@ -41,6 +45,8 @@
 | 单独新增详细迁移文档到 `docs/superpowers/plans/` | 方便后续直接按批次实施，而不是只依赖根目录摘要型 planning 文件 |
 | Batch 1 继续复用 `chat:completions` / `chat:abort` IPC | 这能让前端最小改动切换到 Claude runtime |
 | Batch 1 不引入 Claude SDK 工具适配 | 先验证 runtime、事件流和 Electron 打包，再进入工具兼容层 |
+| Batch 1 使用 transcript prompt 兼容现有聊天历史 | `query()` 并不直接吃完整 Messages API history，先用 prompt 折叠上下文可快速打通主链路 |
+| Batch 1 默认走 `permissionMode: "dontAsk"` 或只读/最小工具集合 | 未实现宿主级审批 UI 前，避免 Claude runtime 在工具权限处卡死 |
 
 ## Issues Encountered
 | Issue | Resolution |
@@ -48,6 +54,7 @@
 | 当前仓库未在本轮扫描中直接找到 skill 主进程 IPC/存储实现 | 规划中明确将“全量删除扫描”和“迁移前核对 skill 数据源”列为实施前置任务 |
 | 当前 workflow 侧并无已落地的 agent runtime 可供替换 | 将“替换范围”定义为统一替换现有 chat/agent 内核，并为 workflow 新建执行型节点接入点 |
 | Claude Agent SDK 与 Electron main 打包是否完全兼容仍未知 | 将 Runtime PoC 和打包验证列为 Batch 1 必做项 |
+| 当前仓库完整 TypeScript 类型检查本身存在多处历史错误 | 本轮改用 `pnpm build` 作为 Batch 1 的集成验证，同时将 `tsc` 报错标记为仓库存量问题，不与 Claude runtime 集成结果混淆 |
 
 ## Resources
 - Claude Agent SDK TypeScript 文档: https://platform.claude.com/docs/en/agent-sdk/typescript
