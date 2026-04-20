@@ -35,33 +35,58 @@ const selectedWorkflow = ref<Workflow | null>(null)
 const isCreating = ref(false)
 const newWorkflowName = ref('新工作流')
 
+function debugLog(message: string, payload?: Record<string, unknown>) {
+  console.log('[workflow-debug][workflow-list-dialog]', message, payload ?? {})
+}
+
 onMounted(() => {
+  debugLog('mounted')
   store.loadData()
 })
 
 watch(() => props.open, (open) => {
+  debugLog('watch:open', { open, createMode: props.createMode })
   if (!open) return
   isCreating.value = !!props.createMode
   selectedWorkflow.value = null
   hasSelectedLocation.value = false
+  debugLog('dialog-reset-state', {
+    isCreating: isCreating.value,
+    selectedFolderId: selectedFolderId.value,
+  })
 })
 
 function onSelectWorkflow(wf: Workflow) {
   selectedWorkflow.value = wf
+  debugLog('onSelectWorkflow', { workflowId: wf.id, workflowName: wf.name })
 }
 
 function confirm() {
+  debugLog('confirm', {
+    selectedWorkflowId: selectedWorkflow.value?.id ?? null,
+    selectedWorkflowName: selectedWorkflow.value?.name ?? null,
+  })
   emit('select', selectedWorkflow.value)
   emit('update:open', false)
 }
 
 async function createNew() {
   const name = newWorkflowName.value.trim()
+  debugLog('createNew:attempt', {
+    name,
+    selectedFolderId: selectedFolderId.value,
+    hasSelectedLocation: hasSelectedLocation.value,
+  })
   if (!name || !hasSelectedLocation.value) return
   store.newWorkflow(selectedFolderId.value, name)
   const workflow = store.currentWorkflow
   if (!workflow) return
   await store.saveWorkflow(workflow)
+  debugLog('createNew:created', {
+    workflowId: workflow.id,
+    workflowName: workflow.name,
+    folderId: workflow.folderId,
+  })
   emit('select', workflow)
   emit('update:open', false)
   isCreating.value = false
@@ -71,10 +96,12 @@ async function createNew() {
 function startCreate() {
   isCreating.value = true
   selectedWorkflow.value = null
+  debugLog('startCreate', { selectedFolderId: selectedFolderId.value })
 }
 
 function onSelectLocation() {
   hasSelectedLocation.value = true
+  debugLog('onSelectLocation', { selectedFolderId: selectedFolderId.value })
 }
 </script>
 

@@ -41,6 +41,14 @@ const props = defineProps<{
   store: WorkflowStore
 }>()
 
+function debugLog(message: string, payload?: Record<string, unknown>) {
+  console.log('[workflow-debug][editor]', message, {
+    tabId: props.tab.id,
+    route: window.location.hash,
+    ...payload,
+  })
+}
+
 provideWorkflowStore(props.store)
 
 const tabStore = useTabStore()
@@ -191,13 +199,17 @@ function goHome() {
 function openRecentWorkflow(id: string) {
   const wf = store.workflows.find(w => w.id === id)
   if (wf) {
+    debugLog('openRecentWorkflow:found', { workflowId: wf.id, workflowName: wf.name })
     store.currentWorkflow = JSON.parse(JSON.stringify(wf))
     store.selectedNodeId = null
+  } else {
+    debugLog('openRecentWorkflow:not-found', { requestedWorkflowId: id, workflowCount: store.workflows.length })
   }
 }
 
 function openWorkflowList(createMode = false) {
   listDialogCreateMode.value = createMode
+  debugLog('openWorkflowList', { createMode, currentWorkflowId: store.currentWorkflow?.id ?? null })
   openWorkflow()
 }
 
@@ -210,6 +222,11 @@ async function handlePluginUpdate(plugins: string[]) {
 // 跳过首次加载的变更检测
 let skipDraft = true
 watch(() => store.currentWorkflow, (val) => {
+  debugLog('watch:currentWorkflow', {
+    workflowId: val?.id ?? null,
+    workflowName: val?.name ?? null,
+    skipDraft,
+  })
   tabStore.updateTabWorkflow(props.tab.id, val?.id ?? null, val?.name || '')
   if (skipDraft) { skipDraft = false; return }
   if (val) store.saveDraft()
@@ -220,9 +237,15 @@ let cleanupFileUpdates: (() => void) | null = null
 let cleanupWorkflowToolRequests: (() => void) | null = null
 let autoSaveTimer: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
+  debugLog('mounted', {
+    query: route.query,
+    hasCurrentWorkflow: !!store.currentWorkflow,
+    currentWorkflowId: store.currentWorkflow?.id ?? null,
+  })
   cleanupFileUpdates = store.listenForFileUpdates()
   cleanupWorkflowToolRequests = store.listenForWorkflowToolRequests()
   if ((route.query.open === '1' || route.query.create === '1') && !store.currentWorkflow) {
+    debugLog('mounted:auto-open-list', { createMode: route.query.create === '1' })
     openWorkflowList(route.query.create === '1')
   }
   autoSaveTimer = setInterval(() => {

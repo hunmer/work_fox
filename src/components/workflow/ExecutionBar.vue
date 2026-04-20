@@ -11,6 +11,14 @@ import type { ExecutionLog } from '@/lib/workflow/types'
 
 const stepTabs = ref<Record<string, string>>({})
 
+const EXEC_BAR_PANEL_SIZES_KEY = 'workflow-exec-bar-panel-sizes'
+const execBarPanelSizes = ref<number[]>(JSON.parse(localStorage.getItem(EXEC_BAR_PANEL_SIZES_KEY) || '[25, 75]'))
+
+function handleExecBarPanelResize(sizes: number[]) {
+  execBarPanelSizes.value = sizes
+  localStorage.setItem(EXEC_BAR_PANEL_SIZES_KEY, JSON.stringify(sizes))
+}
+
 const store = useWorkflowStore()
 const expanded = defineModel<boolean>('expanded', { default: false })
 
@@ -141,10 +149,11 @@ const displayLog = computed(() => store.selectedExecutionLog)
       <ResizablePanelGroup
         direction="horizontal"
         class="h-full"
+        @layout="handleExecBarPanelResize"
       >
         <!-- 左侧：历史执行列表 -->
         <ResizablePanel
-          :default-size="25"
+          :default-size="execBarPanelSizes[0]"
           :min-size="15"
           :max-size="40"
         >
@@ -217,7 +226,7 @@ const displayLog = computed(() => store.selectedExecutionLog)
 
         <!-- 右侧：节点执行详情 - 横向滚动卡片 -->
         <ResizablePanel
-          :default-size="75"
+          :default-size="execBarPanelSizes[1]"
           :min-size="40"
         >
           <div class="h-full flex flex-col">
