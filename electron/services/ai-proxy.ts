@@ -76,6 +76,7 @@ export async function proxyChatCompletions(
     }
 
     const apiUrl = `${provider.apiBase.replace(/\/$/, '')}/v1/messages`
+    console.log(`[ai-proxy] 请求: mode=${_mode ?? 'browser'}, workflowId=${_workflowId ?? 'none'}, tools数量=${tools?.length ?? 0}, toolNames=${tools?.map((t: any) => t.name).join(', ')}`)
     const MAX_TOOL_ROUNDS = 100
     const currentMessages = [...messages]
     const cumulativeUsage = { inputTokens: 0, outputTokens: 0 }

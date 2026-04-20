@@ -93,6 +93,12 @@ export async function runAgentStream(
 
   const requestId = crypto.randomUUID()
 
+  // 调试：输出发送给 AI 的工具列表
+  const toolNames = tools.map((t: any) => t.name)
+  console.log(`[Agent] 模式: ${isWorkflow ? 'workflow' : 'browser'}, 工作流编辑: ${workflowEditMode}, 工具数量: ${toolNames.length}`)
+  console.log(`[Agent] 工具列表:`, toolNames)
+  console.log(`[Agent] 系统提示词前200字:`, systemPrompt.slice(0, 200))
+
   // 监听流式回调
   const cleanup = listenToChatStream(requestId, callbacks)
 

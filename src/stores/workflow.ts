@@ -198,9 +198,11 @@ function createVersionManager(currentWorkflow: Ref<Workflow | null>, api: () => 
 function createDraftManager(currentWorkflow: Ref<Workflow | null>, tabId: string) {
   const draftKey = `${DRAFT_KEY_PREFIX}-${tabId}`
   const isDirty = ref(false)
+  let suppressUntil = 0
 
   function saveDraft(): void {
     if (!currentWorkflow.value) return
+    if (Date.now() < suppressUntil) return
     try { localStorage.setItem(draftKey, JSON.stringify(currentWorkflow.value)) } catch { /* ignore */ }
     isDirty.value = true
   }
@@ -208,6 +210,7 @@ function createDraftManager(currentWorkflow: Ref<Workflow | null>, tabId: string
   function clearDraft(): void {
     localStorage.removeItem(draftKey)
     isDirty.value = false
+    suppressUntil = Date.now() + 500
   }
 
   function restoreDraft(): boolean {

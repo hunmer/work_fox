@@ -192,17 +192,34 @@ function openRecentWorkflow(id: string) {
   }
 }
 
+async function handlePluginUpdate(plugins: string[]) {
+  if (!store.currentWorkflow) return
+  store.currentWorkflow.enabledPlugins = plugins
+  await saveWorkflow()
+}
+
+// 跳过首次加载的变更检测
+let skipDraft = true
 watch(() => store.currentWorkflow, (val) => {
-  if (val) store.saveDraft()
   tabStore.updateTabWorkflow(props.tab.id, val?.id ?? null, val?.name || '未命名工作流')
+  if (skipDraft) { skipDraft = false; return }
+  if (val) store.saveDraft()
 }, { deep: true, immediate: true })
 
+// 定时自动保存：10秒内有变更则保存
 let cleanupFileUpdates: (() => void) | null = null
+let autoSaveTimer: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
   cleanupFileUpdates = store.listenForFileUpdates()
+  autoSaveTimer = setInterval(() => {
+    if (store.isDirty && store.currentWorkflow) {
+      saveWorkflow()
+    }
+  }, 10_000)
 })
 onUnmounted(() => {
   cleanupFileUpdates?.()
+  if (autoSaveTimer) clearInterval(autoSaveTimer)
 })
 
 function onConnect(params: any) {
@@ -366,7 +383,7 @@ function onConnect(params: any) {
       :open="pluginPickerOpen"
       :enabled-plugins="store.currentWorkflow.enabledPlugins || []"
       @update:open="pluginPickerOpen = $event"
-      @update:enabled-plugins="store.currentWorkflow!.enabledPlugins = $event"
+      @update:enabled-plugins="handlePluginUpdate($event)"
     />
   </div>
 </template>
