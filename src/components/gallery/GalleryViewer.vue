@@ -1,5 +1,5 @@
 <template>
-  <div :class="containerClass">
+  <Lightgallery :settings="lgSettings" :onInit="onInit" :class="containerClass">
     <a
       v-for="item in items"
       :key="item.id"
@@ -15,8 +15,7 @@
       </div>
       <div v-if="item.caption" class="gallery-caption">{{ item.caption }}</div>
     </a>
-    <Lightgallery :settings="lgSettings" :onInit="onInit" />
-  </div>
+  </Lightgallery>
 </template>
 
 <script setup lang="ts">
@@ -47,11 +46,9 @@ const props = withDefaults(defineProps<{
   speed?: number
   plugins?: any[]
   layout?: 'grid' | 'masonry'
-  cols?: number
 }>(), {
   speed: 500,
   layout: 'grid',
-  cols: 5,
 })
 
 const emit = defineEmits<{
@@ -62,16 +59,14 @@ const lgInstance = ref<any>(null)
 const defaultPlugins = [lgThumbnail, lgZoom, lgVideo]
 
 const containerClass = computed(() => {
-  if (props.layout === 'masonry') {
-    return `gallery-masonry columns-2 sm:columns-3 md:columns-4`
-  }
-  return `gallery-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-${props.cols} gap-3`
+  return props.layout === 'masonry'
+    ? 'gallery-masonry columns-2 sm:columns-3 md:columns-4'
+    : 'gallery-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3'
 })
 
 const lgSettings = computed(() => ({
   speed: props.speed,
   plugins: props.plugins || defaultPlugins,
-  selector: '.gallery-item',
   youTubePlayerParams: {
     modestbranding: 1,
     showinfo: 0,
