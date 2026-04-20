@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, markRaw, computed, watch, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { VueFlow, useVueFlow, ConnectionMode } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { MiniMap } from '@vue-flow/minimap'
@@ -181,6 +181,7 @@ const recentWorkflows = computed(() =>
 )
 
 const router = useRouter()
+const route = useRoute()
 
 function goHome() {
   router.push('/home')
@@ -213,6 +214,9 @@ let cleanupFileUpdates: (() => void) | null = null
 let autoSaveTimer: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
   cleanupFileUpdates = store.listenForFileUpdates()
+  if (route.query.open === '1' && !store.currentWorkflow) {
+    openWorkflow()
+  }
   autoSaveTimer = setInterval(() => {
     if (store.isDirty && store.currentWorkflow) {
       saveWorkflow()
