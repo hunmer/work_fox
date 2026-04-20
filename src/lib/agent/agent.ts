@@ -4,6 +4,12 @@ import { BROWSER_AGENT_SYSTEM_PROMPT } from './system-prompt'
 import { useAIProviderStore } from '@/stores/ai-provider'
 import { WORKFLOW_TOOL_DEFINITIONS, buildWorkflowSystemPrompt } from './workflow-tools'
 
+type ChatCompletionPayload = Parameters<typeof window.api.chat.completions>[0]
+
+function toIpcPayload<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value))
+}
+
 /** Agent 流式请求的可选配置 */
 export interface AgentStreamOptions {
   /** 运行模式：浏览器模式（默认）或工作流模式 */
@@ -60,17 +66,9 @@ export async function runAgentStream(
       ]
     : input
 
-  const messages = [
-    ...history.map((h) => ({
-      role: h.role,
-      content: h.content,
-    })),
-    { role: 'user', content: userContent },
-  ]
-
   // 工作流模式使用专用工具定义，浏览器模式使用工具发现系统
   const workflowEditMode = isWorkflow ? (options?.workflowEditMode !== false) : false
-  let tools = isWorkflow
+  const tools = isWorkflow
     ? [...WORKFLOW_TOOL_DEFINITIONS]
     : createToolDiscoveryTools()
 
@@ -85,7 +83,7 @@ export async function runAgentStream(
   const toolNames = tools.map((t: any) => t.name)
   console.log(`[Agent] 模式: ${isWorkflow ? 'workflow' : 'browser'}, 工作流编辑: ${workflowEditMode}, 工具数量: ${toolNames.length}`)
   console.log(`[Agent] 工具列表:`, toolNames)
-    console.log(`[Agent] 系统提示词前200字:`, systemPrompt.slice(0, 200))
+  console.log(`[Agent] 系统提示词前200字:`, systemPrompt.slice(0, 200))
 
   // 监听流式回调
   const cleanup = listenToChatStream(requestId, callbacks)
@@ -95,37 +93,39 @@ export async function runAgentStream(
     return item.role !== 'user' || item.content !== input
   })
 
+  const payload: ChatCompletionPayload = toIpcPayload({
+    _requestId: requestId,
+    providerId: provider.id,
+    modelId: model.id,
+    system: systemPrompt,
+    messages: [
+      ...normalizedHistory.map((h) => ({
+        role: h.role,
+        content: h.content,
+      })),
+      { role: 'user', content: userContent },
+    ],
+    tools: tools as unknown as Array<Record<string, unknown>>,
+    stream: true,
+    maxTokens: model.maxTokens || 4096,
+    ...(isWorkflow
+      ? {
+          _mode: 'workflow' as const,
+          _workflowId: options!.workflowId,
+          runtime: {
+            enabledPlugins: options?.enabledPlugins,
+          },
+        }
+      : {
+          targetTabId: targetTabId ?? undefined,
+          enabledToolNames: enabledToolNames ? Array.from(enabledToolNames) : undefined,
+        }),
+    ...(model.supportsThinking ? { thinking: { type: 'enabled' as const, budgetTokens: 2000 } } : {}),
+  })
+
   // 发送请求到主进程
   try {
-    await window.api.chat.completions({
-      _requestId: requestId,
-      providerId: provider.id,
-      modelId: model.id,
-      system: systemPrompt,
-      messages: [
-        ...normalizedHistory.map((h) => ({
-          role: h.role,
-          content: h.content,
-        })),
-        { role: 'user', content: userContent },
-      ],
-      tools: tools as unknown as Array<Record<string, unknown>>,
-      stream: true,
-      maxTokens: model.maxTokens || 4096,
-      ...(isWorkflow
-        ? {
-            _mode: 'workflow' as const,
-            _workflowId: options!.workflowId,
-            runtime: {
-              enabledPlugins: options?.enabledPlugins,
-            },
-          }
-        : {
-            targetTabId: targetTabId ?? undefined,
-            enabledToolNames: enabledToolNames ? Array.from(enabledToolNames) : undefined,
-          }),
-      ...(model.supportsThinking ? { thinking: { type: 'enabled' as const, budgetTokens: 2000 } } : {}),
-    })
+    await window.api.chat.completions(payload)
   } catch (error) {
     cleanup()
     callbacks.onError(error instanceof Error ? error : new Error(String(error)))
