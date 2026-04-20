@@ -4,14 +4,15 @@ import dagre from '@dagrejs/dagre'
 import { getWorkflow, updateWorkflow } from './workflow-store'
 import { workflowNodeRegistry } from './workflow-node-registry'
 
-/** 从 registry 获取所有节点类型定义（内置 + 插件） */
-function getAllNodeTypeDefinitions(): Array<{ type: string; label: string; category: string; description: string }> {
+/** 从 registry 获取所有节点类型定义的完整信息（内置 + 插件） */
+function getAllNodeTypeDefinitions() {
   return workflowNodeRegistry.getAllPluginNodes()
     .flatMap((entry) => entry.nodes.map((n) => ({
-      type: n.type,
+      ...n,
       label: n.label || n.type,
       category: n.category || '插件',
       description: n.description || `插件 ${entry.pluginId} 提供的节点`,
+      source: entry.pluginId,
     })))
 }
 
@@ -454,25 +455,45 @@ function handleInsertNode(ctx: ToolContext): ToolHandlerResult {
 
 function handleSearchNodes(ctx: ToolContext): ToolHandlerResult {
   const { args, nodes } = ctx
-  const { type, label, category, description } = args || {}
-  if (!type && !label && !category && !description) {
-    return { result: { success: false, message: '至少需要一个搜索条件: type, label, category, description' }, mutated: false, nodes, edges: ctx.edges }
+  const keyword = args?.keyword
+  if (!keyword) {
+    return { result: { success: false, message: '缺少必填参数: keyword' }, mutated: false, nodes, edges: ctx.edges }
   }
-  const matches = nodes.filter((n: any) => {
-    if (type && !(n.type || '').toLowerCase().includes(type.toLowerCase())) return false
-    if (label && !(n.label || '').toLowerCase().includes(label.toLowerCase())) return false
-    if (category && !(n.category || '').toLowerCase().includes(category.toLowerCase())) return false
-    if (description && !(n.description || '').toLowerCase().includes(description.toLowerCase())) return false
-    return true
-  })
+  const kw = keyword.toLowerCase()
+  const matches = nodes.filter((n: any) =>
+    [n.type, n.label, n.category, n.description].some((field) => (field || '').toLowerCase().includes(kw))
+  )
   return {
     result: {
       success: true,
       message: `匹配到 ${matches.length} 个节点`,
-      data: { nodes: matches.map((n: any) => ({ id: n.id, type: n.type, label: n.label, category: n.category, description: n.description, data: n.data })) },
+      data: { nodes: matches },
     },
     mutated: false,
     nodes,
+    edges: ctx.edges,
+  }
+}
+
+function handleSearchNodeUsage(ctx: ToolContext): ToolHandlerResult {
+  const { args } = ctx
+  const keyword = args?.keyword
+  if (!keyword) {
+    return { result: { success: false, message: '缺少必填参数: keyword' }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
+  }
+  const kw = keyword.toLowerCase()
+  const allTypes = getAllNodeTypeDefinitions()
+  const matches = allTypes.filter((d) =>
+    [d.type, d.label, d.category, d.description].some((field) => (field || '').toLowerCase().includes(kw))
+  )
+  return {
+    result: {
+      success: true,
+      message: `匹配到 ${matches.length} 种节点类型`,
+      data: { nodeTypes: matches },
+    },
+    mutated: false,
+    nodes: ctx.nodes,
     edges: ctx.edges,
   }
 }
@@ -510,6 +531,7 @@ const WORKFLOW_TOOL_HANDLERS = new Map<string, ToolHandler>([
   ['batch_update', handleBatchUpdate],
   ['auto_layout', handleAutoLayout],
   ['search_nodes', handleSearchNodes],
+  ['search_node_usage', handleSearchNodeUsage],
 ])
 
 // ====== 主入口：执行工作流工具 ======

@@ -63,7 +63,7 @@ export const builtinNodeDefinitions: PluginWorkflowNode[] = [
     icon: 'GitBranch',
     description: '条件分支路由，按条件顺序匹配，输出 = 条件数 + 1（默认）',
     properties: [
-      { key: 'conditions', label: '条件列表', type: 'code', tooltip: '按顺序评估条件，匹配则走对应分支' },
+      { key: 'conditions', label: '条件列表', type: 'conditions' as const, tooltip: '按顺序评估条件，匹配则走对应分支，全部不匹配走默认分支' },
     ],
   },
   // AI
@@ -108,9 +108,22 @@ export const builtinNodeDefinitions: PluginWorkflowNode[] = [
       {
         key: 'items',
         label: '资源列表',
-        type: 'text',
+        type: 'array',
         required: true,
         tooltip: '添加要展示的图片或视频资源',
+        itemTemplate: { id: '', src: '', thumb: '', type: 'image', caption: '' },
+        fields: [
+          { key: 'src', label: '资源地址', type: 'text', required: true, placeholder: '图片/视频 URL' },
+          { key: 'thumb', label: '缩略图', type: 'text', placeholder: '缩略图 URL（可选）' },
+          {
+            key: 'type', label: '类型', type: 'select', default: 'image',
+            options: [
+              { label: '图片', value: 'image' },
+              { label: '视频', value: 'video' },
+            ],
+          },
+          { key: 'caption', label: '标题', type: 'text', placeholder: '显示标题（可选）' },
+        ],
       },
     ],
   },

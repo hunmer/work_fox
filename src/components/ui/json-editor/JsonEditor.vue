@@ -35,7 +35,7 @@ const value = computed({
 
 <template>
   <div
-    class="json-editor-wrapper rounded-md border border-border overflow-hidden"
+    class="json-editor-wrapper rounded-md border border-border overflow-auto"
     :class="{ 'jse-theme-dark': isDark }"
     :style="{ height: `${height}px` }"
   >

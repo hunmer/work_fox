@@ -356,6 +356,8 @@ export function createClaudeToolAdapter(context: ToolAdapterContext): {
       { name: 'execute_workflow_sync', description: '同步执行工作流。', input_schema: { type: 'object' as const, properties: {} } },
       { name: 'execute_workflow_async', description: '异步执行工作流。', input_schema: { type: 'object' as const, properties: {} } },
       { name: 'get_workflow_result', description: '查询工作流执行结果。', input_schema: { type: 'object' as const, properties: { execution_id: { type: 'string', description: '执行 ID。' }, node_id: { type: 'string', description: '可选节点 ID。' } }, required: ['execution_id'] } },
+      { name: 'search_nodes', description: '按关键词模糊搜索当前工作流中的节点，匹配 type/label/category/description 任一字段。', input_schema: { type: 'object' as const, properties: { keyword: { type: 'string', description: '搜索关键词。' } }, required: ['keyword'] } },
+      { name: 'search_node_usage', description: '按关键词模糊搜索所有可用节点类型定义，匹配 type/label/category/description 任一字段。', input_schema: { type: 'object' as const, properties: { keyword: { type: 'string', description: '搜索关键词。' } }, required: ['keyword'] } },
     ] as AgentToolDefinition[]
 
     mcpServers[WORKFLOW_TOOL_SERVER] = createSdkMcpServer({

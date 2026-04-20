@@ -156,11 +156,23 @@ export interface PluginWorkflowNode {
   properties?: Array<{
     key: string
     label: string
-    type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'code'
+    type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'code' | 'array' | 'conditions'
     required?: boolean
     default?: any
     options?: Array<{ label: string; value: string }>
     tooltip?: string
+    placeholder?: string
+    itemTemplate?: Record<string, any>
+    fields?: Array<{
+      key: string
+      label: string
+      type: string
+      required?: boolean
+      default?: any
+      placeholder?: string
+      options?: Array<{ label: string; value: string }>
+      tooltip?: string
+    }>
   }>
   handles?: {
     source?: boolean

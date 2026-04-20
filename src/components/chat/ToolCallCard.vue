@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import type { ToolCall } from '@/types'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import JsonEditor from '@/components/ui/json-editor/JsonEditor.vue'
 
 const props = defineProps<{
   toolCall: ToolCall
@@ -171,7 +172,6 @@ const formattedResult = computed(() => {
   const result = props.toolCall.result
   if (result == null) return ''
   if (typeof result === 'string') {
-    // 尝试解析为 JSON，成功则格式化
     try {
       const parsed = JSON.parse(result)
       return JSON.stringify(parsed, null, 2)
@@ -181,6 +181,17 @@ const formattedResult = computed(() => {
   }
   return JSON.stringify(result, null, 2)
 })
+
+const parsedResult = computed(() => {
+  const result = props.toolCall.result
+  if (result == null) return undefined
+  if (typeof result === 'string') {
+    try { return JSON.parse(result) } catch { return undefined }
+  }
+  return result
+})
+
+const isJsonResult = computed(() => parsedResult.value !== undefined && typeof parsedResult.value === 'object')
 
 function isOptionSelected(questionIndex: number, label: string) {
   return selectedAnswers.value[questionIndex]?.includes(label) ?? false
@@ -495,6 +506,16 @@ async function handleRerun() {
             class="rounded border max-w-full max-h-64 object-contain"
             loading="lazy"
           >
+        </div>
+        <div
+          v-else-if="isJsonResult"
+          class="px-3 pb-2"
+        >
+          <JsonEditor
+            :model-value="parsedResult"
+            :readonly="true"
+            :height="200"
+          />
         </div>
         <pre
           v-else
