@@ -6,6 +6,7 @@ import type { OutputField } from '@/lib/workflow/types'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
+import { CodeEditor } from '@/components/ui/code-editor'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
@@ -46,7 +47,7 @@ const textModeKeys = ref<Set<string>>(new Set())
 
 /** 判断字段是否为纯文本类型（无需切换） */
 function isTextType(type: string): boolean {
-  return type === 'text' || type === 'textarea' || type === 'code'
+  return type === 'text' || type === 'textarea'
 }
 
 function toggleTextMode(key: string) {
@@ -384,8 +385,17 @@ function confirmImport() {
 
             <!-- 原生类型模式 -->
             <template v-else>
+              <CodeEditor
+                v-if="prop.type === 'code'"
+                :model-value="getFieldValue(prop.key)"
+                :language="prop.codeLanguage || 'javascript'"
+                :readonly="prop.readonly"
+                :height="prop.codeHeight || 200"
+                @update:model-value="setFieldValue(prop.key, $event)"
+              />
+
               <Input
-                v-if="prop.type === 'number'"
+                v-else-if="prop.type === 'number'"
                 type="number"
                 :model-value="getFieldValue(prop.key)"
                 :readonly="prop.readonly"
