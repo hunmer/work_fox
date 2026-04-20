@@ -6,7 +6,7 @@ import { JsonStore } from '../utils/json-store'
 import type { Workflow, WorkflowFolder, WorkflowAgentConfig } from './store'
 
 const userDataPath = app.getPath('userData')
-const workflowsDir = join(userDataPath, 'workflows')
+const agentWorkflowsDir = join(userDataPath, 'agent-workflows')
 
 // ====== 文件夹：单个 JsonStore ======
 
@@ -25,12 +25,14 @@ const folderStore = new JsonStore<WorkflowFolderStoreData>(
 
 // ====== 工作流：每个独立文件 ======
 
-function ensureDir(): void {
-  if (!existsSync(workflowsDir)) mkdirSync(workflowsDir, { recursive: true })
+function ensureDir(id: string): string {
+  const dir = join(agentWorkflowsDir, id)
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+  return dir
 }
 
 function workflowPath(id: string): string {
-  return join(workflowsDir, `${id}.json`)
+  return join(agentWorkflowsDir, id, 'workflow.json')
 }
 
 function workflowDataDir(id: string): string {
@@ -60,12 +62,8 @@ function readWorkflowFile(id: string): Workflow | undefined {
 }
 
 function writeWorkflowFile(workflow: Workflow): void {
-  ensureDir()
+  ensureDir(workflow.id)
   workflow.agentConfig = normalizeWorkflowAgentConfig(workflow)
-  const dataDir = workflow.agentConfig.dataDir
-  if (dataDir && !existsSync(dataDir)) {
-    mkdirSync(dataDir, { recursive: true })
-  }
   writeFileSync(workflowPath(workflow.id), JSON.stringify(workflow, null, 2), 'utf-8')
 }
 
@@ -75,12 +73,15 @@ function deleteWorkflowFile(id: string): void {
 }
 
 function readAllWorkflowFiles(): Workflow[] {
-  ensureDir()
-  const files = readdirSync(workflowsDir).filter((f) => f.endsWith('.json'))
+  if (!existsSync(agentWorkflowsDir)) return []
   const workflows: Workflow[] = []
-  for (const file of files) {
+  const dirs = readdirSync(agentWorkflowsDir, { withFileTypes: true })
+    .filter(d => d.isDirectory())
+  for (const dir of dirs) {
+    const file = join(agentWorkflowsDir, dir.name, 'workflow.json')
+    if (!existsSync(file)) continue
     try {
-      const data = JSON.parse(readFileSync(join(workflowsDir, file), 'utf-8'))
+      const data = JSON.parse(readFileSync(file, 'utf-8'))
       data.agentConfig = normalizeWorkflowAgentConfig(data)
       workflows.push(data)
     } catch {

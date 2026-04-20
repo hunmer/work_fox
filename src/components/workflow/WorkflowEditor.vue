@@ -232,8 +232,12 @@ let autoSaveTimer: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
   cleanupFileUpdates = store.listenForFileUpdates()
   cleanupWorkflowToolRequests = store.listenForWorkflowToolRequests()
-  if ((route.query.open === '1' || route.query.create === '1') && !store.currentWorkflow) {
-    openWorkflowList(route.query.create === '1')
+  if (!store.currentWorkflow) {
+    if (route.query.open === '1' || route.query.create === '1') {
+      openWorkflowList(route.query.create === '1')
+    } else {
+      router.replace('/home')
+    }
   }
   autoSaveTimer = setInterval(() => {
     if (store.isDirty && store.currentWorkflow) {

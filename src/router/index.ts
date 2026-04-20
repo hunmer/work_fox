@@ -21,6 +21,10 @@ const router = createRouter({
       path: '/gallery',
       component: () => import('@/views/GalleryPage.vue'),
     },
+    {
+      path: '/:pathMatch(.*)*',
+      component: () => import('@/views/NotFoundPage.vue'),
+    },
   ],
 })
 

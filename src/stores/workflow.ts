@@ -109,7 +109,7 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () =>
     saveTimer = setTimeout(() => {
       const a = api()
       if (a?.operationHistory?.save) {
-        a.operationHistory.save(currentWorkflow.value!.id, operationLog.value)
+        a.operationHistory.save(currentWorkflow.value!.id, JSON.parse(JSON.stringify(operationLog.value)))
       }
     }, 500)
   }

@@ -45,15 +45,21 @@ export const useTabStore = defineStore('tabs', () => {
       if (tab.workflowId) {
         await store.loadData()
         const wf = store.workflows.find(w => w.id === tab.workflowId)
-        if (wf) {
-          store.currentWorkflow = JSON.parse(JSON.stringify(wf))
+        if (!wf) {
+          // 工作流文件已删除，跳过此标签页
+          storeMap.delete(tab.id)
+          continue
         }
+        store.currentWorkflow = JSON.parse(JSON.stringify(wf))
       } else {
         await store.loadData()
       }
       tabs.value.push(tab)
     }
-    activeTabId.value = data.activeTabId || data.tabs[0]?.id || null
+    const validTabs = tabs.value
+    activeTabId.value = validTabs.some(t => t.id === data.activeTabId)
+      ? data.activeTabId
+      : validTabs[0]?.id || null
   }
 
   function addTab(workflowId: string | null = null, name: string = ''): string {
