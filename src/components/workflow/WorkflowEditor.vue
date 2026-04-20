@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, markRaw, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { VueFlow, useVueFlow, ConnectionMode } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { MiniMap } from '@vue-flow/minimap'
@@ -21,7 +22,6 @@ import ExecutionBar from './ExecutionBar.vue'
 import WorkflowListDialog from './WorkflowListDialog.vue'
 import NodeSelectDialog from './NodeSelectDialog.vue'
 import EditorToolbar from './EditorToolbar.vue'
-import WelcomePage from './WelcomePage.vue'
 import CanvasToolbar from './CanvasToolbar.vue'
 import PluginsDialog from '@/components/plugins/PluginsDialog.vue'
 import SettingsDialog from '@/components/settings/SettingsDialog.vue'
@@ -180,8 +180,10 @@ const recentWorkflows = computed(() =>
     .map(wf => ({ id: wf.id, name: wf.name, updatedAt: wf.updatedAt })),
 )
 
+const router = useRouter()
+
 function goHome() {
-  store.currentWorkflow = null
+  router.push('/home')
 }
 
 function openRecentWorkflow(id: string) {
@@ -256,18 +258,11 @@ function onConnect(params: any) {
       @open-recent="openRecentWorkflow"
     />
 
-    <WelcomePage
-      v-if="!store.currentWorkflow"
-      @new="store.newWorkflow()"
-      @open="openWorkflow"
-      @import="importWorkflow"
-    />
-
-    <template v-else>
-      <ResizablePanelGroup
-        direction="vertical"
-        @layout="onExecBarResize"
-      >
+    <ResizablePanelGroup
+      v-if="store.currentWorkflow"
+      direction="vertical"
+      @layout="onExecBarResize"
+    >
         <ResizablePanel
           :default-size="82"
           :min-size="40"
@@ -356,7 +351,6 @@ function onConnect(params: any) {
           <ExecutionBar v-model:expanded="executionBarExpanded" />
         </ResizablePanel>
       </ResizablePanelGroup>
-    </template>
 
     <WorkflowListDialog
       :open="listDialogOpen"

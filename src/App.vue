@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { Toaster } from '@/components/ui/sonner'
-import WorkflowEditor from '@/components/workflow/WorkflowEditor.vue'
 import CommandPaletteDialog from '@/components/command-palette/CommandPaletteDialog.vue'
 import { useTabStore } from '@/stores/tab'
 import { usePluginStore } from '@/stores/plugin'
@@ -22,13 +21,7 @@ onMounted(async () => {
 
 <template>
   <div class="h-screen w-screen flex flex-col bg-background text-foreground" :class="{ 'light': true }">
-    <WorkflowEditor
-      v-for="tab in tabStore.tabs"
-      :key="tab.id"
-      v-show="tab.id === tabStore.activeTabId"
-      :tab="tab"
-      :store="tabStore.getStore(tab.id)!"
-    />
+    <RouterView />
     <Toaster />
     <CommandPaletteDialog
       :open="commandPaletteOpen"
