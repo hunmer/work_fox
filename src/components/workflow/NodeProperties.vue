@@ -413,7 +413,7 @@ function confirmImport() {
                 :model-value="getFieldValue(prop.key)"
                 @update:model-value="setFieldValue(prop.key, $event)"
               >
-                <SelectTrigger class="h-7 text-xs">
+                <SelectTrigger class="h-7 text-xs w-full">
                   <SelectValue :placeholder="prop.label" />
                 </SelectTrigger>
                 <SelectContent>

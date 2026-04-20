@@ -19,12 +19,25 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
   })
 
   onNodesChange((changes) => {
+    let nextSelectedNodeIds: string[] | null = null
+
     for (const change of changes) {
       if (change.type === 'remove') {
         store.removeNode(change.id)
       } else if (change.type === 'position' && change.position) {
         store.updateNodePosition(change.id, change.position)
+      } else if (change.type === 'select') {
+        if (!nextSelectedNodeIds) nextSelectedNodeIds = [...store.selectedNodeIds]
+        if (change.selected) {
+          if (!nextSelectedNodeIds.includes(change.id)) nextSelectedNodeIds.push(change.id)
+        } else {
+          nextSelectedNodeIds = nextSelectedNodeIds.filter(id => id !== change.id)
+        }
       }
+    }
+
+    if (nextSelectedNodeIds) {
+      store.selectedNodeIds = nextSelectedNodeIds
     }
   })
 
@@ -75,6 +88,7 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
       id: n.id,
       type: 'custom',
       position: n.position,
+      selected: store.selectedNodeIds.includes(n.id),
       data: { ...n.data, label: n.label, nodeType: n.type },
     })),
   )
