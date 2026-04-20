@@ -60,16 +60,31 @@ export interface OutputField {
   children?: OutputField[]
 }
 
+/** 数组项子字段定义 */
+export interface ArrayFieldItem {
+  key: string
+  label: string
+  type: 'text' | 'number' | 'select' | 'checkbox'
+  required?: boolean
+  default?: any
+  options?: { label: string; value: string }[]
+  placeholder?: string
+}
+
 /** 节点属性表单字段定义 */
 export interface NodeProperty {
   key: string
   label: string
-  type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'code' | 'conditions'
+  type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'code' | 'conditions' | 'array'
   required?: boolean
   readonly?: boolean
   default?: any
   options?: { label: string; value: string }[]
   tooltip?: string
+  /** array 类型的子字段定义 */
+  fields?: ArrayFieldItem[]
+  /** 新增项的默认值模板 */
+  itemTemplate?: Record<string, any>
 }
 
 /** 节点连接点配置 */
@@ -93,6 +108,10 @@ export interface NodeTypeDefinition {
   properties: NodeProperty[]
   handles?: NodeHandleConfig
   outputs?: OutputField[]
+  /** 自定义节点内容视图组件 */
+  customView?: any
+  /** 自定义视图所需的最小节点尺寸 */
+  customViewMinSize?: { width?: number; height?: number }
 }
 
 /** 执行步骤记录 */

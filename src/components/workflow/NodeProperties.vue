@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Bug, Loader2, CheckCircle2, XCircle, ChevronDown, ChevronRight, Import, FileDown, Info, Braces } from 'lucide-vue-next'
+import { Bug, Loader2, CheckCircle2, XCircle, ChevronDown, ChevronRight, Import, FileDown, Info, Braces, Plus, Trash2 } from 'lucide-vue-next'
 import OutputFieldEditor from './OutputFieldEditor.vue'
 import ConditionEditor from './ConditionEditor.vue'
 import VariablePicker from './VariablePicker.vue'
@@ -74,6 +74,34 @@ function setFieldValue(key: string, value: any) {
 function insertVariable(propKey: string, variablePath: string) {
   const current = getFieldValue(propKey) || ''
   setFieldValue(propKey, current + variablePath)
+}
+
+/** array 类型：获取数组 */
+function getArrayItems(key: string): Record<string, any>[] {
+  return getFieldValue(key) || []
+}
+
+/** array 类型：添加项 */
+function addArrayItem(prop: any) {
+  const items = [...getArrayItems(prop.key)]
+  const template = prop.itemTemplate || {}
+  const newItem = { ...template, id: Date.now() }
+  items.push(newItem)
+  setFieldValue(prop.key, items)
+}
+
+/** array 类型：删除项 */
+function removeArrayItem(propKey: string, index: number) {
+  const items = [...getArrayItems(propKey)]
+  items.splice(index, 1)
+  setFieldValue(propKey, items)
+}
+
+/** array 类型：更新项字段 */
+function updateArrayItemField(propKey: string, index: number, fieldKey: string, value: any) {
+  const items = [...getArrayItems(propKey)]
+  items[index] = { ...items[index], [fieldKey]: value }
+  setFieldValue(propKey, items)
 }
 
 /** 获取/设置节点输出字段 */
@@ -395,6 +423,68 @@ function confirmImport() {
                   @update:model-value="setFieldValue(prop.key, $event)"
                 />
                 <span class="text-xs text-muted-foreground">{{ prop.readonly ? '(只读)' : '' }}</span>
+              </div>
+
+              <!-- array 类型：动态表单列表 -->
+              <div
+                v-else-if="prop.type === 'array'"
+                class="space-y-2"
+              >
+                <div
+                  v-for="(item, idx) in getArrayItems(prop.key)"
+                  :key="idx"
+                  class="relative rounded border border-border bg-muted/30 p-2 space-y-1.5"
+                >
+                  <button
+                    class="absolute top-1 right-1 p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                    @click="removeArrayItem(prop.key, idx)"
+                  >
+                    <Trash2 class="w-3 h-3" />
+                  </button>
+                  <div
+                    v-for="field in prop.fields"
+                    :key="field.key"
+                    class="space-y-0.5"
+                  >
+                    <label class="text-[10px] text-muted-foreground">{{ field.label }}</label>
+                    <Input
+                      v-if="field.type === 'text' || field.type === 'number'"
+                      :type="field.type === 'number' ? 'number' : 'text'"
+                      :model-value="item[field.key]"
+                      :placeholder="field.placeholder || field.label"
+                      class="h-6 text-[11px]"
+                      @update:model-value="updateArrayItemField(prop.key, idx, field.key, field.type === 'number' ? Number($event) : $event)"
+                    />
+                    <Select
+                      v-else-if="field.type === 'select'"
+                      :model-value="item[field.key] || field.default"
+                      @update:model-value="updateArrayItemField(prop.key, idx, field.key, $event)"
+                    >
+                      <SelectTrigger class="h-6 text-[11px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem
+                          v-for="opt in (field.options || [])"
+                          :key="opt.value"
+                          :value="opt.value"
+                          class="text-[11px]"
+                        >
+                          {{ opt.label }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="w-full h-6 text-[11px] gap-1"
+                  @click="addArrayItem(prop)"
+                >
+                  <Plus class="w-3 h-3" />
+                  添加资源
+                </Button>
               </div>
             </template>
           </div>

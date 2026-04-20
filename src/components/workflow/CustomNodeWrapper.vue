@@ -73,7 +73,6 @@ const stateBackground = computed(() => {
         return 'bg-yellow-500/10'
     }
   }
-  // 开始/结束节点的特殊背景色
   if (definition.value?.type === 'start') return 'bg-emerald-500/10'
   if (definition.value?.type === 'end') return 'bg-slate-500/10'
   return 'bg-background'
@@ -121,6 +120,21 @@ function refreshNodeInternals(reason: string) {
 }
 
 const displayLabel = computed(() => props.data?.label || definition.value?.label || props.type)
+
+/** 自定义视图组件 */
+const CustomViewComponent = computed(() => definition.value?.customView)
+
+/** 自定义视图所需的 props */
+const customViewProps = computed(() => {
+  if (!CustomViewComponent.value) return {}
+  if (definition.value?.type === 'gallery_preview') {
+    return { items: props.data?.items || [] }
+  }
+  return props.data || {}
+})
+
+/** 是否有自定义视图 */
+const hasCustomView = computed(() => !!CustomViewComponent.value)
 
 /** 动态输出连接点（switch 节点） */
 const dynamicHandles = computed(() => {
@@ -220,6 +234,14 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- 自定义视图内容区 -->
+        <div v-if="hasCustomView" class="px-2 pb-2 custom-view-area">
+          <component
+            :is="CustomViewComponent"
+            v-bind="customViewProps"
+          />
+        </div>
+
         <!-- 输出连接点 -->
         <Handle
           v-if="showSourceHandle && !dynamicHandles"
@@ -281,3 +303,19 @@ onMounted(() => {
     </ContextMenuContent>
   </ContextMenu>
 </template>
+
+<style scoped>
+.custom-view-area {
+  overflow: hidden;
+  max-height: 200px;
+}
+.custom-view-area :deep(.gallery-grid) {
+  gap: 4px;
+}
+.custom-view-area :deep(.gallery-item) {
+  border-radius: 4px;
+}
+.custom-view-area :deep(.gallery-caption) {
+  display: none;
+}
+</style>
