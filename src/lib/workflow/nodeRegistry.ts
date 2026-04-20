@@ -253,13 +253,10 @@ export const allNodeDefinitions: NodeTypeDefinition[] = [
 /** 插件注册的额外节点定义 */
 const pluginNodeDefinitions: NodeTypeDefinition[] = []
 
-/** 注册插件节点定义（供 NodeSidebar 调用） */
+/** 注册插件节点定义（供 NodeSidebar 调用），替换旧数据 */
 export function registerPluginNodeDefinitions(nodes: any[]): void {
-  for (const node of nodes) {
-    if (!pluginNodeDefinitions.find((d) => d.type === node.type)) {
-      pluginNodeDefinitions.push(node)
-    }
-  }
+  pluginNodeDefinitions.length = 0
+  pluginNodeDefinitions.push(...nodes)
 }
 
 /** 清除插件节点定义 */

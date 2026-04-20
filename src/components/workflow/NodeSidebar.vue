@@ -27,19 +27,27 @@ const pluginNodes = ref<any[]>([])
 const searchQuery = ref('')
 const openCategories = ref<Record<string, boolean>>({})
 
+let pluginLoadSeq = 0
+
 async function loadPluginNodes() {
+  const seq = ++pluginLoadSeq
   if (!props.enabledPlugins?.length) {
     pluginNodes.value = []
     registerPluginNodeDefinitions([])
     return
   }
-  const allNodes: any[] = []
-  for (const pluginId of props.enabledPlugins) {
-    const nodes = await pluginStore.getWorkflowNodes(pluginId)
-    allNodes.push(...nodes)
+  try {
+    const allNodes: any[] = []
+    for (const pluginId of props.enabledPlugins) {
+      const nodes = await pluginStore.getWorkflowNodes(pluginId)
+      if (seq !== pluginLoadSeq) return
+      allNodes.push(...nodes)
+    }
+    pluginNodes.value = allNodes
+    registerPluginNodeDefinitions(allNodes)
+  } catch (e) {
+    console.error('[NodeSidebar] 加载插件节点失败:', e)
   }
-  pluginNodes.value = allNodes
-  registerPluginNodeDefinitions(allNodes)
 }
 
 watch(() => props.enabledPlugins, loadPluginNodes, { immediate: true, deep: true })

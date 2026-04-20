@@ -94,19 +94,38 @@ export async function proxyChatCompletions(
 
       let response: Response | null = null
       let lastErrorText = ''
+      const REQUEST_TIMEOUT_MS = 60_000
 
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': provider.apiKey,
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true',
-          },
-          body: JSON.stringify(body),
-          signal: abortController.signal,
-        })
+        const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+        // 用 AbortSignal.any 让 user-abort 和 timeout 都能取消请求
+        const combinedSignal = AbortSignal.any([abortController.signal, timeoutSignal])
+
+        console.log(`[ai-proxy] fetch attempt ${attempt + 1}, url: ${apiUrl}, model: ${modelId}`)
+        try {
+          response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': provider.apiKey,
+              'anthropic-version': '2023-06-01',
+              'anthropic-dangerous-direct-browser-access': 'true',
+            },
+            body: JSON.stringify(body),
+            signal: combinedSignal,
+          })
+        } catch (fetchErr) {
+          console.error(`[ai-proxy] fetch failed (attempt ${attempt + 1}):`, fetchErr)
+          if (attempt < MAX_RETRIES && abortController.signal.aborted === false) {
+            const retryDelay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt)
+            send('on:chat:retry', { requestId: _requestId, attempt: attempt + 1, maxRetries: MAX_RETRIES, delayMs: retryDelay, status: 0 })
+            await delay(retryDelay)
+            continue
+          }
+          send('on:chat:error', { requestId: _requestId, error: fetchErr instanceof Error ? fetchErr.message : String(fetchErr) })
+          return
+        }
+        console.log(`[ai-proxy] response status: ${response.status}`)
         if (response.ok) break
         lastErrorText = await response.text()
         if (attempt < MAX_RETRIES && isRetryableError(response.status)) {
@@ -230,6 +249,7 @@ async function parseSSEStream(
   cumulativeUsage: { inputTokens: number; outputTokens: number },
   indexOffset = 0,
 ): Promise<{ textContent: string; toolCalls: ParsedToolCall[]; stopReason: string | null; blockCount: number }> {
+  console.log('[ai-proxy] parseSSEStream started')
   const reader = body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
