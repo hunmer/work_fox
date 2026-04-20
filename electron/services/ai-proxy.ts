@@ -128,7 +128,6 @@ export async function proxyChatCompletions(
           send('on:chat:error', { requestId: _requestId, error: fetchErr instanceof Error ? fetchErr.message : String(fetchErr) })
           return
         }
-        console.log(`[ai-proxy] response status: ${response.status}`)
         if (response.ok) break
         lastErrorText = await response.text()
         if (attempt < MAX_RETRIES && isRetryableError(response.status)) {
@@ -252,7 +251,6 @@ async function parseSSEStream(
   cumulativeUsage: { inputTokens: number; outputTokens: number },
   indexOffset = 0,
 ): Promise<{ textContent: string; toolCalls: ParsedToolCall[]; stopReason: string | null; blockCount: number }> {
-  console.log('[ai-proxy] parseSSEStream started')
   const reader = body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
@@ -266,7 +264,6 @@ async function parseSSEStream(
     const { done, value } = await reader.read()
     if (done) { console.log('[ai-proxy] SSE stream ended (done=true)'); break }
     const chunk = decoder.decode(value, { stream: true })
-    console.log('[ai-proxy] SSE raw chunk:', JSON.stringify(chunk.slice(0, 500)))
     buffer += chunk
     const lines = buffer.split('\n')
     buffer = lines.pop() ?? ''

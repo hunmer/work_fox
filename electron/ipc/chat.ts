@@ -33,7 +33,7 @@ export function registerChatIpcHandlers(): void {
     if (!mainWindow) throw new Error('No main window found')
     proxyChatCompletions(mainWindow, params).catch((err) => {
       if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('on:chat:error', {
+        mainWindow.webContents.send('chat:error', {
           requestId: params._requestId,
           error: err instanceof Error ? err.message : String(err),
         })

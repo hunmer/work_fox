@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import { BrowserWindow } from 'electron'
 import dagre from '@dagrejs/dagre'
 import { getWorkflow, updateWorkflow } from './workflow-store'
+import { workflowNodeRegistry } from './workflow-node-registry'
 
 // ====== 节点类型定义（从 nodeRegistry 硬编码，避免跨进程导入） ======
 
@@ -154,7 +155,8 @@ function notifyRenderer(
   changes: WorkflowChanges,
 ): void {
   if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('on:workflow:updated', { workflowId, changes })
+    console.log('[workflow-tool-executor] notifyRenderer:', { workflowId, upsertNodes: changes.upsertNodes.length, deleteNodeIds: changes.deleteNodeIds.length, upsertEdges: changes.upsertEdges.length, deleteEdgeIds: changes.deleteEdgeIds.length })
+    mainWindow.webContents.send('workflow:updated', { workflowId, changes })
   }
 }
 
@@ -174,20 +176,40 @@ function handleGetCurrentWorkflow(): ToolHandlerResult {
 
 function handleListNodeTypes(ctx: ToolContext): ToolHandlerResult {
   const { args } = ctx
-  const category = args?.category
-  const filtered = category
-    ? NODE_TYPE_DEFINITIONS.filter((d) => d.category === category)
-    : NODE_TYPE_DEFINITIONS
+  // 合并基础节点类型 + 插件注册的节点类型
+  const pluginNodes = workflowNodeRegistry.getAllPluginNodes()
+    .flatMap((entry) => entry.nodes.map((n) => ({
+      type: n.type,
+      label: n.label || n.type,
+      category: n.category || '插件',
+      description: n.description || `插件 ${entry.pluginId} 提供的节点`,
+    })))
+  const allTypes = [...NODE_TYPE_DEFINITIONS, ...pluginNodes]
+  const categories = Array.from(new Set(allTypes.map((d) => d.category)))
+  const filtered = args?.category
+    ? allTypes.filter((d) => d.category === category)
+    : allTypes
   return {
     result: {
       success: true,
       message: `共 ${filtered.length} 种节点类型`,
-      data: { nodeTypes: filtered, categories: Array.from(new Set(NODE_TYPE_DEFINITIONS.map((d) => d.category))) },
+      data: { nodeTypes: filtered, categories },
     },
     mutated: false,
     nodes: ctx.nodes,
     edges: ctx.edges,
   }
+}
+
+/** 查找节点类型定义（基础 + 插件） */
+function findNodeType(type: string): { label: string; category: string; description: string } | undefined {
+  const base = NODE_TYPE_DEFINITIONS.find((d) => d.type === type)
+  if (base) return base
+  for (const entry of workflowNodeRegistry.getAllPluginNodes()) {
+    const node = entry.nodes.find((n) => n.type === type)
+    if (node) return { label: node.label || node.type, category: node.category || '插件', description: node.description || '' }
+  }
+  return undefined
 }
 
 function handleCreateNode(ctx: ToolContext): ToolHandlerResult {
@@ -196,12 +218,12 @@ function handleCreateNode(ctx: ToolContext): ToolHandlerResult {
   if (!type) {
     return { result: { success: false, message: '缺少必填参数: type' }, mutated: false, nodes, edges: ctx.edges }
   }
-  const typeDef = NODE_TYPE_DEFINITIONS.find((d) => d.type === type)
+  const typeDef = findNodeType(type)
   if (!typeDef) {
     return {
       result: {
         success: false,
-        message: `未知节点类型: ${type}，可用类型: ${NODE_TYPE_DEFINITIONS.map((d) => d.type).join(', ')}`,
+        message: `未知节点类型: ${type}，可用类型: ${[...NODE_TYPE_DEFINITIONS, ...workflowNodeRegistry.getAllPluginNodes().flatMap(e => e.nodes)].map((d: any) => d.type).join(', ')}`,
       },
       mutated: false,
       nodes,
@@ -218,6 +240,7 @@ function handleCreateNode(ctx: ToolContext): ToolHandlerResult {
   }
   nodes.push(newNode)
   changes.upsertNodes.push(newNode)
+  console.log('[handleCreateNode] node created:', { id: nodeId, type, label: newNode.label, position: newNode.position })
   return {
     result: { success: true, message: `节点已创建: ${newNode.label} (${nodeId})`, data: { nodeId } },
     mutated: true,
@@ -496,7 +519,7 @@ function executeSingleOp(
     case 'create_node': {
       const { type, label } = args || {}
       if (!type) return { success: false, message: '缺少必填参数: type' }
-      const typeDef = NODE_TYPE_DEFINITIONS.find((d) => d.type === type)
+      const typeDef = findNodeType(type)
       if (!typeDef) {
         return { success: false, message: `未知节点类型: ${type}` }
       }

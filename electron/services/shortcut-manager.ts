@@ -79,7 +79,7 @@ export function registerGlobalShortcuts(): void {
         } else {
           if (win.isMinimized()) win.restore()
           win.focus()
-          win.webContents.send('on:shortcut', binding.id)
+          win.webContents.send('shortcut', binding.id)
         }
       })
     } catch {

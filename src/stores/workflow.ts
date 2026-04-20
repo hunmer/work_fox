@@ -512,8 +512,12 @@ function createAIActions(
 
   function listenForFileUpdates() {
     return (window as any).api.on('workflow:updated', (data: any) => {
+      console.log('[workflow store] received workflow:updated:', data)
       if (data.workflowId === currentWorkflow.value?.id && data.changes) {
+        console.log('[workflow store] merging changes:', data.changes)
         mergeWorkflowChanges(data.changes)
+      } else {
+        console.log('[workflow store] skipped:', { eventWorkflowId: data.workflowId, currentId: currentWorkflow.value?.id, hasChanges: !!data.changes })
       }
     })
   }

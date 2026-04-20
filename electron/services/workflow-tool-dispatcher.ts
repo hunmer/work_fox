@@ -90,7 +90,7 @@ async function executeRendererWorkflowTool(
       timer,
     })
 
-    mainWindow.webContents.send('on:workflow-tool:execute', {
+    mainWindow.webContents.send('workflow-tool:execute', {
       requestId,
       toolUseId,
       name,
