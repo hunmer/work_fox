@@ -118,7 +118,7 @@ class PluginManager {
         }
       }
 
-      // 加载 api.js（如果有）—— 插件自定义 API
+      // 加载 api.js（如果有）—— 插件自定义 API；否则使用内置网络请求 API
       const apiPath = join(pluginDir, 'api.js')
       if (existsSync(apiPath)) {
         try {
@@ -130,6 +130,8 @@ class PluginManager {
         } catch (err) {
           console.error(`[PluginManager] 插件 ${info.name} 的 api.js 加载失败:`, err)
         }
+      } else {
+        workflowNodeRegistry.registerApi(info.id, { ...context.fetch, ...context.fs } as any)
       }
 
       // 加载 tools.js（如果有）—— 插件 Agent 工具定义

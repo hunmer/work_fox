@@ -46,6 +46,70 @@ export interface PluginMeta {
   iconPath: string
 }
 
+/** 网络请求选项 */
+export interface FetchOptions {
+  headers?: Record<string, string>
+  encoding?: string
+  timeout?: number
+  userAgent?: string
+}
+
+/** 单个下载结果 */
+export interface FetchBufferResult {
+  buffer: Buffer
+  size: number
+  mimeType: string
+}
+
+/** 批量下载单项结果 */
+export interface FetchBuffersItem {
+  url: string
+  buffer?: Buffer
+  size?: number
+  mimeType?: string
+  success: boolean
+  error?: string
+}
+
+/** 内置网络请求 API */
+export interface FetchApi {
+  fetchText(url: string, options?: FetchOptions): Promise<string>
+  fetchJson<T = any>(url: string, options?: FetchOptions): Promise<T>
+  fetchBuffer(url: string, options?: FetchOptions): Promise<FetchBufferResult>
+  fetchBuffers(urls: string[], options?: FetchOptions): Promise<FetchBuffersItem[]>
+}
+
+/** 列举文件结果项 */
+export interface ListFilesItem {
+  name: string
+  path: string
+  type: 'file' | 'directory'
+}
+
+/** 文件信息结果 */
+export interface FileStatResult {
+  isFile: boolean
+  isDirectory: boolean
+  size: number
+  createdAt: string
+  modifiedAt: string
+}
+
+/** 内置文件系统 API */
+export interface FsApi {
+  writeFile(filePath: string, content: string, encoding?: string): Promise<void>
+  readFile(filePath: string, encoding?: string): Promise<string>
+  editFile(filePath: string, oldContent: string, newContent: string): Promise<{ replaced: boolean }>
+  deleteFile(filePath: string): Promise<void>
+  listFiles(dirPath: string, options?: { recursive?: boolean; pattern?: string }): Promise<ListFilesItem[]>
+  createDir(dirPath: string, options?: { recursive?: boolean }): Promise<void>
+  removeDir(dirPath: string, options?: { recursive?: boolean; force?: boolean }): Promise<void>
+  stat(filePath: string): Promise<FileStatResult>
+  exists(filePath: string): Promise<boolean>
+  rename(oldPath: string, newPath: string): Promise<void>
+  copyFile(src: string, dest: string): Promise<void>
+}
+
 /** 插件上下文 API */
 export interface PluginContext {
   events: {
@@ -69,6 +133,10 @@ export interface PluginContext {
   }
   /** 向渲染进程发送消息（通过 mainWindow.webContents.send） */
   sendToRenderer(channel: string, ...args: any[]): void
+  /** 内置网络请求能力 */
+  fetch: FetchApi
+  /** 内置文件系统能力 */
+  fs: FsApi
   api?: PluginApi
 }
 
