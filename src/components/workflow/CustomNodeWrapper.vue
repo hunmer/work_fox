@@ -3,7 +3,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import type { NodeProps } from '@vue-flow/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
-import { X, CircleSlash, SkipForward } from 'lucide-vue-next'
+import { X, CircleSlash, SkipForward, FileText } from 'lucide-vue-next'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
 import { useWorkflowStore } from '@/stores/workflow'
@@ -15,6 +15,12 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 const props = defineProps<NodeProps>()
 defineEmits<{ (e: 'updateNodeInternals'): void }>()
@@ -45,6 +51,19 @@ const currentNodeState = computed<NodeRunState>(() => {
 const nodeStatus = computed(() => {
   const step = store.executionLog?.steps.find((s) => s.nodeId === props.id)
   return step?.status || 'idle'
+})
+
+/** 当前节点的执行日志 */
+const nodeLogs = computed(() => {
+  const step = store.executionLog?.steps.find((s) => s.nodeId === props.id)
+  return step?.logs || []
+})
+
+/** 日志摘要文本（用于 tooltip） */
+const nodeLogsSummary = computed(() => {
+  if (nodeLogs.value.length === 0) return ''
+  const lines = nodeLogs.value.map((l) => `[${l.level}] ${l.message}`)
+  return lines.join('\n')
 })
 
 /** 节点状态对应的样式 */
@@ -204,6 +223,34 @@ onMounted(() => {
         >
           {{ stateBadge }}
         </span>
+
+        <!-- 日志图标（执行结束后有日志时显示） -->
+        <TooltipProvider v-if="nodeLogs.length > 0 && (nodeStatus === 'completed' || nodeStatus === 'error')">
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <div class="absolute -bottom-1.5 -right-1.5 w-4 h-4 rounded-full bg-muted border border-border flex items-center justify-center z-10 cursor-default">
+                <FileText class="w-2.5 h-2.5 text-muted-foreground" />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" class="max-w-[280px] max-h-[200px] overflow-auto">
+              <div class="space-y-0.5 text-xs">
+                <div
+                  v-for="(log, idx) in nodeLogs"
+                  :key="idx"
+                  class="flex items-start gap-1"
+                  :class="{
+                    'text-blue-600 dark:text-blue-400': log.level === 'info',
+                    'text-yellow-600 dark:text-yellow-400': log.level === 'warning',
+                    'text-red-600 dark:text-red-400': log.level === 'error',
+                  }"
+                >
+                  <span class="opacity-60">[{{ log.level }}]</span>
+                  <span class="break-all">{{ log.message }}</span>
+                </div>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
         <div class="flex items-center gap-2 px-3 py-2 border-b border-border/50">
           <component

@@ -12,6 +12,12 @@ export function registerChatIpcHandlers(): void {
       return { error: `Tool not available: ${toolType}` }
     }
     const api = workflowNodeRegistry.getApiForNodeType(toolType) || {}
+    const logs: Array<{ level: 'info' | 'warning' | 'error'; message: string; timestamp: number }> = []
+    const logger = {
+      info(message: string) { logs.push({ level: 'info', message, timestamp: Date.now() }) },
+      warning(message: string) { logs.push({ level: 'warning', message, timestamp: Date.now() }) },
+      error(message: string) { logs.push({ level: 'error', message, timestamp: Date.now() }) },
+    }
     try {
       const result = await handler(
         {
@@ -19,12 +25,13 @@ export function registerChatIpcHandlers(): void {
           nodeId: params.nodeId || '',
           nodeLabel: params.nodeLabel || '',
           upstream: params.upstream || {},
+          logger,
         },
         params,
       )
-      return result
+      return { ...result, _logs: logs }
     } catch (err: any) {
-      return { success: false, message: err.message }
+      return { success: false, message: err.message, _logs: logs }
     }
   })
 

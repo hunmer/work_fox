@@ -131,6 +131,13 @@ export interface NodeTypeDefinition {
   customViewMinSize?: { width?: number; height?: number }
 }
 
+/** 执行日志条目 */
+export interface ExecutionLogEntry {
+  level: 'info' | 'warning' | 'error'
+  message: string
+  timestamp: number
+}
+
 /** 执行步骤记录 */
 export interface ExecutionStep {
   nodeId: string
@@ -141,6 +148,7 @@ export interface ExecutionStep {
   input?: any
   output?: any
   error?: string
+  logs?: ExecutionLogEntry[]
 }
 
 /** 执行日志 */

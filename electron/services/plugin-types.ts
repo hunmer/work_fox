@@ -170,12 +170,20 @@ export interface PluginWorkflowNode {
   handler?: (ctx: PluginNodeContext, args: Record<string, any>) => Promise<PluginToolResult>
 }
 
+/** 节点 handler 日志接口 */
+export interface NodeLogger {
+  info(message: string): void
+  warning(message: string): void
+  error(message: string): void
+}
+
 /** 插件节点执行上下文 */
 export interface PluginNodeContext {
   api: PluginApi
   nodeId: string
   nodeLabel: string
   upstream: Record<string, any>
+  logger: NodeLogger
 }
 
 /** 插件 handler 返回结果 */

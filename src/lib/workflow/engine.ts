@@ -1,6 +1,6 @@
 // src/lib/workflow/engine.ts
 import { toRaw } from 'vue'
-import type { WorkflowNode, WorkflowEdge, ExecutionLog, ExecutionStep, ConditionItem } from './types'
+import type { WorkflowNode, WorkflowEdge, ExecutionLog, ExecutionStep, ExecutionLogEntry, ConditionItem } from './types'
 import { getNodeDefinition } from './nodeRegistry'
 import { listenToChatStream } from '@/lib/agent/stream'
 import { useAIProviderStore } from '@/stores/ai-provider'
@@ -220,8 +220,15 @@ export class WorkflowEngine {
       const result = await this.dispatchNode(node)
       step.finishedAt = Date.now()
       step.status = 'completed'
-      step.output = result
-      this.context[node.id] = result
+      // 提取 handler 日志
+      if (result && Array.isArray(result._logs)) {
+        step.logs = result._logs as ExecutionLogEntry[]
+        const { _logs, ...rest } = result
+        step.output = rest
+      } else {
+        step.output = result
+      }
+      this.context[node.id] = step.output
       if (!this.context.__data__) this.context.__data__ = {}
       this.context.__data__[node.id] = result
       // switch 节点记录活跃分支

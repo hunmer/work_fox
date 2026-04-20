@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Play, Pause, Square, ChevronDown, ChevronUp, ChevronRight, CheckCircle, XCircle, Loader2, Circle, Trash2, AlertTriangle } from 'lucide-vue-next'
+import { Play, Pause, Square, ChevronDown, ChevronUp, ChevronRight, CheckCircle, XCircle, Loader2, Circle, Trash2, AlertTriangle, FileText, Info, AlertCircle as AlertCircleIcon } from 'lucide-vue-next'
 import type { ExecutionLog, ExecutionStep } from '@/lib/workflow/types'
 
 const store = useWorkflowStore()
@@ -281,6 +281,38 @@ const displayLog = computed(() => store.selectedExecutionLog)
                   >
                     {{ step.error }}
                   </div>
+
+                  <!-- 日志信息 -->
+                  <Collapsible
+                    v-if="step.logs && step.logs.length > 0"
+                    :default-open="false"
+                    class="mt-1"
+                  >
+                    <CollapsibleTrigger class="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full">
+                      <ChevronRight class="w-2.5 h-2.5 transition-transform [[data-state=open]>&]:rotate-90" />
+                      <FileText class="w-2.5 h-2.5" />
+                      日志 ({{ step.logs.length }})
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div class="mt-0.5 space-y-px">
+                        <div
+                          v-for="(log, idx) in step.logs"
+                          :key="idx"
+                          class="flex items-start gap-1 text-[10px] px-1.5 py-0.5 rounded"
+                          :class="{
+                            'text-blue-600 dark:text-blue-400 bg-blue-500/10': log.level === 'info',
+                            'text-yellow-600 dark:text-yellow-400 bg-yellow-500/10': log.level === 'warning',
+                            'text-red-600 dark:text-red-400 bg-red-500/10': log.level === 'error',
+                          }"
+                        >
+                          <Info v-if="log.level === 'info'" class="w-2.5 h-2.5 shrink-0 mt-0.5" />
+                          <AlertTriangle v-else-if="log.level === 'warning'" class="w-2.5 h-2.5 shrink-0 mt-0.5" />
+                          <AlertCircleIcon v-else class="w-2.5 h-2.5 shrink-0 mt-0.5" />
+                          <span class="break-all">{{ log.message }}</span>
+                        </div>
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
 
                   <!-- 输入信息（可折叠，默认展开） -->
                   <Collapsible
