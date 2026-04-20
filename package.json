@@ -28,6 +28,7 @@
     "dexie": "^4.4.2",
     "electron-store": "^11.0.2",
     "eventemitter2": "^6.4.9",
+    "json-editor-vue": "^0.18.1",
     "lightgallery": "^2.9.0",
     "lucide-vue-next": "^0.460.0",
     "monaco-editor": "^0.55.1",

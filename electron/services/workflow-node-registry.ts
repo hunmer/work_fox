@@ -29,6 +29,17 @@ interface PluginNodeEntry {
 class WorkflowNodeRegistry {
   private entries: Map<string, PluginNodeEntry> = new Map()
 
+  /** 注册内置基础节点 */
+  registerBuiltinNodes(nodes: PluginWorkflowNode[]): void {
+    const existing = this.entries.get('__builtin__')
+    if (existing) {
+      existing.nodes = nodes
+    } else {
+      this.entries.set('__builtin__', { pluginId: '__builtin__', nodes, handlers: new Map() })
+    }
+    console.log(`[WorkflowNodeRegistry] 内置节点注册完成: ${nodes.length} 个`)
+  }
+
   /** 注册插件的工作流节点 */
   register(pluginId: string, workflowModule: { nodes: PluginWorkflowNode[] }): void {
     const nodes: PluginWorkflowNode[] = []

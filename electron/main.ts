@@ -10,7 +10,9 @@ import { registerPluginIpcHandlers } from './ipc/plugin'
 import { registerTabsIpcHandlers } from './ipc/tabs'
 import { registerAgentSettingsIpcHandlers } from './ipc/agent-settings'
 import { pluginManager } from './services/plugin-manager'
+import { workflowNodeRegistry } from './services/workflow-node-registry'
 import { getWindowMaximized, setWindowMaximized } from './services/store'
+import { builtinNodeDefinitions } from './services/builtin-nodes'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -59,6 +61,7 @@ app.whenReady().then(() => {
   registerPluginIpcHandlers()
   registerTabsIpcHandlers()
   registerAgentSettingsIpcHandlers()
+  workflowNodeRegistry.registerBuiltinNodes(builtinNodeDefinitions)
   pluginManager.loadAll()
 
   ipcMain.on('window:minimize', () => mainWindow?.minimize())

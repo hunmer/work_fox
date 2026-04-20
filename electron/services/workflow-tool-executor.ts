@@ -4,23 +4,16 @@ import dagre from '@dagrejs/dagre'
 import { getWorkflow, updateWorkflow } from './workflow-store'
 import { workflowNodeRegistry } from './workflow-node-registry'
 
-// ====== 节点类型定义（从 nodeRegistry 硬编码，避免跨进程导入） ======
-
-interface NodeTypeDefinition {
-  type: string
-  label: string
-  category: string
-  description: string
+/** 从 registry 获取所有节点类型定义（内置 + 插件） */
+function getAllNodeTypeDefinitions(): Array<{ type: string; label: string; category: string; description: string }> {
+  return workflowNodeRegistry.getAllPluginNodes()
+    .flatMap((entry) => entry.nodes.map((n) => ({
+      type: n.type,
+      label: n.label || n.type,
+      category: n.category || '插件',
+      description: n.description || `插件 ${entry.pluginId} 提供的节点`,
+    })))
 }
-
-const NODE_TYPE_DEFINITIONS: NodeTypeDefinition[] = [
-  // 流程控制
-  { type: 'start', label: '开始', category: '流程控制', description: '工作流入口节点，仅支持输出连接' },
-  { type: 'end', label: '结束', category: '流程控制', description: '工作流出口节点，仅支持输入连接' },
-  { type: 'run_code', label: '运行 JS 代码', category: '流程控制', description: '执行自定义 JavaScript 代码，可通过 context 访问上游数据' },
-  { type: 'toast', label: 'Toast 消息', category: '流程控制', description: '显示 Toast 通知消息' },
-  { type: 'agent_run', label: 'AI 执行', category: 'AI', description: '调用 Claude Agent 运行任务，支持目录、规则和工具' },
-]
 
 // ====== 接口定义 ======
 
@@ -176,18 +169,10 @@ function handleGetCurrentWorkflow(): ToolHandlerResult {
 
 function handleListNodeTypes(ctx: ToolContext): ToolHandlerResult {
   const { args } = ctx
-  // 合并基础节点类型 + 插件注册的节点类型
-  const pluginNodes = workflowNodeRegistry.getAllPluginNodes()
-    .flatMap((entry) => entry.nodes.map((n) => ({
-      type: n.type,
-      label: n.label || n.type,
-      category: n.category || '插件',
-      description: n.description || `插件 ${entry.pluginId} 提供的节点`,
-    })))
-  const allTypes = [...NODE_TYPE_DEFINITIONS, ...pluginNodes]
+  const allTypes = getAllNodeTypeDefinitions()
   const categories = Array.from(new Set(allTypes.map((d) => d.category)))
   const filtered = args?.category
-    ? allTypes.filter((d) => d.category === category)
+    ? allTypes.filter((d) => d.category === args.category)
     : allTypes
   return {
     result: {
@@ -201,15 +186,9 @@ function handleListNodeTypes(ctx: ToolContext): ToolHandlerResult {
   }
 }
 
-/** 查找节点类型定义（基础 + 插件） */
+/** 查找节点类型定义（内置 + 插件） */
 function findNodeType(type: string): { label: string; category: string; description: string } | undefined {
-  const base = NODE_TYPE_DEFINITIONS.find((d) => d.type === type)
-  if (base) return base
-  for (const entry of workflowNodeRegistry.getAllPluginNodes()) {
-    const node = entry.nodes.find((n) => n.type === type)
-    if (node) return { label: node.label || node.type, category: node.category || '插件', description: node.description || '' }
-  }
-  return undefined
+  return getAllNodeTypeDefinitions().find((d) => d.type === type)
 }
 
 function handleCreateNode(ctx: ToolContext): ToolHandlerResult {
@@ -223,7 +202,7 @@ function handleCreateNode(ctx: ToolContext): ToolHandlerResult {
     return {
       result: {
         success: false,
-        message: `未知节点类型: ${type}，可用类型: ${[...NODE_TYPE_DEFINITIONS, ...workflowNodeRegistry.getAllPluginNodes().flatMap(e => e.nodes)].map((d: any) => d.type).join(', ')}`,
+        message: `未知节点类型: ${type}，可用类型: ${getAllNodeTypeDefinitions().map((d) => d.type).join(', ')}`,
       },
       mutated: false,
       nodes,
