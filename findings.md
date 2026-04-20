@@ -18,6 +18,10 @@
 - Claude Agent SDK 原生支持项目级 `CLAUDE.md`，但要通过 `systemPrompt: { type: "preset", preset: "claude_code" }` 和 `settingSources: ["project"]` 开启。
 - `rule.md` 不是 Claude Agent SDK 的原生规则文件约定，因此只能通过应用层读取后拼接到附加系统提示，或迁移到 `CLAUDE.md`。
 - Claude 原生支持 skill/规则加载不等于自动兼容当前应用内 skill CRUD UI；删除 skills 模块需要拆成“删除产品入口”和“迁移/兼容用户已有 skill 内容”两部分处理。
+- 当前 `src/stores/chat.ts` 与 `src/lib/agent/stream.ts` 已经定义了稳定的流式事件消费形态，这使“保留 UI 协议、替换主进程 runtime”成为可行方案。
+- 当前 `electron/services/workflow-tool-dispatcher.ts` 已把 workflow 工具分成 main/renderer 两类 owner，说明 workflow tools 不需要重写，只需要在 Claude runtime 中做包装。
+- 当前 provider 模型 `src/stores/ai-provider.ts` 假设的是通用 provider/model 列表，而 Claude Agent SDK 实际上是特定 runtime，后续更适合引入 `runtimeType` 概念。
+- 当前 Electron main 构建采用 `electron-vite` + `moduleResolution: bundler`，引入 Claude Agent SDK 时需要提前验证依赖打包兼容性。
 
 ## Technical Decisions
 | Decision | Rationale |
@@ -27,12 +31,16 @@
 | workflow 侧不再围绕 `agent_chat` 规划，而是围绕通用 `agent_run`/`agent_exec` 节点能力规划 | 用户目标是执行型 agent，不是聊天型 agent |
 | `CLAUDE.md` 作为第一规则源，`rule.md` 作为兼容补充 | 这样既能用 Claude 原生项目规则，又能兼容用户现有目录约定 |
 | skills 模块的退场分为三步：停止宣传、移除 UI/IPC、可选迁移历史 skill 内容 | 直接硬删容易造成功能断裂和用户历史数据丢失 |
+| 第一阶段 tools 兼容采用本地 adapter，不优先使用 MCP | 现有主进程已经掌握执行能力和 plugin registry，适配成本最低 |
+| 前端事件协议暂时保留 `chat:*` 命名 | 当前 `ChatStore` 和消息渲染已经围绕这套协议实现，短期内保留可减少改动 |
+| 单独新增详细迁移文档到 `docs/superpowers/plans/` | 方便后续直接按批次实施，而不是只依赖根目录摘要型 planning 文件 |
 
 ## Issues Encountered
 | Issue | Resolution |
 |-------|------------|
 | 当前仓库未在本轮扫描中直接找到 skill 主进程 IPC/存储实现 | 规划中明确将“全量删除扫描”和“迁移前核对 skill 数据源”列为实施前置任务 |
 | 当前 workflow 侧并无已落地的 agent runtime 可供替换 | 将“替换范围”定义为统一替换现有 chat/agent 内核，并为 workflow 新建执行型节点接入点 |
+| Claude Agent SDK 与 Electron main 打包是否完全兼容仍未知 | 将 Runtime PoC 和打包验证列为 Batch 1 必做项 |
 
 ## Resources
 - Claude Agent SDK TypeScript 文档: https://platform.claude.com/docs/en/agent-sdk/typescript
@@ -43,6 +51,7 @@
 - 当前插件节点/工具注册表: `/Users/Zhuanz/Documents/work_fox/electron/services/workflow-node-registry.ts`
 - 当前 skills UI: `/Users/Zhuanz/Documents/work_fox/src/components/chat/ChatInput.vue`
 - planning-with-files 技能说明: `/Users/Zhuanz/Documents/work_fox/.claude/skills/planning-with-files/SKILL.md`
+- 详细迁移计划: `/Users/Zhuanz/Documents/work_fox/docs/superpowers/plans/2026-04-20-claude-agent-sdk-migration.md`
 
 ## Visual/Browser Findings
 - 无额外图像或 PDF 结果需要转录；本轮关键信息来自本地代码扫描和官方文档搜索。
