@@ -50,6 +50,23 @@ export interface Workflow {
   createdAt: number
   updatedAt: number
   enabledPlugins?: string[]
+  agentConfig?: WorkflowAgentConfig
+}
+
+export interface AgentResourceItem {
+  id: string
+  name: string
+  enabled: boolean
+  description?: string
+  command?: string
+  source?: string
+}
+
+export interface WorkflowAgentConfig {
+  workspaceDir: string
+  dataDir: string
+  skills: AgentResourceItem[]
+  mcps: AgentResourceItem[]
 }
 
 /** 节点输出字段定义（支持嵌套） */

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import {
   InputGroup,
   InputGroupAddon,
@@ -18,10 +18,13 @@ import {
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
+import { Badge } from '@/components/ui/badge'
 import {
-  ImagePlus, Send, Square, Trash2, Wrench,
+  Braces, FolderTree, ImagePlus, Send, Square, Trash2, Wrench,
 } from 'lucide-vue-next'
 import type { ToolDisplayItem } from '@/types'
+import { useAgentSettingsStore } from '@/stores/agent-settings'
+import { useTabStore } from '@/stores/tab'
 
 const props = defineProps<{
   isStreaming: boolean
@@ -38,12 +41,15 @@ const emit = defineEmits<{
   clear: []
   toggleTool: [toolName: string]
   toggleWorkflowEdit: [enabled: boolean]
+  openAgentSettings: [scope: 'global' | 'workflow']
 }>()
 
 const inputText = ref('')
 const images = ref<string[]>([])
 
 const toolList = computed(() => props.tools ?? [])
+const agentSettingsStore = useAgentSettingsStore()
+const tabStore = useTabStore()
 
 /** 按分类分组工具列表 */
 const groupedTools = computed(() => {
@@ -59,6 +65,16 @@ const groupedTools = computed(() => {
 /** 已启用工具数量 */
 const enabledCount = computed(() => {
   return toolList.value.filter((t) => props.enabledTools?.[t.name] !== false).length
+})
+
+const currentWorkflowAgent = computed(() => tabStore.activeStore?.currentWorkflow?.agentConfig ?? null)
+const globalSkillCount = computed(() => agentSettingsStore.globalSettings.skills.filter((item) => item.enabled).length)
+const workflowSkillCount = computed(() => currentWorkflowAgent.value?.skills.filter((item) => item.enabled).length ?? 0)
+const globalMcpCount = computed(() => agentSettingsStore.globalSettings.mcps.filter((item) => item.enabled).length)
+const workflowMcpCount = computed(() => currentWorkflowAgent.value?.mcps.filter((item) => item.enabled).length ?? 0)
+
+onMounted(() => {
+  agentSettingsStore.init()
 })
 
 function handleKeydown(e: KeyboardEvent) {
@@ -234,6 +250,105 @@ function removeImage(index: number) {
               </DropdownMenuItem>
               <DropdownMenuSeparator v-if="gi < groupedTools.length - 1" />
             </template>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <InputGroupButton
+              variant="ghost"
+              size="xs"
+              :disabled="isStreaming"
+              class="gap-1"
+            >
+              <Braces class="size-3.5" />
+              <span class="text-[10px] text-muted-foreground">
+                {{ isWorkflowContext ? workflowSkillCount : globalSkillCount }}
+              </span>
+            </InputGroupButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" class="w-72">
+            <DropdownMenuLabel>Skill 管理</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <div class="px-2 py-2 space-y-2">
+              <div class="flex items-center justify-between text-xs">
+                <span>全局启用</span>
+                <Badge variant="secondary">{{ globalSkillCount }}</Badge>
+              </div>
+              <div v-if="isWorkflowContext" class="flex items-center justify-between text-xs">
+                <span>工作流启用</span>
+                <Badge variant="outline">{{ workflowSkillCount }}</Badge>
+              </div>
+              <Button size="sm" variant="outline" class="w-full" @click="emit('openAgentSettings', isWorkflowContext ? 'workflow' : 'global')">
+                打开 Agent 设置
+              </Button>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <InputGroupButton
+              variant="ghost"
+              size="xs"
+              :disabled="isStreaming"
+              class="gap-1"
+            >
+              <Wrench class="size-3.5" />
+              <span class="text-[10px] text-muted-foreground">
+                {{ isWorkflowContext ? workflowMcpCount : globalMcpCount }}
+              </span>
+            </InputGroupButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" class="w-72">
+            <DropdownMenuLabel>MCP 管理</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <div class="px-2 py-2 space-y-2">
+              <div class="flex items-center justify-between text-xs">
+                <span>全局启用</span>
+                <Badge variant="secondary">{{ globalMcpCount }}</Badge>
+              </div>
+              <div v-if="isWorkflowContext" class="flex items-center justify-between text-xs">
+                <span>工作流启用</span>
+                <Badge variant="outline">{{ workflowMcpCount }}</Badge>
+              </div>
+              <Button size="sm" variant="outline" class="w-full" @click="emit('openAgentSettings', isWorkflowContext ? 'workflow' : 'global')">
+                打开 Agent 设置
+              </Button>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <InputGroupButton
+              variant="ghost"
+              size="xs"
+              :disabled="isStreaming"
+            >
+              <FolderTree class="size-3.5" />
+            </InputGroupButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" class="w-80">
+            <DropdownMenuLabel>工作区管理</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <div class="px-2 py-2 space-y-2 text-xs">
+              <div class="flex items-start justify-between gap-3">
+                <span class="text-muted-foreground">全局工作目录</span>
+                <span class="text-right break-all">{{ agentSettingsStore.globalSettings.workspaceDir || '未设置' }}</span>
+              </div>
+              <div v-if="isWorkflowContext" class="flex items-start justify-between gap-3">
+                <span class="text-muted-foreground">工作流目录</span>
+                <span class="text-right break-all">{{ currentWorkflowAgent?.workspaceDir || '未设置' }}</span>
+              </div>
+              <div v-if="isWorkflowContext" class="flex items-start justify-between gap-3">
+                <span class="text-muted-foreground">工作流数据目录</span>
+                <span class="text-right break-all">{{ currentWorkflowAgent?.dataDir || '未设置' }}</span>
+              </div>
+              <Button size="sm" variant="outline" class="w-full" @click="emit('openAgentSettings', isWorkflowContext ? 'workflow' : 'global')">
+                打开 Agent 设置
+              </Button>
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
 

@@ -3,6 +3,7 @@ import { listenToChatStream, type StreamCallbacks } from './stream'
 import { BROWSER_AGENT_SYSTEM_PROMPT } from './system-prompt'
 import { useAIProviderStore } from '@/stores/ai-provider'
 import { WORKFLOW_TOOL_DEFINITIONS, buildWorkflowSystemPrompt } from './workflow-tools'
+import type { ChatCompletionParams } from '@/types'
 
 type ChatCompletionPayload = Parameters<typeof window.api.chat.completions>[0]
 
@@ -28,6 +29,8 @@ export interface AgentStreamOptions {
   enabledPlugins?: string[]
   /** 工作流编辑模式：true=用 workflow-tools 创建节点，false=用插件工具直接运行（默认 true） */
   workflowEditMode?: boolean
+  /** 工作流专属 runtime 参数 */
+  runtime?: ChatCompletionParams['runtime']
 }
 
 /**
@@ -113,6 +116,7 @@ export async function runAgentStream(
           _mode: 'workflow' as const,
           _workflowId: options!.workflowId,
           runtime: {
+            ...options?.runtime,
             enabledPlugins: options?.enabledPlugins,
           },
         }

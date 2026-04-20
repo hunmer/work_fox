@@ -8,6 +8,7 @@ import { registerChatIpcHandlers } from './ipc/chat'
 import { registerShortcutIpcHandlers, registerGlobalShortcuts, unregisterGlobalShortcuts } from './ipc/shortcut'
 import { registerPluginIpcHandlers } from './ipc/plugin'
 import { registerTabsIpcHandlers } from './ipc/tabs'
+import { registerAgentSettingsIpcHandlers } from './ipc/agent-settings'
 import { pluginManager } from './services/plugin-manager'
 import { getWindowMaximized, setWindowMaximized } from './services/store'
 
@@ -57,6 +58,7 @@ app.whenReady().then(() => {
   registerShortcutIpcHandlers()
   registerPluginIpcHandlers()
   registerTabsIpcHandlers()
+  registerAgentSettingsIpcHandlers()
   pluginManager.loadAll()
 
   ipcMain.on('window:minimize', () => mainWindow?.minimize())

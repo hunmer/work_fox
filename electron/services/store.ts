@@ -52,6 +52,30 @@ export interface Workflow {
   edges: WorkflowEdge[]
   createdAt: number
   updatedAt: number
+  enabledPlugins?: string[]
+  agentConfig?: WorkflowAgentConfig
+}
+
+export interface AgentResourceItem {
+  id: string
+  name: string
+  enabled: boolean
+  description?: string
+  command?: string
+  source?: string
+}
+
+export interface AgentGlobalSettings {
+  workspaceDir: string
+  skills: AgentResourceItem[]
+  mcps: AgentResourceItem[]
+}
+
+export interface WorkflowAgentConfig {
+  workspaceDir: string
+  dataDir: string
+  skills: AgentResourceItem[]
+  mcps: AgentResourceItem[]
 }
 
 // ===== Shortcut 类型 =====
@@ -75,6 +99,13 @@ interface StoreSchema {
   shortcutBindings: ShortcutBinding[]
   appTabs: { tabs: AppTab[]; activeTabId: string | null }
   windowMaximized: boolean
+  agentSettings: AgentGlobalSettings
+}
+
+const defaultAgentSettings: AgentGlobalSettings = {
+  workspaceDir: '',
+  skills: [],
+  mcps: [],
 }
 
 const store = new Store<StoreSchema>({
@@ -83,6 +114,7 @@ const store = new Store<StoreSchema>({
     shortcutBindings: [],
     appTabs: { tabs: [], activeTabId: null },
     windowMaximized: false,
+    agentSettings: defaultAgentSettings,
   }
 })
 
@@ -142,4 +174,24 @@ export function getWindowMaximized(): boolean {
 
 export function setWindowMaximized(maximized: boolean): void {
   store.set('windowMaximized', maximized)
+}
+
+// ===== Agent Settings =====
+export function getAgentSettings(): AgentGlobalSettings {
+  const value = store.get('agentSettings', defaultAgentSettings)
+  return {
+    workspaceDir: value.workspaceDir || '',
+    skills: Array.isArray(value.skills) ? value.skills : [],
+    mcps: Array.isArray(value.mcps) ? value.mcps : [],
+  }
+}
+
+export function setAgentSettings(settings: AgentGlobalSettings): AgentGlobalSettings {
+  const normalized = {
+    workspaceDir: settings.workspaceDir || '',
+    skills: Array.isArray(settings.skills) ? settings.skills : [],
+    mcps: Array.isArray(settings.mcps) ? settings.mcps : [],
+  }
+  store.set('agentSettings', normalized)
+  return normalized
 }

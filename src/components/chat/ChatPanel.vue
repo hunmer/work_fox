@@ -22,6 +22,7 @@ const props = defineProps<{
 const providerStore = useAIProviderStore()
 const uiStore = useChatUIStore()
 const showSettings = ref(false)
+const settingsInitialTab = ref('models')
 const pluginTools = ref<ToolDisplayItem[]>([])
 
 async function loadPluginTools(pluginIds: string[]) {
@@ -91,6 +92,11 @@ function handleClear() {
   }
 }
 
+function handleOpenAgentSettings() {
+  settingsInitialTab.value = 'agent'
+  showSettings.value = true
+}
+
 function handleEdit(messageId: string, newContent: string) {
   props.chat.editMessage(messageId, newContent)
 }
@@ -148,12 +154,13 @@ function handleEdit(messageId: string, newContent: string) {
       @clear="handleClear"
       @toggle-tool="handleToggleTool"
       @toggle-workflow-edit="handleToggleWorkflowEdit"
+      @open-agent-settings="handleOpenAgentSettings"
     />
 
     <!-- 设置对话框 -->
     <SettingsDialog
       :open="showSettings"
-      initial-tab="models"
+      :initial-tab="settingsInitialTab"
       @update:open="showSettings = $event"
     />
   </div>

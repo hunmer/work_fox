@@ -3,7 +3,7 @@ import { app } from 'electron'
 import { randomUUID } from 'crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
 import { JsonStore } from '../utils/json-store'
-import type { Workflow, WorkflowFolder } from './store'
+import type { Workflow, WorkflowFolder, WorkflowAgentConfig } from './store'
 
 const userDataPath = app.getPath('userData')
 const workflowsDir = join(userDataPath, 'workflows')
@@ -33,11 +33,27 @@ function workflowPath(id: string): string {
   return join(workflowsDir, `${id}.json`)
 }
 
+function workflowDataDir(id: string): string {
+  return join(userDataPath, 'agent-workflows', id)
+}
+
+function normalizeWorkflowAgentConfig(workflow: Workflow): WorkflowAgentConfig {
+  const current = workflow.agentConfig
+  return {
+    workspaceDir: current?.workspaceDir || '',
+    dataDir: current?.dataDir || workflowDataDir(workflow.id),
+    skills: Array.isArray(current?.skills) ? current!.skills : [],
+    mcps: Array.isArray(current?.mcps) ? current!.mcps : [],
+  }
+}
+
 function readWorkflowFile(id: string): Workflow | undefined {
   const path = workflowPath(id)
   if (!existsSync(path)) return undefined
   try {
-    return JSON.parse(readFileSync(path, 'utf-8'))
+    const workflow = JSON.parse(readFileSync(path, 'utf-8')) as Workflow
+    workflow.agentConfig = normalizeWorkflowAgentConfig(workflow)
+    return workflow
   } catch {
     return undefined
   }
@@ -45,6 +61,11 @@ function readWorkflowFile(id: string): Workflow | undefined {
 
 function writeWorkflowFile(workflow: Workflow): void {
   ensureDir()
+  workflow.agentConfig = normalizeWorkflowAgentConfig(workflow)
+  const dataDir = workflow.agentConfig.dataDir
+  if (dataDir && !existsSync(dataDir)) {
+    mkdirSync(dataDir, { recursive: true })
+  }
   writeFileSync(workflowPath(workflow.id), JSON.stringify(workflow, null, 2), 'utf-8')
 }
 
@@ -60,6 +81,7 @@ function readAllWorkflowFiles(): Workflow[] {
   for (const file of files) {
     try {
       const data = JSON.parse(readFileSync(join(workflowsDir, file), 'utf-8'))
+      data.agentConfig = normalizeWorkflowAgentConfig(data)
       workflows.push(data)
     } catch {
       // 跳过损坏的文件
@@ -127,6 +149,7 @@ export function getWorkflow(id: string): Workflow | undefined {
 
 export function createWorkflow(data: Omit<Workflow, 'id'>): Workflow {
   const item: Workflow = { ...data, id: randomUUID() }
+  item.agentConfig = normalizeWorkflowAgentConfig(item)
   writeWorkflowFile(item)
   return item
 }

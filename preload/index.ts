@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import type { AgentGlobalSettings } from '../src/types'
 
 export interface ChatCompletionParams {
   providerId: string
@@ -119,6 +120,11 @@ const api = {
     getWorkflowNodes: (pluginId: string) => ipcRenderer.invoke('plugin:get-workflow-nodes', pluginId),
     listWorkflowPlugins: () => ipcRenderer.invoke('plugin:list-workflow-plugins'),
     getAgentTools: (pluginIds: string[]) => ipcRenderer.invoke('plugin:get-agent-tools', pluginIds),
+  },
+
+  agentSettings: {
+    get: (): Promise<AgentGlobalSettings> => ipcRenderer.invoke('agentSettings:get'),
+    set: (settings: AgentGlobalSettings): Promise<AgentGlobalSettings> => ipcRenderer.invoke('agentSettings:set', settings),
   },
 
   window: {

@@ -272,6 +272,28 @@ export interface ToolDisplayItem {
   category: string
 }
 
+export interface AgentResourceItem {
+  id: string
+  name: string
+  enabled: boolean
+  description?: string
+  command?: string
+  source?: string
+}
+
+export interface AgentGlobalSettings {
+  workspaceDir: string
+  skills: AgentResourceItem[]
+  mcps: AgentResourceItem[]
+}
+
+export interface WorkflowAgentConfig {
+  workspaceDir: string
+  dataDir: string
+  skills: AgentResourceItem[]
+  mcps: AgentResourceItem[]
+}
+
 // 浏览器交互工具参数
 export interface BrowserClickArgs {
   selector?: string

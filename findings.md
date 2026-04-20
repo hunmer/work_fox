@@ -52,7 +52,7 @@
 | Batch 1 继续复用 `chat:completions` / `chat:abort` IPC | 这能让前端最小改动切换到 Claude runtime |
 | Batch 1 不引入 Claude SDK 工具适配 | 先验证 runtime、事件流和 Electron 打包，再进入工具兼容层 |
 | Batch 1 使用 transcript prompt 兼容现有聊天历史 | `query()` 并不直接吃完整 Messages API history，先用 prompt 折叠上下文可快速打通主链路 |
-| Batch 1 默认走 `permissionMode: "dontAsk"` 或只读/最小工具集合 | 未实现宿主级审批 UI 前，避免 Claude runtime 在工具权限处卡死 |
+| Batch 1 默认走 `permissionMode: "dontAsk"`，工具默认允许 Claude 内置全量预设；如需收缩再通过 `allowedTools` 显式限制 | 避免 MCP workflow tools 在进入应用层授权前就被 SDK 的工具白名单拦截 |
 | Phase 7 采用 in-process MCP server 暴露 WorkFox 本地工具 | 这是 Claude Agent SDK 原生的自定义工具接入方式，且最容易兼容 workflow / plugin tools |
 | Claude 自定义工具名在 UI 层必须还原为 WorkFox 原始工具名 | 现有聊天记录、重试工具、流式工具卡片都依赖稳定的应用内工具名 |
 | workflow `agent_run` 节点复用 `chat:completions` IPC | 这样可直接继承 Claude runtime 的目录、规则、权限和工具适配能力 |

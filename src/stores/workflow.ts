@@ -5,6 +5,7 @@ import { WorkflowEngine, type EngineStatus } from '@/lib/workflow/engine'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { executeRendererWorkflowTool } from '@/lib/agent/workflow-renderer-tools'
 import type { WorkflowToolExecuteRequest } from '../../preload'
+import { useAgentSettingsStore, createWorkflowAgentConfigFromGlobal } from './agent-settings'
 
 const DRAFT_KEY_PREFIX = 'workflow-draft'
 
@@ -305,13 +306,19 @@ function createEditActions(
   function newWorkflow(folderId: string | null = null) {
     const startNodeId = crypto.randomUUID()
     const endNodeId = crypto.randomUUID()
+    const workflowId = crypto.randomUUID()
+    const agentSettingsStore = useAgentSettingsStore()
     currentWorkflow.value = {
-      id: crypto.randomUUID(), name: '未命名工作流', folderId,
+      id: workflowId, name: '未命名工作流', folderId,
       nodes: [
         { id: startNodeId, type: 'start', label: '开始', position: { x: 100, y: 250 }, data: {} },
         { id: endNodeId, type: 'end', label: '结束', position: { x: 600, y: 250 }, data: {} },
       ],
       edges: [], createdAt: Date.now(), updatedAt: Date.now(),
+      agentConfig: createWorkflowAgentConfigFromGlobal(
+        workflowId,
+        JSON.parse(JSON.stringify(agentSettingsStore.globalSettings)),
+      ),
     }
     selectedNodeId.value = null
     executionStatus.value = 'idle'

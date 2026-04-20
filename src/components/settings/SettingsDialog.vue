@@ -1,23 +1,28 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
-  Settings, Palette, Keyboard, Info, Bot
+  Settings, Palette, Keyboard, Info, Bot, Wrench
 } from 'lucide-vue-next'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import SettingsShortcut from './SettingsShortcut.vue'
 import SettingsTheme from './SettingsTheme.vue'
 import SettingsAbout from './SettingsAbout.vue'
 import SettingsModels from './SettingsModels.vue'
+import SettingsAgent from './SettingsAgent.vue'
 
-const props = defineProps<{ open: boolean; initialTab?: string }>()
+const props = defineProps<{ open: boolean; initialTab?: string; workflowOnly?: boolean }>()
 const emit = defineEmits<{ 'update:open': [value: boolean] }>()
 
-const tabs = [
+const allTabs = [
   { key: 'models', label: '模型', icon: Bot },
+  { key: 'agent', label: 'Agent', icon: Wrench },
   { key: 'theme', label: '主题', icon: Palette },
   { key: 'shortcuts', label: '快捷键', icon: Keyboard },
   { key: 'about', label: '关于', icon: Info }
 ]
+const tabs = computed(() => props.workflowOnly
+  ? allTabs.filter((tab) => tab.key === 'agent')
+  : allTabs)
 const activeTab = ref('models')
 
 watch(() => props.open, (open) => {
@@ -61,6 +66,7 @@ watch(() => props.open, (open) => {
 
         <div class="flex-1 p-6 overflow-y-auto">
           <SettingsModels v-if="activeTab === 'models'" />
+          <SettingsAgent v-else-if="activeTab === 'agent'" :workflow-only="workflowOnly" />
           <SettingsTheme v-else-if="activeTab === 'theme'" />
           <SettingsShortcut v-else-if="activeTab === 'shortcuts'" />
           <SettingsAbout v-else-if="activeTab === 'about'" />

@@ -17,6 +17,7 @@ import { useAIProviderStore } from './ai-provider'
 import { useChatUIStore } from './chat-ui'
 import { useTabStore } from './tab'
 import { runAgentStream } from '@/lib/agent/agent'
+import { useAgentSettingsStore } from './agent-settings'
 
 // ====== 辅助函数 ======
 
@@ -57,8 +58,10 @@ function buildWorkflowOptions(
   workflowEditMode: boolean,
 ) {
   const workflowStore = useTabStore().activeStore
+  const agentSettingsStore = useAgentSettingsStore()
   const sessionData = sessions.value.find((s) => s.id === currentSessionId.value)
   if (!sessionData?.workflowId || !workflowStore?.currentWorkflow) return undefined
+  const agentConfig = workflowStore.currentWorkflow.agentConfig
   return {
     mode: 'workflow' as const,
     workflowId: workflowStore.currentWorkflow.id,
@@ -71,6 +74,10 @@ function buildWorkflowOptions(
     },
     enabledPlugins: workflowStore.currentWorkflow.enabledPlugins || [],
     workflowEditMode,
+    runtime: {
+      cwd: agentConfig?.workspaceDir || agentSettingsStore.globalSettings.workspaceDir || undefined,
+      additionalDirectories: agentConfig?.dataDir ? [agentConfig.dataDir] : undefined,
+    },
   }
 }
 

@@ -106,18 +106,14 @@ function resolvePermissionMode(runtime?: RuntimeOptions): PermissionMode {
 }
 
 function resolveBuiltInTools(runtime?: RuntimeOptions): string[] | { type: 'preset'; preset: 'claude_code' } {
-  if (runtime?.allowedTools?.length) {
+  if (Array.isArray(runtime?.allowedTools) && runtime.allowedTools.length > 0) {
     return runtime.allowedTools
   }
 
-  switch (resolvePermissionMode(runtime)) {
-    case 'acceptEdits':
-      return EDIT_TOOLS
-    case 'bypassPermissions':
-      return { type: 'preset', preset: 'claude_code' }
-    default:
-      return READ_ONLY_TOOLS
-  }
+  // Default to Claude's full built-in tool preset unless the caller explicitly
+  // narrows the tool list. Otherwise MCP workflow tools can be rejected before
+  // our own canUseTool hook has a chance to authorize them.
+  return { type: 'preset', preset: 'claude_code' }
 }
 
 async function ensureReadableDirectory(dirPath: string): Promise<string> {
