@@ -53,20 +53,10 @@ function handleChange(val: any) {
 </template>
 
 <style>
+
+.json-editor-wrapper > div,
 .json-editor-wrapper .jse-main {
   height: 100%;
-}
-
-.json-editor-wrapper {
-  font-size: 12px;
-}
-
-.json-editor-wrapper .jse-json-node,
-.json-editor-wrapper .jse-value,
-.json-editor-wrapper .jse-key,
-.json-editor-wrapper .jse-string,
-.json-editor-wrapper .jse-number {
-  font-size: 12px;
 }
 
 .json-editor-wrapper.jse-readonly .jse-value,

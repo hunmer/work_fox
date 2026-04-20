@@ -320,7 +320,7 @@ const displayLog = computed(() => store.selectedExecutionLog)
                       v-if="step.input !== undefined && step.input !== null"
                       :model-value="step.input"
                       :readonly="true"
-                      :height="400"
+                      height="100%"
                       mode="tree"
                       class="h-full [&_.json-editor-wrapper]:h-full [&_.json-editor-wrapper]:border-0"
                     />
@@ -340,7 +340,7 @@ const displayLog = computed(() => store.selectedExecutionLog)
                       v-if="step.output !== undefined && step.output !== null"
                       :model-value="step.output"
                       :readonly="true"
-                      :height="400"
+                      height="100%"
                       mode="tree"
                       class="h-full [&_.json-editor-wrapper]:h-full [&_.json-editor-wrapper]:border-0"
                     />
