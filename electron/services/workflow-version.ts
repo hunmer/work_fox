@@ -1,7 +1,7 @@
 import { join } from 'path'
 import { app } from 'electron'
 import { randomUUID } from 'crypto'
-import { JsonStore } from '../utils/json-store'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
 import type { WorkflowNode, WorkflowEdge } from './store'
 
 export interface WorkflowVersion {
@@ -18,19 +18,43 @@ export interface WorkflowVersion {
 const MAX_VERSIONS_PER_WORKFLOW = 100
 
 export class WorkflowVersionStore {
-  private store: JsonStore<Record<string, WorkflowVersion[]>>
+  private baseDir: string
 
   constructor() {
-    const filePath = join(app.getPath('userData'), 'workflow-data', 'workflow-versions.json')
-    this.store = new JsonStore(filePath)
+    this.baseDir = join(app.getPath('userData'), 'agent-workflows')
+  }
+
+  private versionsDir(workflowId: string): string {
+    return join(this.baseDir, workflowId, 'versions')
+  }
+
+  private ensureDir(workflowId: string): string {
+    const dir = this.versionsDir(workflowId)
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+    return dir
   }
 
   list(workflowId: string): WorkflowVersion[] {
-    return this.store.get(workflowId) || []
+    const dir = this.versionsDir(workflowId)
+    if (!existsSync(dir)) return []
+
+    const files = readdirSync(dir)
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => {
+        try {
+          return JSON.parse(readFileSync(join(dir, f), 'utf-8')) as WorkflowVersion
+        } catch {
+          return null
+        }
+      })
+      .filter(Boolean) as WorkflowVersion[]
+
+    files.sort((a, b) => b.createdAt - a.createdAt)
+    return files
   }
 
   add(workflowId: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowVersion {
-    const versions = this.list(workflowId)
+    this.ensureDir(workflowId)
     const version: WorkflowVersion = {
       id: randomUUID(),
       workflowId,
@@ -41,29 +65,42 @@ export class WorkflowVersionStore {
       },
       createdAt: Date.now(),
     }
-    versions.unshift(version)
-    if (versions.length > MAX_VERSIONS_PER_WORKFLOW) versions.length = MAX_VERSIONS_PER_WORKFLOW
-    this.store.set(workflowId, versions)
+    writeFileSync(join(this.versionsDir(workflowId), `${version.id}.json`), JSON.stringify(version), 'utf-8')
+    this.enforceLimit(workflowId)
     return version
   }
 
   get(workflowId: string, versionId: string): WorkflowVersion | undefined {
-    return this.list(workflowId).find((v) => v.id === versionId)
+    const file = join(this.versionsDir(workflowId), `${versionId}.json`)
+    if (!existsSync(file)) return undefined
+    try {
+      return JSON.parse(readFileSync(file, 'utf-8'))
+    } catch {
+      return undefined
+    }
   }
 
   delete(workflowId: string, versionId: string): void {
-    const versions = this.list(workflowId).filter((v) => v.id !== versionId)
-    this.store.set(workflowId, versions)
+    const file = join(this.versionsDir(workflowId), `${versionId}.json`)
+    if (existsSync(file)) unlinkSync(file)
   }
 
   clear(workflowId: string): void {
-    this.store.delete(workflowId)
+    const dir = this.versionsDir(workflowId)
+    if (!existsSync(dir)) return
+    readdirSync(dir)
+      .filter((f) => f.endsWith('.json'))
+      .forEach((f) => unlinkSync(join(dir, f)))
   }
 
-  /** 生成下一个版本名称 */
   nextVersionName(workflowId: string): string {
-    const count = this.list(workflowId).length
-    return `v${count + 1}`
+    return `v${this.list(workflowId).length + 1}`
+  }
+
+  private enforceLimit(workflowId: string): void {
+    const versions = this.list(workflowId)
+    if (versions.length <= MAX_VERSIONS_PER_WORKFLOW) return
+    versions.slice(MAX_VERSIONS_PER_WORKFLOW).forEach((v) => this.delete(workflowId, v.id))
   }
 }
 

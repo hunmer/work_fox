@@ -80,6 +80,7 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () =>
     redoStack.value = []
     operationLog.value.unshift({ description, timestamp: Date.now() })
     if (operationLog.value.length > MAX_HISTORY) operationLog.value.length = MAX_HISTORY
+    persistLog()
   }
 
   function undo(): void {
@@ -88,6 +89,7 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () =>
     applySnapshot(undoStack.value.pop()!)
     operationLog.value.unshift({ description: '撤销操作', timestamp: Date.now() })
     if (operationLog.value.length > MAX_HISTORY) operationLog.value.length = MAX_HISTORY
+    persistLog()
   }
 
   function redo(): void {
@@ -96,6 +98,7 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () =>
     applySnapshot(redoStack.value.pop()!)
     operationLog.value.unshift({ description: '重做操作', timestamp: Date.now() })
     if (operationLog.value.length > MAX_HISTORY) operationLog.value.length = MAX_HISTORY
+    persistLog()
   }
 
   const canUndo = computed(() => undoStack.value.length > 0)
@@ -110,10 +113,13 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () =>
       if (a?.operationHistory?.save) {
         a.operationHistory.save(currentWorkflow.value!.id, operationLog.value)
       }
-    }, 1000)
+    }, 500)
   }
 
-  watch(operationLog, () => scheduleSave(), { deep: true })
+  function persistLog(): void {
+    operationLog.value = [...operationLog.value]
+    scheduleSave()
+  }
 
   async function loadFromDisk(): Promise<void> {
     const a = api()

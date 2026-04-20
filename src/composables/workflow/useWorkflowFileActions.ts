@@ -2,11 +2,13 @@ import { ref } from 'vue'
 import type { Ref } from 'vue'
 import type { WorkflowStore } from '@/stores/workflow'
 import { useNotification } from '@/composables/useNotification'
+import { useTabStore } from '@/stores/tab'
 
 export function useWorkflowFileActions(
   store: WorkflowStore,
   listDialogOpen: Ref<boolean>,
 ) {
+  const tabStore = useTabStore()
   const notify = useNotification()
 
   const isEditingName = ref(false)
@@ -88,6 +90,7 @@ export function useWorkflowFileActions(
       const loaded = store.workflows.find((w) => w.id === workflow.id) || workflow
       store.currentWorkflow = JSON.parse(JSON.stringify(loaded))
       store.selectedNodeId = null
+      tabStore.updateTabWorkflow(tabStore.activeTabId!, loaded.id, loaded.name)
     }
   }
 

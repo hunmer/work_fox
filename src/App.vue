@@ -12,19 +12,10 @@ const providerStore = useAIProviderStore()
 
 const commandPaletteOpen = ref(false)
 
-function debugLog(message: string, payload?: Record<string, unknown>) {
-  console.log('[workflow-debug][app]', message, payload ?? {})
-}
-
 onMounted(async () => {
-  debugLog('mounted:start')
   await pluginStore.init()
   await providerStore.init()
   await tabStore.restoreTabs()
-  debugLog('mounted:tabs-restored', {
-    activeTabId: tabStore.activeTabId,
-    tabs: tabStore.tabs,
-  })
 })
 </script>
 

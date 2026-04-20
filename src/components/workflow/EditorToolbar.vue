@@ -23,13 +23,8 @@ import { useTabStore } from '@/stores/tab'
 const router = useRouter()
 const tabStore = useTabStore()
 
-function debugLog(message: string, payload?: Record<string, unknown>) {
-  console.log('[workflow-debug][editor-toolbar]', message, payload ?? {})
-}
-
 function closeTab(tabId: string) {
   const isLast = tabStore.tabs.length === 1
-  debugLog('closeTab', { tabId, isLast, tabs: tabStore.tabs })
   tabStore.closeTab(tabId)
   if (isLast) router.push('/home')
 }

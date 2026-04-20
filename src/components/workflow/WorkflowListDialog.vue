@@ -26,6 +26,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:open': [value: boolean]
   select: [workflow: Workflow | null]
+  cancel: []
 }>()
 
 const store = useWorkflowStore()
@@ -35,58 +36,38 @@ const selectedWorkflow = ref<Workflow | null>(null)
 const isCreating = ref(false)
 const newWorkflowName = ref('新工作流')
 
-function debugLog(message: string, payload?: Record<string, unknown>) {
-  console.log('[workflow-debug][workflow-list-dialog]', message, payload ?? {})
-}
-
 onMounted(() => {
-  debugLog('mounted')
   store.loadData()
 })
 
 watch(() => props.open, (open) => {
-  debugLog('watch:open', { open, createMode: props.createMode })
   if (!open) return
   isCreating.value = !!props.createMode
   selectedWorkflow.value = null
   hasSelectedLocation.value = false
-  debugLog('dialog-reset-state', {
-    isCreating: isCreating.value,
-    selectedFolderId: selectedFolderId.value,
-  })
 })
 
 function onSelectWorkflow(wf: Workflow) {
   selectedWorkflow.value = wf
-  debugLog('onSelectWorkflow', { workflowId: wf.id, workflowName: wf.name })
 }
 
 function confirm() {
-  debugLog('confirm', {
-    selectedWorkflowId: selectedWorkflow.value?.id ?? null,
-    selectedWorkflowName: selectedWorkflow.value?.name ?? null,
-  })
   emit('select', selectedWorkflow.value)
+  emit('update:open', false)
+}
+
+function cancel() {
+  emit('cancel')
   emit('update:open', false)
 }
 
 async function createNew() {
   const name = newWorkflowName.value.trim()
-  debugLog('createNew:attempt', {
-    name,
-    selectedFolderId: selectedFolderId.value,
-    hasSelectedLocation: hasSelectedLocation.value,
-  })
   if (!name || !hasSelectedLocation.value) return
   store.newWorkflow(selectedFolderId.value, name)
   const workflow = store.currentWorkflow
   if (!workflow) return
   await store.saveWorkflow(workflow)
-  debugLog('createNew:created', {
-    workflowId: workflow.id,
-    workflowName: workflow.name,
-    folderId: workflow.folderId,
-  })
   emit('select', workflow)
   emit('update:open', false)
   isCreating.value = false
@@ -96,12 +77,10 @@ async function createNew() {
 function startCreate() {
   isCreating.value = true
   selectedWorkflow.value = null
-  debugLog('startCreate', { selectedFolderId: selectedFolderId.value })
 }
 
 function onSelectLocation() {
   hasSelectedLocation.value = true
-  debugLog('onSelectLocation', { selectedFolderId: selectedFolderId.value })
 }
 </script>
 
@@ -110,7 +89,11 @@ function onSelectLocation() {
     :open="open"
     @update:open="emit('update:open', $event)"
   >
-    <DialogContent class="sm:max-w-[700px] h-[500px] flex flex-col p-0">
+    <DialogContent
+      class="sm:max-w-[700px] h-[500px] flex flex-col p-0"
+      @escape-key-down="cancel"
+      @pointer-down-outside="cancel"
+    >
       <DialogHeader class="px-4 pt-4">
         <DialogTitle class="text-sm">
           {{ isCreating ? '新建工作流' : '打开工作流' }}
