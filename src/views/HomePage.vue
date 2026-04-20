@@ -18,7 +18,7 @@ const recentWorkflows = computed(() => {
 
 function handleNew() {
   tabStore.addTab()
-  router.push('/editor')
+  router.push({ path: '/editor', query: { create: '1' } })
 }
 
 function handleOpen(workflowId?: string) {
@@ -26,7 +26,7 @@ function handleOpen(workflowId?: string) {
     tabStore.addTab(workflowId)
     router.push('/editor')
   } else {
-    tabStore.addTab(null, '', { createWorkflow: false })
+    tabStore.addTab()
     router.push({ path: '/editor', query: { open: '1' } })
   }
 }

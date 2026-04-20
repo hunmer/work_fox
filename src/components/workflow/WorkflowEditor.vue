@@ -46,6 +46,7 @@ provideWorkflowStore(props.store)
 const tabStore = useTabStore()
 const store = props.store
 const listDialogOpen = ref(false)
+const listDialogCreateMode = ref(false)
 const nodeSelectOpen = ref(false)
 const pluginsDialogOpen = ref(false)
 const settingsDialogOpen = ref(false)
@@ -82,7 +83,7 @@ const {
 
 const {
   executionBarExpanded,
-  savedExecPanelSize,
+  execPanelSizes,
   execPanelRef,
   onExecBarResize,
 } = useExecutionPanel()
@@ -195,6 +196,11 @@ function openRecentWorkflow(id: string) {
   }
 }
 
+function openWorkflowList(createMode = false) {
+  listDialogCreateMode.value = createMode
+  openWorkflow()
+}
+
 async function handlePluginUpdate(plugins: string[]) {
   if (!store.currentWorkflow) return
   store.currentWorkflow.enabledPlugins = plugins
@@ -204,7 +210,7 @@ async function handlePluginUpdate(plugins: string[]) {
 // 跳过首次加载的变更检测
 let skipDraft = true
 watch(() => store.currentWorkflow, (val) => {
-  tabStore.updateTabWorkflow(props.tab.id, val?.id ?? null, val?.name || '未命名工作流')
+  tabStore.updateTabWorkflow(props.tab.id, val?.id ?? null, val?.name || '')
   if (skipDraft) { skipDraft = false; return }
   if (val) store.saveDraft()
 }, { deep: true, immediate: true })
@@ -216,8 +222,8 @@ let autoSaveTimer: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
   cleanupFileUpdates = store.listenForFileUpdates()
   cleanupWorkflowToolRequests = store.listenForWorkflowToolRequests()
-  if (route.query.open === '1' && !store.currentWorkflow) {
-    openWorkflow()
+  if ((route.query.open === '1' || route.query.create === '1') && !store.currentWorkflow) {
+    openWorkflowList(route.query.create === '1')
   }
   autoSaveTimer = setInterval(() => {
     if (store.isDirty && store.currentWorkflow) {
@@ -250,8 +256,8 @@ function onConnect(params: any) {
       :hide-tab-switcher="!store.currentWorkflow"
       :is-dirty="store.isDirty"
       :recent-workflows="recentWorkflows"
-      @new="store.newWorkflow()"
-      @open="openWorkflow"
+      @new="openWorkflowList(true)"
+      @open="openWorkflowList(false)"
       @save="saveWorkflow"
       @export="exportWorkflow"
       @import="importWorkflow"
@@ -271,7 +277,7 @@ function onConnect(params: any) {
       @layout="onExecBarResize"
     >
         <ResizablePanel
-          :default-size="82"
+          :default-size="execPanelSizes[0]"
           :min-size="40"
         >
           <ResizablePanelGroup
@@ -351,7 +357,7 @@ function onConnect(params: any) {
           ref="execPanelRef"
           :collapsible="!executionBarExpanded"
           :collapsed-size="4"
-          :default-size="executionBarExpanded ? savedExecPanelSize : 4"
+          :default-size="executionBarExpanded ? execPanelSizes[1] : 4"
           :min-size="executionBarExpanded ? 15 : 4"
           :max-size="executionBarExpanded ? 60 : 4"
         >
@@ -361,6 +367,7 @@ function onConnect(params: any) {
 
     <WorkflowListDialog
       :open="listDialogOpen"
+      :create-mode="listDialogCreateMode"
       @update:open="listDialogOpen = $event"
       @select="onListSelect"
     />

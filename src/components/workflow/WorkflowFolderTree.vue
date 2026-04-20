@@ -7,6 +7,9 @@ import { Folder, FolderOpen, Plus } from 'lucide-vue-next'
 
 const store = useWorkflowStore()
 const selectedFolderId = defineModel<string | null>('selectedFolderId', { default: null })
+const emit = defineEmits<{
+  selectLocation: []
+}>()
 
 const rootFolders = computed(() =>
   store.workflowFolders.filter((f) => f.parentId === null).sort((a, b) => a.order - b.order),
@@ -21,6 +24,11 @@ function getChildren(parentId: string) {
 async function addFolder(parentId: string | null) {
   await store.createFolder('新文件夹', parentId)
 }
+
+function selectFolder(folderId: string | null) {
+  selectedFolderId.value = folderId
+  emit('selectLocation')
+}
 </script>
 
 <template>
@@ -29,7 +37,7 @@ async function addFolder(parentId: string | null) {
       <div
         class="flex items-center gap-1.5 px-2 py-1 text-xs rounded cursor-pointer hover:bg-muted/50"
         :class="selectedFolderId === null ? 'bg-muted' : ''"
-        @click="selectedFolderId = null"
+        @click="selectFolder(null)"
       >
         <Folder class="w-3.5 h-3.5 text-muted-foreground" />
         <span>全部工作流</span>
@@ -42,7 +50,7 @@ async function addFolder(parentId: string | null) {
         <div
           class="flex items-center gap-1.5 px-2 py-1 text-xs rounded cursor-pointer hover:bg-muted/50"
           :class="selectedFolderId === folder.id ? 'bg-muted' : ''"
-          @click="selectedFolderId = folder.id"
+          @click="selectFolder(folder.id)"
         >
           <component
             :is="selectedFolderId === folder.id ? FolderOpen : Folder"
@@ -58,7 +66,7 @@ async function addFolder(parentId: string | null) {
           <div
             class="flex items-center gap-1.5 px-2 py-1 text-xs rounded cursor-pointer hover:bg-muted/50"
             :class="selectedFolderId === child.id ? 'bg-muted' : ''"
-            @click="selectedFolderId = child.id"
+            @click="selectFolder(child.id)"
           >
             <component
               :is="selectedFolderId === child.id ? FolderOpen : Folder"

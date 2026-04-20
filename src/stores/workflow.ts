@@ -306,13 +306,13 @@ function createEditActions(
   undoRedo: ReturnType<typeof createUndoRedoManager>,
   draftMgr: ReturnType<typeof createDraftManager>,
 ) {
-  function newWorkflow(folderId: string | null = null) {
+  function newWorkflow(folderId: string | null, name = '新工作流') {
     const startNodeId = crypto.randomUUID()
     const endNodeId = crypto.randomUUID()
     const workflowId = crypto.randomUUID()
     const agentSettingsStore = useAgentSettingsStore()
     currentWorkflow.value = {
-      id: workflowId, name: '未命名工作流', folderId,
+      id: workflowId, name, folderId,
       nodes: [
         { id: startNodeId, type: 'start', label: '开始', position: { x: 100, y: 250 }, data: {} },
         { id: endNodeId, type: 'end', label: '结束', position: { x: 600, y: 250 }, data: {} },

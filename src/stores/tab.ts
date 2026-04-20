@@ -8,10 +8,6 @@ export interface Tab {
   name: string
 }
 
-interface AddTabOptions {
-  createWorkflow?: boolean
-}
-
 export const useTabStore = defineStore('tabs', () => {
   const tabs = ref<Tab[]>([])
   const activeTabId = ref<string | null>(null)
@@ -49,15 +45,10 @@ export const useTabStore = defineStore('tabs', () => {
     activeTabId.value = data.activeTabId || data.tabs[0]?.id || null
   }
 
-  function addTab(
-    workflowId: string | null = null,
-    name: string = '未命名工作流',
-    options: AddTabOptions = {},
-  ): string {
+  function addTab(workflowId: string | null = null, name: string = ''): string {
     const id = crypto.randomUUID()
     const store = createWorkflowStore(id)
     storeMap.set(id, store)
-    const shouldCreateWorkflow = options.createWorkflow ?? !workflowId
     const existingStore = activeStore.value
 
     if (workflowId) {
@@ -75,11 +66,7 @@ export const useTabStore = defineStore('tabs', () => {
       }
     } else {
       store.loadData()
-      if (shouldCreateWorkflow) {
-        store.newWorkflow()
-      } else {
-        name = ''
-      }
+      name = ''
     }
 
     tabs.value.push({ id, workflowId, name })

@@ -57,6 +57,11 @@ export function useWorkflowFileActions(
   }
 
   async function importWorkflow() {
+    if (!store.currentWorkflow) {
+      notify.error('请先新建或打开工作流')
+      openWorkflow()
+      return
+    }
     const result = await (window as any).api.workflow.importOpenFile()
     if (!result?.json) return
     try {
@@ -65,12 +70,12 @@ export function useWorkflowFileActions(
         notify.error('无效的工作流文件')
         return
       }
-      store.newWorkflow()
-      const wf = store.currentWorkflow!
+      const wf = store.currentWorkflow
       wf.name = data.name || '导入的工作流'
       wf.description = data.description
       wf.nodes = data.nodes
       wf.edges = data.edges
+      await store.saveWorkflow(wf)
       notify.success('工作流已导入')
     } catch {
       notify.error('解析工作流文件失败')

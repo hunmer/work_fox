@@ -174,7 +174,7 @@ refreshMaximized()
     <div v-if="!hideTabSwitcher" class="flex items-center gap-1 ml-2 no-drag">
       <DropdownMenu>
         <DropdownMenuTrigger class="flex items-center gap-1 text-xs px-2 py-1 rounded hover:bg-muted transition-colors max-w-40">
-          <span class="truncate">{{ workflowName || '未命名工作流' }}</span>
+          <span class="truncate">{{ workflowName || '未选择工作流' }}</span>
           <ChevronDown class="w-3 h-3 shrink-0" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" class="min-w-48">
@@ -185,7 +185,7 @@ refreshMaximized()
             :class="{ 'bg-muted': tab.id === tabStore.activeTabId }"
             @click="tabStore.switchTab(tab.id)"
           >
-            <span class="truncate">{{ tab.name || '未命名工作流' }}</span>
+            <span class="truncate">{{ tab.name || '未选择工作流' }}</span>
             <button
               class="shrink-0 p-0.5 rounded hover:bg-destructive/20 hover:text-destructive"
               @click.stop="closeTab(tab.id)"
@@ -198,7 +198,7 @@ refreshMaximized()
       <button
         class="inline-flex items-center justify-center w-5 h-5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
         title="新标签页"
-        @click="tabStore.addTab()"
+        @click="emit('new')"
       >
         <Plus class="w-3 h-3" />
       </button>
@@ -220,7 +220,7 @@ refreshMaximized()
       class="ml-3 text-xs text-muted-foreground truncate cursor-pointer hover:text-foreground"
       @click="emit('startEditName')"
     >
-      {{ workflowName || '未命名工作流' }}
+      {{ workflowName || '未选择工作流' }}
     </span>
     </template>
 
