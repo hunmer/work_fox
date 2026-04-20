@@ -8,6 +8,10 @@ export interface Tab {
   name: string
 }
 
+interface AddTabOptions {
+  createWorkflow?: boolean
+}
+
 export const useTabStore = defineStore('tabs', () => {
   const tabs = ref<Tab[]>([])
   const activeTabId = ref<string | null>(null)
@@ -45,22 +49,37 @@ export const useTabStore = defineStore('tabs', () => {
     activeTabId.value = data.activeTabId || data.tabs[0]?.id || null
   }
 
-  function addTab(workflowId: string | null = null, name: string = '未命名工作流'): string {
+  function addTab(
+    workflowId: string | null = null,
+    name: string = '未命名工作流',
+    options: AddTabOptions = {},
+  ): string {
     const id = crypto.randomUUID()
     const store = createWorkflowStore(id)
     storeMap.set(id, store)
+    const shouldCreateWorkflow = options.createWorkflow ?? !workflowId
+    const existingStore = activeStore.value
 
     if (workflowId) {
-      const existingStore = activeStore.value
-      const wf = existingStore?.workflows.find(w => w.id === workflowId)
-      if (wf) {
+      void store.loadData().then(() => {
+        const loaded = store.workflows.find(w => w.id === workflowId)
+        const fallback = existingStore?.workflows.find(w => w.id === workflowId)
+        const wf = loaded || fallback
+        if (!wf) return
         store.currentWorkflow = JSON.parse(JSON.stringify(wf))
-        store.loadData()
-        name = wf.name
+        updateTabWorkflow(id, wf.id, wf.name)
+      })
+      const fallback = existingStore?.workflows.find(w => w.id === workflowId)
+      if (fallback) {
+        name = fallback.name
       }
     } else {
       store.loadData()
-      store.newWorkflow()
+      if (shouldCreateWorkflow) {
+        store.newWorkflow()
+      } else {
+        name = ''
+      }
     }
 
     tabs.value.push({ id, workflowId, name })

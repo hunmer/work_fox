@@ -145,7 +145,10 @@ function createExecutionLogManager(currentWorkflow: Ref<Workflow | null>, api: (
     executionLogs.value.unshift(log)
     if (executionLogs.value.length > 100) executionLogs.value.length = 100
     selectedExecutionLogId.value = log.id
-    api().executionLog.save(workflowId, log).catch(() => {})
+    try {
+      const serializable = JSON.parse(JSON.stringify(log))
+      api().executionLog.save(workflowId, serializable).catch(() => {})
+    } catch { /* serialization failed, skip persist */ }
   }
 
   return { executionLogs, selectedExecutionLogId, loadExecutionLogs, deleteExecutionLog, clearExecutionLogs, appendCompletedLog }

@@ -26,6 +26,7 @@ function handleOpen(workflowId?: string) {
     tabStore.addTab(workflowId)
     router.push('/editor')
   } else {
+    tabStore.addTab(null, '', { createWorkflow: false })
     router.push({ path: '/editor', query: { open: '1' } })
   }
 }

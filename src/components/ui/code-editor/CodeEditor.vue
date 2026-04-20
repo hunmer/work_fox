@@ -150,12 +150,12 @@ onBeforeUnmount(() => {
   <div
     v-if="!inline"
     ref="inlineContainer"
-    class="rounded-md border border-border overflow-hidden"
+    class="nokey rounded-md border border-border overflow-hidden"
     :style="{ height: `${height}px` }"
   />
 
   <!-- 内嵌模式：迷你编辑器 + 全屏按钮 -->
-  <div v-else class="relative group">
+  <div v-else class="nokey relative group">
     <div
       ref="inlineContainer"
       class="rounded-md border border-border overflow-hidden"
@@ -180,7 +180,7 @@ onBeforeUnmount(() => {
           完成
         </Button>
       </DialogHeader>
-      <div ref="fullContainer" class="flex-1" />
+      <div ref="fullContainer" class="nokey flex-1" />
     </DialogContent>
   </Dialog>
 </template>
