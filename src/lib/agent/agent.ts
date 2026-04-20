@@ -2,7 +2,8 @@ import { createToolDiscoveryTools } from './tools'
 import { listenToChatStream, type StreamCallbacks } from './stream'
 import { BROWSER_AGENT_SYSTEM_PROMPT } from './system-prompt'
 import { useAIProviderStore } from '@/stores/ai-provider'
-import { WORKFLOW_TOOL_DEFINITIONS, buildWorkflowSystemPrompt } from './workflow-tools'
+import { WORKFLOW_TOOL_DEFINITIONS } from './workflow-tools'
+import { buildWorkflowSystemPrompt } from './workflow-prompt'
 import type { ChatCompletionParams } from '@/types'
 
 type ChatCompletionPayload = Parameters<typeof window.api.chat.completions>[0]

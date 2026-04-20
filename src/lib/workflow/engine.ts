@@ -462,11 +462,24 @@ export class WorkflowEngine {
   }
 
   private resolveContextVariables(data: Record<string, any>): Record<string, any> {
-    const resolved: Record<string, any> = {}
-    for (const [key, value] of Object.entries(data)) {
-      resolved[key] = typeof value === 'string' ? this.resolveStringValue(value) : value
+    return this.resolveValue(data)
+  }
+
+  private resolveValue(value: any): any {
+    if (typeof value === 'string') {
+      return this.resolveStringValue(value)
     }
-    return resolved
+    if (Array.isArray(value)) {
+      return value.map((item) => this.resolveValue(item))
+    }
+    if (value && typeof value === 'object') {
+      const resolved: Record<string, any> = {}
+      for (const [key, nested] of Object.entries(value)) {
+        resolved[key] = this.resolveValue(nested)
+      }
+      return resolved
+    }
+    return value
   }
 
   /**

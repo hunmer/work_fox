@@ -1,20 +1,34 @@
 /**
- * 工作流 AI 助手的工具定义和系统提示词。
+ * 工作流 AI 助手的工具定义。
  *
- * 提供工作流编辑专用的 14 个 Anthropic 工具 schema，
- * 以及带工作流上下文注入的系统提示词生成函数。
+ * 该文件只负责工作流编辑工具 schema，系统提示词单独放在 workflow-prompt.ts，
+ * 避免工具契约和 prompt 语义耦合在一起。
  */
 
 import type { ToolDefinition } from './tools'
 
-/** 工作流摘要信息，用于构建上下文感知的系统提示词 */
-export interface WorkflowSummary {
-  id: string
-  name: string
-  description?: string
-  nodes: Array<{ id: string; type: string; label: string }>
-  edges: Array<{ id: string; source: string; target: string }>
-}
+const WORKFLOW_SEARCH_PROPERTIES = {
+  keyword: {
+    type: 'string',
+    description: '模糊搜索关键词，会同时匹配 type、label、category、description。',
+  },
+  type: {
+    type: 'string',
+    description: '按节点类型模糊筛选，例如 "run_code"、"gallery_preview"。',
+  },
+  label: {
+    type: 'string',
+    description: '按节点标签模糊筛选。',
+  },
+  category: {
+    type: 'string',
+    description: '按分类模糊筛选，例如 "流程控制"、"AI"、"展示"。',
+  },
+  description: {
+    type: 'string',
+    description: '按节点描述模糊筛选。',
+  },
+} as const
 
 /** 工作流 AI 助手的工具定义 */
 export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
@@ -56,33 +70,16 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'search_nodes',
     description:
-      '在当前工作流中搜索节点，支持按 type、label、category、description 模糊匹配。至少传一个字段作为搜索条件，返回匹配的节点数组。',
+      '在当前工作流中搜索节点，支持按 keyword/type/label/category/description 模糊匹配。返回当前画布中匹配的节点，并附带节点类型的分类和描述信息。',
     input_schema: {
       type: 'object',
-      properties: {
-        type: {
-          type: 'string',
-          description: '按节点类型模糊搜索，如 "browser"、"code"、"agent"。',
-        },
-        label: {
-          type: 'string',
-          description: '按节点标签模糊搜索。',
-        },
-        category: {
-          type: 'string',
-          description: '按分类模糊搜索，如 "流程控制"、"浏览器操作"、"AI"。',
-        },
-        description: {
-          type: 'string',
-          description: '按节点描述模糊搜索。',
-        },
-      },
+      properties: WORKFLOW_SEARCH_PROPERTIES,
     },
   },
   {
     name: 'list_node_types',
     description:
-      '查询工作流中可用的节点类型列表。可按分类筛选，返回每种节点类型的 type 标识、标签、分类、描述和参数定义。不传 category 则返回所有分类的全部节点类型。',
+      '查询工作流中可用的节点类型列表。可按分类筛选，返回每种节点类型的 type、标签、分类、描述、句柄和参数定义。找到候选类型后，如需实际使用，继续调用 search_node_usage 查看具体用法。',
     input_schema: {
       type: 'object',
       properties: {
@@ -95,9 +92,18 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
+    name: 'search_node_usage',
+    description:
+      '查询节点类型的具体使用方法。支持按 keyword/type/label/category/description 模糊匹配，返回节点定义、字段说明、变量支持、编排建议和示例数据。准备使用陌生节点前必须先调用它。',
+    input_schema: {
+      type: 'object',
+      properties: WORKFLOW_SEARCH_PROPERTIES,
+    },
+  },
+  {
     name: 'create_node',
     description:
-      '在工作流中创建一个新节点。需要指定节点类型（type），可通过 list_node_types 查询可用类型。可选提供节点标签（label）和参数数据（data）。创建后节点会出现在画布上，需要用 create_edge 连接到其他节点。',
+      '在工作流中创建一个新节点。需要指定节点类型（type），可通过 list_node_types 找候选，通过 search_node_usage 查看具体字段后再创建。可选提供节点标签（label）和参数数据（data）。创建后节点会出现在画布上，需要用 create_edge 连接到其他节点。',
     input_schema: {
       type: 'object',
       properties: {
@@ -123,13 +129,17 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'update_node',
     description:
-      '更新指定节点的参数数据。只需传入要修改的字段，未传入的字段保持不变。更新前建议先用 get_current_workflow(summarize=false) 查看节点当前完整数据。',
+      '更新指定节点的参数数据。只需传入要修改的字段，未传入的字段保持不变。更新前建议先用 get_current_workflow(summarize=false) 查看节点当前完整 data；若不确定字段含义，先用 search_node_usage 查看该节点类型的具体用法。',
     input_schema: {
       type: 'object',
       properties: {
         nodeId: {
           type: 'string',
           description: '要更新的节点 ID。',
+        },
+        label: {
+          type: 'string',
+          description: '可选，同时更新节点显示名称。',
         },
         data: {
           type: 'object',
@@ -138,7 +148,7 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
           properties: {},
         },
       },
-      required: ['nodeId', 'data'],
+      required: ['nodeId'],
     },
   },
   {
@@ -201,7 +211,7 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'insert_node',
     description:
-      '在一条已有连线的中途插入新节点。操作为原子性：删除原边，创建新节点，再创建两条新边连接 source → 新节点 → target。适合在两个已有节点之间插入中间处理步骤。',
+      '在一条已有连线的中途插入新节点。操作为原子性：删除原边，创建新节点，再创建两条新边连接 source → 新节点 → target。适合在两个已有节点之间插入中间处理步骤。插入前应先用 search_node_usage 查看目标节点类型的字段和使用方式。',
     input_schema: {
       type: 'object',
       properties: {
@@ -229,13 +239,25 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'batch_update',
     description:
-      '批量执行多个工作流编辑操作，在一个事务中完成。支持同时创建节点、删除节点、创建连线和删除连线。所有操作要么全部成功，要么全部回滚。适合需要原子性执行的复杂编辑场景。',
+      '批量执行多个工作流编辑操作，在一个事务中完成。优先使用 operations 数组；也兼容 createNodes/deleteNodeIds/createEdges/deleteEdgeIds 这种旧格式。所有操作要么全部成功，要么全部回滚，适合需要原子性执行的复杂编辑场景。',
     input_schema: {
       type: 'object',
       properties: {
+        operations: {
+          type: 'array',
+          description: '推荐格式。每项为 { tool, args }，tool 支持 create_node/update_node/delete_node/create_edge/delete_edge。',
+          items: {
+            type: 'object',
+            properties: {
+              tool: { type: 'string', description: '要执行的工作流工具名。' },
+              args: { type: 'object', description: '对应工具的参数。', properties: {} },
+            },
+            required: ['tool'],
+          },
+        },
         createNodes: {
           type: 'array',
-          description: '要创建的节点列表。',
+          description: '旧格式兼容。要创建的节点列表。',
           items: {
             type: 'object',
             properties: {
@@ -248,12 +270,12 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
         },
         deleteNodeIds: {
           type: 'array',
-          description: '要删除的节点 ID 列表。删除节点时会自动移除相关连线。',
+          description: '旧格式兼容。要删除的节点 ID 列表。删除节点时会自动移除相关连线。',
           items: { type: 'string' },
         },
         createEdges: {
           type: 'array',
-          description: '要创建的连线列表。',
+          description: '旧格式兼容。要创建的连线列表。',
           items: {
             type: 'object',
             properties: {
@@ -267,7 +289,7 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
         },
         deleteEdgeIds: {
           type: 'array',
-          description: '要删除的连线 ID 列表。',
+          description: '旧格式兼容。要删除的连线 ID 列表。',
           items: { type: 'string' },
         },
       },
@@ -320,75 +342,3 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
 ]
-
-/** 工作流 AI 助手基础系统提示词 */
-export const WORKFLOW_SYSTEM_PROMPT = `你是一个工作流编辑助手，帮助用户创建、修改和优化可视化工作流。你可以通过工具调用直接操作工作流的节点和连线。
-
-## 可用操作
-
-| 操作 | 工具名 | 说明 |
-|------|--------|------|
-| 查看当前画布 | get_current_workflow | 获取当前画布的节点和连线，包含未保存改动 |
-| 查看已保存文件 | get_workflow | 按 workflow_id 读取磁盘中的最新已保存工作流 |
-| 搜索节点 | search_nodes | 按 type/label/category/description 模糊搜索当前工作流中的节点 |
-| 查询节点类型 | list_node_types | 查看可用的节点类型及其参数 |
-| 创建节点 | create_node | 添加新节点到工作流 |
-| 更新节点 | update_node | 修改节点参数 |
-| 删除节点 | delete_node | 移除节点及相关连线 |
-| 创建连线 | create_edge | 连接两个节点 |
-| 删除连线 | delete_edge | 移除节点间的连接 |
-| 插入节点 | insert_node | 在已有连线中途插入新节点 |
-| 批量操作 | batch_update | 一次性执行多个创建/删除操作 |
-| 自动布局 | auto_layout | 自动排列所有节点位置 |
-| 同步执行 | execute_workflow_sync | 同步执行工作流，等待完成后返回结果 |
-| 异步执行 | execute_workflow_async | 异步执行工作流，立即返回 execution_id |
-| 查询结果 | get_workflow_result | 按 execution_id 查询执行结果，可选 node_id 过滤 |
-
-## 使用指南
-
-1. **先了解现状**：编辑前优先用 get_current_workflow 查看当前画布结构，了解现有节点和连线关系。
-2. **确认类型**：创建节点前用 list_node_types 确认可用的节点类型和所需参数。
-3. **逐步操作**：复杂修改建议分步执行，每步确认后再继续。
-4. **批量编辑**：需要同时创建多个节点和连线时，优先使用 batch_update 以保证原子性。
-5. **最终整理**：完成编辑后可调用 auto_layout 自动整理布局。
-6. **谨慎删除**：删除操作不可撤销，请确认 ID 正确后再执行。
-7. **区分数据来源**：查看当前画布用 \`get_current_workflow\`；查看已保存文件用 \`get_workflow({ workflow_id })\`。
-8. **选择执行模式**：短工作流用 \`execute_workflow_sync\` 直接获取结果；长工作流用 \`execute_workflow_async\` 后台运行，再用 \`get_workflow_result\` 轮询结果。
-
-## 注意事项
-
-- \`get_workflow\` 必须显式传入 \`workflow_id\`。
-- 节点 ID 由系统自动生成，创建节点后返回结果中会包含新 ID。
-- 连线方向为 source -> target，表示数据/控制流从源节点流向目标节点。
-- 条件分支节点通常有多个输出连接点（sourceHandle），如 "true"/"false"。
-- 每个工作流通常需要一个开始节点（start）和一个或多个结束节点（end）。
-- \`execute_workflow_sync\` 会阻塞等待，适合节点少、执行快的工作流。
-- \`execute_workflow_async\` 适合节点多或含浏览器操作等耗时的场景。`
-
-/**
- * 构建包含工作流上下文的完整系统提示词。
- *
- * @param workflow 工作流摘要对象，包含名称、描述、节点和连线
- * @returns 完整的系统提示词字符串，末尾附注当前工作流 JSON
- */
-export function buildWorkflowSystemPrompt(workflow: WorkflowSummary): string {
-  const summary = {
-    id: workflow.id,
-    name: workflow.name,
-    description: workflow.description,
-    nodes: workflow.nodes,
-    edges: workflow.edges,
-  }
-
-  return `${WORKFLOW_SYSTEM_PROMPT}
-
----
-
-## 当前工作流
-
-当前 workflow_id: ${workflow.id}
-
-\`\`\`json
-${JSON.stringify(summary, null, 2)}
-\`\`\``
-}

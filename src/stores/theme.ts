@@ -362,6 +362,12 @@ export const useThemeStore = defineStore('theme', () => {
   function applyThemeMode(t: Theme) {
     document.documentElement.classList.toggle('dark', t === 'dark')
     document.documentElement.classList.toggle('light', t === 'light')
+    const overlay = document.getElementById('stream-markdown-overlay')
+    if (overlay) {
+      overlay.classList.toggle('stream-markdown', true)
+      overlay.classList.toggle('dark', t === 'dark')
+      overlay.classList.toggle('light', t === 'light')
+    }
   }
 
   function applyPresetVars() {

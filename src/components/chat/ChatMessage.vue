@@ -20,10 +20,13 @@ import 'vue-stream-markdown/theme.css'
 import { useThemeStore } from '@/stores/theme'
 import { useUserProfileStore } from '@/stores/userProfile'
 import { BROWSER_AGENT_SYSTEM_PROMPT } from '@/lib/agent/system-prompt'
+import { WORKFLOW_AGENT_SYSTEM_PROMPT, buildWorkflowSystemPrompt } from '@/lib/agent/workflow-prompt'
+import { useTabStore } from '@/stores/tab'
 import type { ChatStoreInstance } from '@/stores/chat'
 
 const themeStore = useThemeStore()
 const userProfile = useUserProfileStore()
+const tabStore = useTabStore()
 
 type ContentSegment =
   | { type: 'thinking'; content: string }
@@ -222,6 +225,30 @@ const inputRawText = computed(() => {
     .join('\n\n')
 })
 
+const workflowPromptText = computed(() => {
+  if (props.chat.scope !== 'workflow') return ''
+  const workflow = tabStore.activeStore?.currentWorkflow
+  const sessionWorkflowId = props.chat.currentSession?.workflowId
+  if (!workflow || !sessionWorkflowId || workflow.id !== sessionWorkflowId) {
+    return WORKFLOW_AGENT_SYSTEM_PROMPT
+  }
+  return buildWorkflowSystemPrompt({
+    id: workflow.id,
+    name: workflow.name,
+    description: workflow.description,
+    nodes: workflow.nodes.map((node) => ({
+      id: node.id,
+      type: node.type,
+      label: node.label,
+    })),
+    edges: workflow.edges.map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+    })),
+  })
+})
+
 /** System Prompt：内置的 Agent 系统提示词 */
 const inputPromptText = computed(() => {
   const msgs = props.allMessages ?? []
@@ -230,7 +257,7 @@ const inputPromptText = computed(() => {
   // 优先取消息列表中的 system 消息，否则使用内置 prompt
   const systemMsgs = msgs.slice(0, idx).filter(m => m.role === 'system')
   if (systemMsgs.length) return systemMsgs.map(m => m.content || '').join('\n\n')
-  return BROWSER_AGENT_SYSTEM_PROMPT
+  return props.chat.scope === 'workflow' ? workflowPromptText.value : BROWSER_AGENT_SYSTEM_PROMPT
 })
 
 /** 原始输出文本：当前消息的内容 */

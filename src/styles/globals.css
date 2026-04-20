@@ -155,3 +155,12 @@ textarea,
 .no-drag {
   -webkit-app-region: no-drag;
 }
+
+/* vue-stream-markdown: modal/image-viewer 通过 Teleport 挂到 #stream-markdown-overlay，
+   该容器不在 .stream-markdown 组件内，需要手动继承主题 class 和 CSS 变量 */
+#stream-markdown-overlay {
+  pointer-events: none;
+}
+#stream-markdown-overlay > * {
+  pointer-events: auto;
+}

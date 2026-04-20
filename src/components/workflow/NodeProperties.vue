@@ -106,6 +106,11 @@ function updateArrayItemField(propKey: string, index: number, fieldKey: string, 
   setFieldValue(propKey, items)
 }
 
+function insertArrayVariable(propKey: string, index: number, fieldKey: string, variablePath: string) {
+  const current = getArrayItems(propKey)?.[index]?.[fieldKey] || ''
+  updateArrayItemField(propKey, index, fieldKey, `${current}${variablePath}`)
+}
+
 /** 获取/设置节点输出字段 */
 const nodeOutputs = computed<OutputField[]>({
   get: () => store.selectedNode?.data?.outputs ?? [],
@@ -456,13 +461,30 @@ function confirmImport() {
                     class="space-y-0.5"
                   >
                     <label class="text-[10px] text-muted-foreground">{{ field.label }}</label>
+                    <div
+                      v-if="field.type === 'text'"
+                      class="flex gap-1"
+                    >
+                      <Input
+                        type="text"
+                        :model-value="item[field.key]"
+                        :placeholder="field.placeholder || field.label"
+                        class="h-6 text-[11px] flex-1"
+                        @update:model-value="updateArrayItemField(prop.key, idx, field.key, $event)"
+                      />
+                      <VariablePicker
+                        v-if="store.selectedNodeId"
+                        :exclude-node-id="store.selectedNodeId"
+                        @select="insertArrayVariable(prop.key, idx, field.key, $event)"
+                      />
+                    </div>
                     <Input
-                      v-if="field.type === 'text' || field.type === 'number'"
-                      :type="field.type === 'number' ? 'number' : 'text'"
+                      v-else-if="field.type === 'number'"
+                      type="number"
                       :model-value="item[field.key]"
                       :placeholder="field.placeholder || field.label"
                       class="h-6 text-[11px]"
-                      @update:model-value="updateArrayItemField(prop.key, idx, field.key, field.type === 'number' ? Number($event) : $event)"
+                      @update:model-value="updateArrayItemField(prop.key, idx, field.key, Number($event))"
                     />
                     <Select
                       v-else-if="field.type === 'select'"

@@ -7,6 +7,7 @@ import {
   buildToolListResponse,
   isBrowserBusinessToolName,
 } from '../../src/lib/agent/tools'
+import { WORKFLOW_TOOL_DEFINITIONS } from '../../src/lib/agent/workflow-tools'
 import { dispatchWorkflowTool } from './workflow-tool-dispatcher'
 import { workflowNodeRegistry, type AgentToolDefinition } from './workflow-node-registry'
 
@@ -342,23 +343,7 @@ export function createClaudeToolAdapter(context: ToolAdapterContext): {
   }
 
   if (context.mode === 'workflow' && context.workflowId) {
-    const workflowTools = [
-      { name: 'get_workflow', description: '读取指定工作流文件中的数据。', input_schema: { type: 'object' as const, properties: { workflow_id: { type: 'string', description: '工作流 ID。' }, summarize: { type: 'boolean', description: '是否返回摘要。' } }, required: ['workflow_id'] } },
-      { name: 'get_current_workflow', description: '读取当前渲染进程画布工作流。', input_schema: { type: 'object' as const, properties: { summarize: { type: 'boolean', description: '是否返回摘要。' } } } },
-      { name: 'list_node_types', description: '列出可用工作流节点类型。', input_schema: { type: 'object' as const, properties: { category: { type: 'string', description: '可选分类。' } } } },
-      { name: 'create_node', description: '创建工作流节点。', input_schema: { type: 'object' as const, properties: { type: { type: 'string', description: '节点类型。' }, label: { type: 'string', description: '节点标签。' }, data: { type: 'object', description: '节点参数。' } }, required: ['type'] } },
-      { name: 'update_node', description: '更新工作流节点。', input_schema: { type: 'object' as const, properties: { nodeId: { type: 'string', description: '节点 ID。' }, data: { type: 'object', description: '更新数据。' }, label: { type: 'string', description: '可选标签。' } }, required: ['nodeId', 'data'] } },
-      { name: 'delete_node', description: '删除工作流节点。', input_schema: { type: 'object' as const, properties: { nodeId: { type: 'string', description: '节点 ID。' } }, required: ['nodeId'] } },
-      { name: 'create_edge', description: '创建工作流连线。', input_schema: { type: 'object' as const, properties: { source: { type: 'string', description: '源节点 ID。' }, target: { type: 'string', description: '目标节点 ID。' }, sourceHandle: { type: 'string', description: '源 handle。' }, targetHandle: { type: 'string', description: '目标 handle。' } }, required: ['source', 'target'] } },
-      { name: 'delete_edge', description: '删除工作流连线。', input_schema: { type: 'object' as const, properties: { edgeId: { type: 'string', description: '连线 ID。' } }, required: ['edgeId'] } },
-      { name: 'batch_update', description: '批量更新工作流。', input_schema: { type: 'object' as const, properties: { operations: { type: 'array', description: '操作列表。' } }, required: ['operations'] } },
-      { name: 'auto_layout', description: '自动布局工作流。', input_schema: { type: 'object' as const, properties: {} } },
-      { name: 'execute_workflow_sync', description: '同步执行工作流。', input_schema: { type: 'object' as const, properties: {} } },
-      { name: 'execute_workflow_async', description: '异步执行工作流。', input_schema: { type: 'object' as const, properties: {} } },
-      { name: 'get_workflow_result', description: '查询工作流执行结果。', input_schema: { type: 'object' as const, properties: { execution_id: { type: 'string', description: '执行 ID。' }, node_id: { type: 'string', description: '可选节点 ID。' } }, required: ['execution_id'] } },
-      { name: 'search_nodes', description: '按关键词模糊搜索当前工作流中的节点，匹配 type/label/category/description 任一字段。', input_schema: { type: 'object' as const, properties: { keyword: { type: 'string', description: '搜索关键词。' } }, required: ['keyword'] } },
-      { name: 'search_node_usage', description: '按关键词模糊搜索所有可用节点类型定义，匹配 type/label/category/description 任一字段。', input_schema: { type: 'object' as const, properties: { keyword: { type: 'string', description: '搜索关键词。' } }, required: ['keyword'] } },
-    ] as AgentToolDefinition[]
+    const workflowTools = WORKFLOW_TOOL_DEFINITIONS as AgentToolDefinition[]
 
     mcpServers[WORKFLOW_TOOL_SERVER] = createSdkMcpServer({
       name: WORKFLOW_TOOL_SERVER,

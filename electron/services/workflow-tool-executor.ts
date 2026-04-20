@@ -4,6 +4,14 @@ import dagre from '@dagrejs/dagre'
 import { getWorkflow, updateWorkflow } from './workflow-store'
 import { workflowNodeRegistry } from './workflow-node-registry'
 
+interface SearchFilters {
+  keyword?: string
+  type?: string
+  label?: string
+  category?: string
+  description?: string
+}
+
 /** 从 registry 获取所有节点类型定义的完整信息（内置 + 插件） */
 function getAllNodeTypeDefinitions() {
   return workflowNodeRegistry.getAllPluginNodes()
@@ -14,6 +22,91 @@ function getAllNodeTypeDefinitions() {
       description: n.description || `插件 ${entry.pluginId} 提供的节点`,
       source: entry.pluginId,
     })))
+}
+
+function normalizeText(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLowerCase() : ''
+}
+
+function hasSearchFilters(args: any): args is SearchFilters {
+  return ['keyword', 'type', 'label', 'category', 'description']
+    .some((key) => typeof args?.[key] === 'string' && args[key].trim())
+}
+
+function matchesNodeDefinition(def: any, args: SearchFilters): boolean {
+  const keyword = normalizeText(args.keyword)
+  const type = normalizeText(args.type)
+  const label = normalizeText(args.label)
+  const category = normalizeText(args.category)
+  const description = normalizeText(args.description)
+
+  if (keyword) {
+    const haystack = [def.type, def.label, def.category, def.description]
+      .map(normalizeText)
+      .join('\n')
+    if (!haystack.includes(keyword)) return false
+  }
+  if (type && !normalizeText(def.type).includes(type)) return false
+  if (label && !normalizeText(def.label).includes(label)) return false
+  if (category && !normalizeText(def.category).includes(category)) return false
+  if (description && !normalizeText(def.description).includes(description)) return false
+  return true
+}
+
+function buildNodeUsageNotes(def: any): string[] {
+  const notes = [
+    '写入节点 data 前先核对 properties 字段定义，不要臆造字段名。',
+    '字符串字段支持变量引用，纯变量会保留原始类型，变量与文本混排会转成字符串。',
+    '嵌套对象字段和数组项中的字符串字段也支持变量引用。',
+    '上游节点输出优先使用 {{ __data__["节点ID"].字段路径 }}；上下文路径可用 {{ context.some.path }}。',
+  ]
+
+  if (def.type === 'run_code') {
+    notes.push('run_code.code 是 JavaScript 代码，不要在 code 字段里写 {{ }} 插值。')
+    notes.push('run_code 应直接读取 context，并通过 return 返回给下游节点消费的结构化结果。')
+  }
+
+  if (Array.isArray(def.properties) && def.properties.some((prop: any) => prop.type === 'array')) {
+    notes.push('array 类型字段应保持数组结构，在数组项的字符串字段中写变量。')
+  }
+
+  if (def.type === 'gallery_preview') {
+    notes.push('gallery_preview.items 是数组；数组项通常包含 src、thumb、type、caption。')
+    notes.push('若上游输出结构不一致，建议先插入 run_code 节点做映射，再由 gallery_preview 逐字段引用。')
+  }
+
+  return notes
+}
+
+function buildNodeUsageExamples(def: any): Array<Record<string, any>> {
+  const examples: Array<Record<string, any>> = []
+
+  if (def.type === 'run_code') {
+    examples.push({
+      scene: '在两个节点之间插入 JS 做资源结构映射',
+      data: {
+        code: 'const upstream = context["上游节点ID"] || {}\nconst list = Array.isArray(upstream.items) ? upstream.items : []\nreturn {\n  items: list.map((item) => ({\n    src: item.src || item.url || "",\n    thumb: item.thumb || item.cover || "",\n    type: item.type || "image",\n    caption: item.caption || item.title || ""\n  }))\n}',
+      },
+    })
+  }
+
+  if (def.type === 'gallery_preview') {
+    examples.push({
+      scene: '引用上游 JS 节点输出的第一个资源',
+      data: {
+        items: [
+          {
+            src: '{{ __data__["js-node-id"].items.0.src }}',
+            thumb: '{{ __data__["js-node-id"].items.0.thumb }}',
+            type: '{{ __data__["js-node-id"].items.0.type }}',
+            caption: '{{ __data__["js-node-id"].items.0.caption }}',
+          },
+        ],
+      },
+    })
+  }
+
+  return examples
 }
 
 // ====== 接口定义 ======
@@ -350,9 +443,33 @@ function handleDeleteEdge(ctx: ToolContext): ToolHandlerResult {
 
 function handleBatchUpdate(ctx: ToolContext): ToolHandlerResult {
   const { args, nodes, edges } = ctx
-  const { operations } = args || {}
-  if (!Array.isArray(operations) || operations.length === 0) {
-    return { result: { success: false, message: '缺少必填参数: operations (非空数组)' }, mutated: false, nodes, edges }
+  const operations = Array.isArray(args?.operations) && args.operations.length > 0
+    ? args.operations
+    : [
+        ...(Array.isArray(args?.createNodes)
+          ? args.createNodes.map((item: any) => ({ tool: 'create_node', args: item }))
+          : []),
+        ...(Array.isArray(args?.deleteNodeIds)
+          ? args.deleteNodeIds.map((nodeId: string) => ({ tool: 'delete_node', args: { nodeId } }))
+          : []),
+        ...(Array.isArray(args?.createEdges)
+          ? args.createEdges.map((item: any) => ({
+            tool: 'create_edge',
+            args: {
+              source: item.source ?? item.sourceId,
+              target: item.target ?? item.targetId,
+              sourceHandle: item.sourceHandle,
+              targetHandle: item.targetHandle,
+            },
+          }))
+          : []),
+        ...(Array.isArray(args?.deleteEdgeIds)
+          ? args.deleteEdgeIds.map((edgeId: string) => ({ tool: 'delete_edge', args: { edgeId } }))
+          : []),
+      ]
+
+  if (operations.length === 0) {
+    return { result: { success: false, message: '缺少批量操作内容：请传 operations，或旧格式 createNodes/deleteNodeIds/createEdges/deleteEdgeIds' }, mutated: false, nodes, edges }
   }
   // 事务性执行：收集所有变更，全部成功后一次性写入
   const batchChanges: WorkflowChanges = {
@@ -455,19 +572,28 @@ function handleInsertNode(ctx: ToolContext): ToolHandlerResult {
 
 function handleSearchNodes(ctx: ToolContext): ToolHandlerResult {
   const { args, nodes } = ctx
-  const keyword = args?.keyword
-  if (!keyword) {
-    return { result: { success: false, message: '缺少必填参数: keyword' }, mutated: false, nodes, edges: ctx.edges }
+  if (!hasSearchFilters(args)) {
+    return { result: { success: false, message: '至少需要一个搜索条件：keyword/type/label/category/description' }, mutated: false, nodes, edges: ctx.edges }
   }
-  const kw = keyword.toLowerCase()
+  const nodeDefs = new Map(getAllNodeTypeDefinitions().map((def) => [def.type, def]))
   const matches = nodes.filter((n: any) =>
-    [n.type, n.label, n.category, n.description].some((field) => (field || '').toLowerCase().includes(kw))
+    matchesNodeDefinition({
+      ...n,
+      category: nodeDefs.get(n.type)?.category,
+      description: nodeDefs.get(n.type)?.description,
+    }, args)
   )
   return {
     result: {
       success: true,
       message: `匹配到 ${matches.length} 个节点`,
-      data: { nodes: matches },
+      data: {
+        nodes: matches.map((node: any) => ({
+          ...node,
+          category: nodeDefs.get(node.type)?.category,
+          description: nodeDefs.get(node.type)?.description,
+        })),
+      },
     },
     mutated: false,
     nodes,
@@ -477,20 +603,31 @@ function handleSearchNodes(ctx: ToolContext): ToolHandlerResult {
 
 function handleSearchNodeUsage(ctx: ToolContext): ToolHandlerResult {
   const { args } = ctx
-  const keyword = args?.keyword
-  if (!keyword) {
-    return { result: { success: false, message: '缺少必填参数: keyword' }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
+  if (!hasSearchFilters(args)) {
+    return { result: { success: false, message: '至少需要一个搜索条件：keyword/type/label/category/description' }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
   }
-  const kw = keyword.toLowerCase()
   const allTypes = getAllNodeTypeDefinitions()
-  const matches = allTypes.filter((d) =>
-    [d.type, d.label, d.category, d.description].some((field) => (field || '').toLowerCase().includes(kw))
-  )
+  const matches = allTypes.filter((d) => matchesNodeDefinition(d, args))
   return {
     result: {
       success: true,
       message: `匹配到 ${matches.length} 种节点类型`,
-      data: { nodeTypes: matches },
+      data: {
+        nodeTypes: matches.map((def) => ({
+          ...def,
+          variableSupport: {
+            stringFields: true,
+            nestedObjectFields: true,
+            arrayItemStringFields: true,
+            syntax: {
+              upstream: '{{ __data__["节点ID"].字段路径 }}',
+              context: '{{ context.some.path }}',
+            },
+          },
+          usageNotes: buildNodeUsageNotes(def),
+          examples: buildNodeUsageExamples(def),
+        })),
+      },
     },
     mutated: false,
     nodes: ctx.nodes,
