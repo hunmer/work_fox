@@ -55,6 +55,7 @@ const tabStore = useTabStore()
 const store = props.store
 const listDialogOpen = ref(false)
 const listDialogCreateMode = ref(false)
+const lastWorkflowListOpenedAt = ref(0)
 const nodeSelectOpen = ref(false)
 const pluginsDialogOpen = ref(false)
 const settingsDialogOpen = ref(false)
@@ -209,8 +210,30 @@ function openRecentWorkflow(id: string) {
 
 function openWorkflowList(createMode = false) {
   listDialogCreateMode.value = createMode
+  lastWorkflowListOpenedAt.value = Date.now()
   debugLog('openWorkflowList', { createMode, currentWorkflowId: store.currentWorkflow?.id ?? null })
   openWorkflow()
+}
+
+function onWorkflowListOpenChange(open: boolean) {
+  const elapsed = Date.now() - lastWorkflowListOpenedAt.value
+  if (!open && !store.currentWorkflow && elapsed < 300) {
+    debugLog('onWorkflowListOpenChange:ignoring immediate close', { elapsed })
+    listDialogOpen.value = true
+    return
+  }
+  listDialogOpen.value = open
+  debugLog('onWorkflowListOpenChange', {
+    open,
+    elapsed,
+    currentWorkflowId: store.currentWorkflow?.id ?? null,
+    currentTabWorkflowId: props.tab.workflowId,
+  })
+  if (!open && !store.currentWorkflow) {
+    debugLog('onWorkflowListOpenChange:closing transient empty tab')
+    tabStore.closeTab(props.tab.id)
+    router.push('/home')
+  }
 }
 
 async function handlePluginUpdate(plugins: string[]) {
@@ -391,7 +414,7 @@ function onConnect(params: any) {
     <WorkflowListDialog
       :open="listDialogOpen"
       :create-mode="listDialogCreateMode"
-      @update:open="listDialogOpen = $event"
+      @update:open="onWorkflowListOpenChange"
       @select="onListSelect"
     />
 

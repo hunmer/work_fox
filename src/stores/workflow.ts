@@ -54,7 +54,7 @@ function summarizeChanges(changes: WorkflowChanges): string {
 
 // ====== Undo/Redo 管理器 ======
 
-function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>) {
+function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () => any) {
   const MAX_HISTORY = 1000
   const undoStack = ref<string[]>([])
   const redoStack = ref<string[]>([])
@@ -101,9 +101,33 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>) {
   const canUndo = computed(() => undoStack.value.length > 0)
   const canRedo = computed(() => redoStack.value.length > 0)
 
+  let saveTimer: ReturnType<typeof setTimeout> | null = null
+  function scheduleSave(): void {
+    if (!currentWorkflow.value?.id) return
+    if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = setTimeout(() => {
+      const a = api()
+      if (a?.operationHistory?.save) {
+        a.operationHistory.save(currentWorkflow.value!.id, operationLog.value)
+      }
+    }, 1000)
+  }
+
+  watch(operationLog, () => scheduleSave(), { deep: true })
+
+  async function loadFromDisk(): Promise<void> {
+    const a = api()
+    if (!a?.operationHistory?.load || !currentWorkflow.value?.id) return
+    try {
+      const entries = await a.operationHistory.load(currentWorkflow.value.id)
+      if (entries?.length) operationLog.value = entries
+    } catch { /* ignore */ }
+  }
+
   return {
     undoStack, redoStack, operationLog, pushUndo, undo, redo,
     reset: () => { undoStack.value = []; redoStack.value = []; operationLog.value = [] },
+    loadOperationHistory: loadFromDisk,
     canUndo, canRedo,
   }
 }
@@ -584,7 +608,7 @@ export function createWorkflowStore(tabId: string) {
     const executionContext = ref<Record<string, any>>({})
     const engine = ref<WorkflowEngine | null>(null)
 
-    const undoRedo = createUndoRedoManager(currentWorkflow)
+    const undoRedo = createUndoRedoManager(currentWorkflow, api)
     const execLogMgr = createExecutionLogManager(currentWorkflow, api)
     const versionMgr = createVersionManager(currentWorkflow, api)
     const draftMgr = createDraftManager(currentWorkflow, tabId)
@@ -615,6 +639,7 @@ export function createWorkflowStore(tabId: string) {
       execLogMgr.loadExecutionLogs()
       versionMgr.loadVersions()
       undoRedo.reset()
+      undoRedo.loadOperationHistory()
     })
 
     function restoreDraft(): boolean {

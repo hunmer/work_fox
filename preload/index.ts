@@ -120,6 +120,11 @@ const api = {
     clear: (workflowId: string): Promise<void> => ipcRenderer.invoke('executionLog:clear', workflowId),
   },
 
+  operationHistory: {
+    load: (workflowId: string): Promise<any[]> => ipcRenderer.invoke('operationHistory:load', workflowId),
+    save: (workflowId: string, entries: any[]): Promise<void> => ipcRenderer.invoke('operationHistory:save', workflowId, entries),
+  },
+
   shortcut: {
     list: (): Promise<{ groups: any[]; shortcuts: any[] }> => ipcRenderer.invoke('shortcut:list'),
     update: (id: string, accelerator: string, isGlobal: boolean, enabled?: boolean): Promise<any> =>

@@ -4,6 +4,7 @@ import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { registerWorkflowIpcHandlers } from './ipc/workflow'
 import { registerWorkflowVersionIpcHandlers } from './ipc/workflow-version'
 import { registerExecutionLogIpcHandlers } from './ipc/execution-log'
+import { registerOperationHistoryIpcHandlers } from './ipc/operation-history'
 import { registerChatIpcHandlers } from './ipc/chat'
 import { registerShortcutIpcHandlers, registerGlobalShortcuts, unregisterGlobalShortcuts } from './ipc/shortcut'
 import { registerPluginIpcHandlers } from './ipc/plugin'
@@ -56,6 +57,7 @@ app.whenReady().then(() => {
   registerWorkflowIpcHandlers()
   registerWorkflowVersionIpcHandlers()
   registerExecutionLogIpcHandlers()
+  registerOperationHistoryIpcHandlers()
   registerChatIpcHandlers()
   registerShortcutIpcHandlers()
   registerPluginIpcHandlers()
