@@ -99,5 +99,33 @@ function isLastAssistantMessage(index: number): boolean {
       @delete="emit('delete', $event)"
       @edit="(id, content) => emit('edit', id, content)"
     />
+
+    <!-- Streaming 占位消息 -->
+    <div
+      v-if="isStreaming && !(messages.length > 0 && messages[messages.length - 1].role === 'assistant')"
+      class="group/msg flex gap-3 py-3"
+    >
+      <div class="h-7 w-7 shrink-0 mt-0.5 rounded-full bg-muted flex items-center justify-center text-xs">AI</div>
+      <div class="flex-1 min-w-0 space-y-1">
+        <div class="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm text-muted-foreground bg-muted">
+          <span class="thinking-dots">正在思考</span>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.thinking-dots::after {
+  content: '';
+  animation: dots 1.5s steps(4, end) infinite;
+}
+
+@keyframes dots {
+  0%   { content: ''; }
+  25%  { content: '.'; }
+  50%  { content: '..'; }
+  75%  { content: '...'; }
+  100% { content: ''; }
+}
+</style>

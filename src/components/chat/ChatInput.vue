@@ -20,10 +20,11 @@ import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import {
-  Braces, FolderTree, ImagePlus, Send, Square, Trash2, Wrench,
+  Braces, FolderTree, ImagePlus, Send, Square, Trash2, Wrench, Crosshair,
 } from 'lucide-vue-next'
 import type { ToolDisplayItem } from '@/types'
 import { useAgentSettingsStore } from '@/stores/agent-settings'
+import { useChatUIStore } from '@/stores/chat-ui'
 import { useTabStore } from '@/stores/tab'
 
 const props = defineProps<{
@@ -33,6 +34,7 @@ const props = defineProps<{
   enabledTools?: Record<string, boolean>
   isWorkflowContext?: boolean
   workflowEditMode?: boolean
+  selectedNode?: { id: string; type: string; label: string } | null
 }>()
 
 const emit = defineEmits<{
@@ -49,6 +51,7 @@ const images = ref<string[]>([])
 
 const toolList = computed(() => props.tools ?? [])
 const agentSettingsStore = useAgentSettingsStore()
+const uiStore = useChatUIStore()
 const tabStore = useTabStore()
 
 /** 按分类分组工具列表 */
@@ -150,6 +153,22 @@ function removeImage(index: number) {
             ×
           </button>
         </div>
+      </InputGroupAddon>
+
+      <!-- 选中节点 Badge -->
+      <InputGroupAddon
+        v-if="isWorkflowContext && selectedNode"
+        align="block-start"
+        class="px-2 pt-1"
+      >
+        <Badge
+          :variant="uiStore.nodeContextEnabled ? 'default' : 'outline'"
+          class="cursor-pointer select-none gap-1 text-xs transition-colors"
+          @click="uiStore.toggleNodeContext()"
+        >
+          <Crosshair class="size-3" />
+          {{ selectedNode.label || selectedNode.type }}
+        </Badge>
       </InputGroupAddon>
 
       <!-- 输入框 -->

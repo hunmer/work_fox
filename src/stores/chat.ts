@@ -68,12 +68,14 @@ function buildWorkflowOptions(
   sessions: { value: ChatSession[] },
   currentSessionId: { value: string | null },
   workflowEditMode: boolean,
+  nodeContextEnabled: boolean,
 ) {
   const workflowStore = useTabStore().activeStore
   const agentSettingsStore = useAgentSettingsStore()
   const sessionData = sessions.value.find((s) => s.id === currentSessionId.value)
   if (!sessionData?.workflowId || !workflowStore?.currentWorkflow) return undefined
   const agentConfig = workflowStore.currentWorkflow.agentConfig
+  const selectedNode = nodeContextEnabled ? workflowStore.selectedNode : null
   return {
     mode: 'workflow' as const,
     workflowId: workflowStore.currentWorkflow.id,
@@ -86,6 +88,7 @@ function buildWorkflowOptions(
     },
     enabledPlugins: workflowStore.currentWorkflow.enabledPlugins || [],
     workflowEditMode,
+    selectedNode: selectedNode ? { id: selectedNode.id, type: selectedNode.type, label: selectedNode.label, data: selectedNode.data } : null,
     runtime: {
       cwd: agentConfig?.workspaceDir || agentSettingsStore.globalSettings.workspaceDir || undefined,
       additionalDirectories: agentConfig?.dataDir ? [agentConfig.dataDir] : undefined,
@@ -512,7 +515,7 @@ export function createChatStore(scope: string) {
         const result = await runAgentStream(
           history, content, images, callbacks,
           uiStore.targetTabId, uiStore.enabledToolNames,
-          buildWorkflowOptions(sessions, currentSessionId, uiStore.workflowEditMode),
+          buildWorkflowOptions(sessions, currentSessionId, uiStore.workflowEditMode, uiStore.nodeContextEnabled),
         )
         if (result) { currentRequestId = result.requestId; streamCleanup = result.cleanup }
       } catch (error) {

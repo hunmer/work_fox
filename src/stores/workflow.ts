@@ -80,23 +80,22 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () =>
     operationLog.value.unshift(entry)
     if (operationLog.value.length > MAX_HISTORY) operationLog.value.length = MAX_HISTORY
     // Capture AFTER state — caller modifies state synchronously after this call
-    Promise.resolve().then(() => { entry.snapshot = captureSnapshot() })
+    Promise.resolve().then(() => {
+      entry.snapshot = captureSnapshot()
+      persistLog()
+    })
     persistLog()
   }
 
   async function restoreToStep(index: number): Promise<void> {
     if (index < 0 || !currentWorkflow.value) return
-    const target = index + 1
-    for (let i = 1; i <= target && i < operationLog.value.length; i++) {
-      const entry = operationLog.value[i]
-      if (entry?.snapshot) {
-        applySnapshot(entry.snapshot)
-        if (i < target) await new Promise(r => setTimeout(r, 100))
-      }
-    }
-    operationLog.value.splice(0, target)
+    const entry = operationLog.value[index]
+    if (!entry?.snapshot) return
+    applySnapshot(entry.snapshot)
+    operationLog.value.splice(0, index)
     undoStack.value = []
     redoStack.value = []
+    persistLog()
   }
 
   function undo(): void {
@@ -679,7 +678,9 @@ export function createWorkflowStore(tabId: string) {
 
 // ====== Provide / Inject ======
 
-const WORKFLOW_STORE_KEY = Symbol('workflowStore')
+// HMR 时 Symbol 会重新创建导致 inject 失败，用全局注册表复用同一个 key
+const WORKFLOW_STORE_KEY: symbol = (globalThis as any).__WORKFLOW_STORE_KEY__
+  ?? ((globalThis as any).__WORKFLOW_STORE_KEY__ = Symbol('workflowStore'))
 
 export function provideWorkflowStore(store: WorkflowStore) {
   provide(WORKFLOW_STORE_KEY, store)
@@ -688,8 +689,6 @@ export function provideWorkflowStore(store: WorkflowStore) {
 export function useWorkflowStore(): WorkflowStore {
   const store = inject<WorkflowStore>(WORKFLOW_STORE_KEY)
   if (!store) {
-    // HMR 期间 provide/inject 可能丢失，返回 null 代替抛错
-    if (import.meta.hot) return null as unknown as WorkflowStore
     throw new Error('useWorkflowStore() must be called inside a WorkflowEditor')
   }
   return store

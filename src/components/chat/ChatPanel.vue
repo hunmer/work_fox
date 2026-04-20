@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import type { ChatStoreInstance } from '@/stores/chat'
 import { useAIProviderStore } from '@/stores/ai-provider'
 import { useChatUIStore } from '@/stores/chat-ui'
+import { useTabStore } from '@/stores/tab'
 import { BROWSER_TOOL_LIST } from '@/lib/agent/tools'
 import { WORKFLOW_TOOL_DEFINITIONS } from '@/lib/agent/workflow-tools'
 import type { ToolDisplayItem } from '@/types'
@@ -22,6 +23,7 @@ const props = defineProps<{
 
 const providerStore = useAIProviderStore()
 const uiStore = useChatUIStore()
+const tabStore = useTabStore()
 const showSettings = ref(false)
 const showWorkflowWorkspaceDialog = ref(false)
 const pluginTools = ref<ToolDisplayItem[]>([])
@@ -73,6 +75,12 @@ function handleToggleTool(toolName: string) {
 const isWorkflowContext = computed(() => {
   const session = props.chat.currentSession
   return !!session?.workflowId
+})
+
+const selectedNode = computed(() => {
+  const node = tabStore.activeStore?.selectedNode
+  if (!node) return null
+  return { id: node.id, type: node.type, label: node.label }
 })
 
 function handleToggleWorkflowEdit(enabled: boolean) {
@@ -161,6 +169,7 @@ function handleEdit(messageId: string, newContent: string) {
       :enabled-tools="enabledTools"
       :is-workflow-context="isWorkflowContext"
       :workflow-edit-mode="uiStore.workflowEditMode"
+      :selected-node="selectedNode"
       @send="handleSend"
       @stop="chat.stopGeneration()"
       @clear="handleClear"
