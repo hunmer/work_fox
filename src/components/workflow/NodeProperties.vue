@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Bug, Loader2, CheckCircle2, XCircle, ChevronDown, ChevronRight, Import, FileDown, Info, Braces, Plus, Trash2 } from 'lucide-vue-next'
+import { JsonEditor } from '@/components/ui/json-editor'
 import OutputFieldEditor from './OutputFieldEditor.vue'
 import ConditionEditor from './ConditionEditor.vue'
 import VariablePicker from './VariablePicker.vue'
@@ -123,16 +124,6 @@ async function handleDebug() {
   }
   outputExpanded.value = true
   await store.debugSingleNode(store.selectedNodeId)
-}
-
-function formatOutput(value: any): string {
-  if (value === undefined || value === null) return ''
-  if (typeof value === 'string') return value
-  try {
-    return JSON.stringify(value, null, 2)
-  } catch {
-    return String(value)
-  }
 }
 
 /** 将任意值推断为 OutputField 类型 */
@@ -284,9 +275,14 @@ function confirmImport() {
           <!-- 输出结果 -->
           <div
             v-if="store.debugNodeResult.output !== undefined"
-            class="rounded bg-muted p-2"
+            class="mt-1"
           >
-            <pre class="text-[11px] font-mono text-foreground whitespace-pre-wrap break-all max-h-40 overflow-auto">{{ formatOutput(store.debugNodeResult.output) }}</pre>
+            <JsonEditor
+              :model-value="store.debugNodeResult.output"
+              :read-only="true"
+              mode="tree"
+              :height="240"
+            />
           </div>
         </div>
       </div>
