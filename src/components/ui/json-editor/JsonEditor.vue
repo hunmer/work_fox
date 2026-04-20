@@ -35,28 +35,30 @@ function handleChange(val: any) {
 </script>
 
 <template>
-  <div
-    class="json-editor-wrapper rounded-md border border-border overflow-auto w-full"
+  <div class="json-editor-wrapper rounded-md border border-border overflow-auto w-full"
     :class="{ 'jse-theme-dark': isDark, 'jse-readonly': readonly }"
-    :style="{ height: typeof height === 'number' ? `${height}px` : height }"
-  >
-    <JsonEditorVue
-      :model-value="value"
-      :mode="mode"
-      :read-only="readonly"
-      :main-menu-bar="mainMenuBar"
-      :navigation-bar="navigationBar"
-      :status-bar="statusBar"
-      @update:model-value="handleChange"
-    />
+    :style="{ height: typeof height === 'number' ? `${height}px` : height }">
+    <JsonEditorVue :model-value="value" :mode="mode" :read-only="readonly" :main-menu-bar="mainMenuBar"
+      :navigation-bar="navigationBar" :status-bar="statusBar" @update:model-value="handleChange" />
   </div>
 </template>
 
 <style>
-
-.json-editor-wrapper > div,
+.json-editor-wrapper>div,
 .json-editor-wrapper .jse-main {
   height: 100%;
+}
+
+.json-editor-wrapper {
+  font-size: 8px;
+}
+
+.json-editor-wrapper .jse-json-node,
+json-editor-wrapper .jse-value,
+.json-editor-wrapper .jse-key,
+.json-editor-wrapper .jse-string,
+.json-editor-wrapper .jse-number {
+  font-size: 12px;
 }
 
 .json-editor-wrapper.jse-readonly .jse-value,
