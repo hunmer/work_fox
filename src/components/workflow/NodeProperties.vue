@@ -116,7 +116,11 @@ const nodeOutputs = computed<OutputField[]>({
 })
 
 async function handleDebug() {
-  if (!store.selectedNodeId || isDebugging.value) return
+  if (!store.selectedNodeId) return
+  if (isDebugging.value) {
+    store.cancelDebug()
+    return
+  }
   outputExpanded.value = true
   await store.debugSingleNode(store.selectedNodeId)
 }
@@ -218,9 +222,8 @@ function confirmImport() {
       <div class="px-3 py-2 border-b border-border">
         <Button
           size="sm"
-          variant="outline"
+          :variant="isDebugging ? 'destructive' : 'outline'"
           class="w-full h-7 text-xs gap-1.5"
-          :disabled="isDebugging"
           @click="handleDebug"
         >
           <Loader2
@@ -231,7 +234,7 @@ function confirmImport() {
             v-else
             class="w-3 h-3"
           />
-          {{ isDebugging ? '执行中...' : '调试此节点' }}
+          {{ isDebugging ? '取消调试' : '调试此节点' }}
         </Button>
       </div>
 

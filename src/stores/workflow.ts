@@ -471,6 +471,7 @@ function createDebugActions(
   const debugNodeStatus = ref<'idle' | 'running' | 'completed' | 'error'>('idle')
   const debugNodeResult = ref<{ status: 'completed' | 'error'; output?: any; error?: string; duration: number } | null>(null)
   const debugNodeId = ref<string | null>(null)
+  let debugEngine: WorkflowEngine | null = null
 
   async function debugSingleNode(nodeId: string): Promise<void> {
     if (!currentWorkflow.value) return
@@ -481,19 +482,30 @@ function createDebugActions(
     debugNodeResult.value = null
     debugNodeId.value = nodeId
 
-    const tempEngine = new WorkflowEngine([node], [], undefined, {
+    debugEngine = new WorkflowEngine([node], [], undefined, {
       workflowId: currentWorkflow.value.id,
       workflowName: currentWorkflow.value.name,
       workflowDescription: currentWorkflow.value.description,
       enabledPlugins: currentWorkflow.value.enabledPlugins || [],
     })
-    const result = await tempEngine.debugSingleNode(node, executionContext.value)
+    const result = await debugEngine.debugSingleNode(node, executionContext.value)
+    debugEngine = null
 
     debugNodeResult.value = result
     debugNodeStatus.value = result.status
   }
 
-  return { debugNodeStatus, debugNodeResult, debugNodeId, debugSingleNode }
+  function cancelDebug() {
+    if (debugEngine) {
+      debugEngine.stop()
+      debugEngine = null
+    }
+    debugNodeStatus.value = 'idle'
+    debugNodeResult.value = null
+    debugNodeId.value = null
+  }
+
+  return { debugNodeStatus, debugNodeResult, debugNodeId, debugSingleNode, cancelDebug }
 }
 
 // ====== AI 增量更新 ======
@@ -629,6 +641,7 @@ export function createWorkflowStore(tabId: string) {
       debugNodeResult: debugActions.debugNodeResult,
       debugNodeId: debugActions.debugNodeId,
       debugSingleNode: debugActions.debugSingleNode,
+      cancelDebug: debugActions.cancelDebug,
       undo: undoRedo.undo,
       redo: undoRedo.redo,
       canUndo: undoRedo.canUndo,

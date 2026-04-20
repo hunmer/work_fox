@@ -545,12 +545,6 @@ export async function startClaudeAgentRun(
     }
 
     for await (const message of agentQuery) {
-      console.debug('[ClaudeAgentRuntime] stream message:', {
-        requestId: _requestId,
-        type: message.type,
-        subtype: 'subtype' in message ? message.subtype : undefined,
-      })
-
       if (message.type === 'stream_event') {
         bridgePartialMessage(mainWindow, _requestId, streamState, message.event, toolAdapter.resolveDisplayToolName)
         continue
