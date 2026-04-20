@@ -9,9 +9,19 @@
       :data-sub-html="item.caption"
       class="gallery-item"
     >
-      <img v-if="item.thumb" :src="item.thumb" :alt="item.caption || ''" class="gallery-thumb" />
+      <img
+        v-if="item.thumb"
+        :src="item.thumb"
+        :alt="item.caption || ''"
+        class="gallery-thumb"
+        loading="lazy"
+        @load="onThumbLoad($event)"
+      />
       <div v-else class="gallery-thumb-placeholder">
         <component :is="item.type === 'video' ? VideoIcon : ImageIcon" class="size-8 text-muted-foreground" />
+      </div>
+      <div class="gallery-loading">
+        <div class="gallery-skeleton" />
       </div>
       <div v-if="item.caption" class="gallery-caption">{{ item.caption }}</div>
     </a>
@@ -56,6 +66,13 @@ const emit = defineEmits<{
 }>()
 
 const containerRef = ref<HTMLElement | null>(null)
+
+const onThumbLoad = (e: Event) => {
+  const img = e.target as HTMLImageElement
+  img.classList.add('loaded')
+  const loading = img.parentElement?.querySelector('.gallery-loading') as HTMLElement
+  if (loading) loading.style.display = 'none'
+}
 const lgInstance = ref<any>(null)
 const defaultPlugins = [lgThumbnail, lgZoom, lgVideo]
 
@@ -129,6 +146,33 @@ onBeforeUnmount(() => {
   height: 100%;
   object-fit: cover;
   border-radius: 0.5rem;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.gallery-thumb.loaded {
+  opacity: 1;
+}
+
+.gallery-loading {
+  position: absolute;
+  inset: 0;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.gallery-skeleton {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--muted) / 0.5) 50%, hsl(var(--muted)) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 .gallery-thumb-placeholder {

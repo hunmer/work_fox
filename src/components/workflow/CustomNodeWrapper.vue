@@ -58,13 +58,15 @@ const currentNodeState = computed<NodeRunState>(() => {
 
 /** 执行时的节点状态 */
 const nodeStatus = computed(() => {
-  const step = store.executionLog?.steps.find((s) => s.nodeId === props.id)
+  const log = store.isPreview ? store.selectedExecutionLog : store.executionLog
+  const step = log?.steps.find((s) => s.nodeId === props.id)
   return step?.status || 'idle'
 })
 
 /** 当前节点的执行日志 */
 const nodeLogs = computed(() => {
-  const step = store.executionLog?.steps.find((s) => s.nodeId === props.id)
+  const log = store.isPreview ? store.selectedExecutionLog : store.executionLog
+  const step = log?.steps.find((s) => s.nodeId === props.id)
   return step?.logs || []
 })
 
