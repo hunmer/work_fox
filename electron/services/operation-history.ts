@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from '
 export interface OperationEntry {
   description: string
   timestamp: number
+  snapshot?: string
 }
 
 export class OperationHistoryStore {

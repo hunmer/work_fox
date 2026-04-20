@@ -53,6 +53,10 @@ const settingsDialogOpen = ref(false)
 const pluginPickerOpen = ref(false)
 const FLOW_ID = `workflow-editor-flow-${props.tab.id}`
 
+watch(() => store.selectedNodeId, (id) => {
+  if (id) store.rightPanelTab = 'properties'
+})
+
 const {
   project,
   vueFlowRef,
@@ -146,11 +150,8 @@ function onNodeSelectDialogClose(open: boolean) {
 }
 
 function onSelectionChange({ nodes: selectedNodes }: any) {
+  console.log('[WorkflowEditor] selection-change:', selectedNodes?.map((n: any) => n.id))
   store.selectedNodeIds = selectedNodes?.map((n: any) => n.id) || []
-}
-
-function onNodeClick({ node }: any) {
-  store.selectedNodeIds = node?.id ? [node.id] : []
 }
 
 function onPaneClick() {
@@ -336,7 +337,6 @@ function onConnect(params: any) {
                 @connect-end="onConnectEnd"
                 @dragover="onDragOver"
                 @drop="onDrop"
-                @node-click="onNodeClick"
                 @nodes-initialized="handleNodesInitialized as any"
                 @pane-click="onPaneClick"
                 @selection-change="onSelectionChange"

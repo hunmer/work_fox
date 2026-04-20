@@ -4,6 +4,7 @@ import {
   getNodeDefinitionsByCategory,
   searchNodeDefinitions,
   allNodeDefinitions,
+  pluginNodesVersion,
 } from '@/lib/workflow/nodeRegistry'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
 import {
@@ -29,11 +30,13 @@ const searchQuery = ref('')
 const selectedCategory = ref<string | null>(null)
 
 const categories = computed(() => {
+  void pluginNodesVersion.value
   const grouped = getNodeDefinitionsByCategory()
   return Object.keys(grouped)
 })
 
 const filteredNodes = computed(() => {
+  void pluginNodesVersion.value
   if (searchQuery.value.trim()) {
     return searchNodeDefinitions(searchQuery.value)
   }
@@ -41,7 +44,8 @@ const filteredNodes = computed(() => {
     const grouped = getNodeDefinitionsByCategory()
     return grouped[selectedCategory.value] || []
   }
-  return allNodeDefinitions
+  const grouped = getNodeDefinitionsByCategory()
+  return Object.values(grouped).flat()
 })
 
 function getIcon(name: string) {

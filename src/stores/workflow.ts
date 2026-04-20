@@ -76,14 +76,13 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () =>
     undoStack.value.push(snapshot)
     if (undoStack.value.length > MAX_HISTORY) undoStack.value.shift()
     redoStack.value = []
-    const entry: { description: string; timestamp: number; snapshot?: string } = { description, timestamp: Date.now() }
+    const entry: { description: string; timestamp: number; snapshot?: string } = {
+      description,
+      timestamp: Date.now(),
+      snapshot,
+    }
     operationLog.value.unshift(entry)
     if (operationLog.value.length > MAX_HISTORY) operationLog.value.length = MAX_HISTORY
-    // Capture AFTER state — caller modifies state synchronously after this call
-    Promise.resolve().then(() => {
-      entry.snapshot = captureSnapshot()
-      persistLog()
-    })
     persistLog()
   }
 
@@ -92,7 +91,7 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () =>
     const entry = operationLog.value[index]
     if (!entry?.snapshot) return
     applySnapshot(entry.snapshot)
-    operationLog.value.splice(0, index)
+    operationLog.value.splice(0, index + 1)
     undoStack.value = []
     redoStack.value = []
     persistLog()
@@ -100,18 +99,20 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () =>
 
   function undo(): void {
     if (undoStack.value.length === 0) return
+    const snapshot = captureSnapshot()
     redoStack.value.push(captureSnapshot())
     applySnapshot(undoStack.value.pop()!)
-    operationLog.value.unshift({ description: '撤销操作', timestamp: Date.now(), snapshot: captureSnapshot() })
+    operationLog.value.unshift({ description: '撤销操作', timestamp: Date.now(), snapshot })
     if (operationLog.value.length > MAX_HISTORY) operationLog.value.length = MAX_HISTORY
     persistLog()
   }
 
   function redo(): void {
     if (redoStack.value.length === 0) return
+    const snapshot = captureSnapshot()
     undoStack.value.push(captureSnapshot())
     applySnapshot(redoStack.value.pop()!)
-    operationLog.value.unshift({ description: '重做操作', timestamp: Date.now(), snapshot: captureSnapshot() })
+    operationLog.value.unshift({ description: '重做操作', timestamp: Date.now(), snapshot })
     if (operationLog.value.length > MAX_HISTORY) operationLog.value.length = MAX_HISTORY
     persistLog()
   }
@@ -126,8 +127,7 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () =>
     saveTimer = setTimeout(() => {
       const a = api()
       if (a?.operationHistory?.save) {
-        const entries = operationLog.value.map(({ snapshot: _s, ...rest }) => rest)
-        a.operationHistory.save(currentWorkflow.value!.id, entries)
+        a.operationHistory.save(currentWorkflow.value!.id, operationLog.value)
       }
     }, 500)
   }
@@ -596,6 +596,7 @@ export function createWorkflowStore(tabId: string) {
     const workflowFolders = ref<WorkflowFolder[]>([])
     const currentWorkflow = ref<Workflow | null>(null)
     const selectedNodeIds = ref<string[]>([])
+    const rightPanelTab = ref('properties')
     const executionStatus = ref<EngineStatus>('idle')
     const executionLog = ref<ExecutionLog | null>(null)
     const executionContext = ref<Record<string, any>>({})
@@ -644,6 +645,7 @@ export function createWorkflowStore(tabId: string) {
 
     return {
       tabId,
+      rightPanelTab,
       workflows, workflowFolders, currentWorkflow, selectedNodeId, selectedNodeIds,
       rootFolders, selectedNode, selectedNodes, executionValidationError,
       executionStatus, executionLog, executionContext,

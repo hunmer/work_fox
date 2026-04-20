@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Settings2, GitBranch, History, Bot } from 'lucide-vue-next'
@@ -11,7 +11,10 @@ import { createChatStore } from '@/stores/chat'
 import { useWorkflowStore } from '@/stores/workflow'
 
 const workflowStore = useWorkflowStore()
-const activeTab = ref('properties')
+const activeTab = computed({
+  get: () => workflowStore.rightPanelTab,
+  set: (v) => { workflowStore.rightPanelTab = v },
+})
 const workflowChat = createChatStore('workflow')
 
 // 监听 tab 切换，自动绑定工作流会话

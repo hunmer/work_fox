@@ -1,7 +1,11 @@
 // src/lib/workflow/nodeRegistry.ts
+import { ref } from 'vue'
 import { BROWSER_TOOL_LIST } from '@/lib/agent/tools'
 import type { NodeTypeDefinition, NodeProperty } from './types'
 import { customNodeDefinitions } from './nodes'
+
+/** 插件节点版本号，每次 register 递增，供 computed 响应式依赖 */
+export const pluginNodesVersion = ref(0)
 
 /** 工具 schema property 到 NodeProperty 的转换 */
 function schemaToProps(
@@ -149,11 +153,13 @@ const pluginNodeDefinitions: NodeTypeDefinition[] = []
 export function registerPluginNodeDefinitions(nodes: any[]): void {
   pluginNodeDefinitions.length = 0
   pluginNodeDefinitions.push(...nodes)
+  pluginNodesVersion.value++
 }
 
 /** 清除插件节点定义 */
 export function clearPluginNodeDefinitions(): void {
   pluginNodeDefinitions.length = 0
+  pluginNodesVersion.value++
 }
 
 /** 按类别分组 */
