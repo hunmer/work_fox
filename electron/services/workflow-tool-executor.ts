@@ -473,6 +473,31 @@ function handleInsertNode(ctx: ToolContext): ToolHandlerResult {
   }
 }
 
+function handleSearchNodes(ctx: ToolContext): ToolHandlerResult {
+  const { args, nodes } = ctx
+  const { type, label, category, description } = args || {}
+  if (!type && !label && !category && !description) {
+    return { result: { success: false, message: '至少需要一个搜索条件: type, label, category, description' }, mutated: false, nodes, edges: ctx.edges }
+  }
+  const matches = nodes.filter((n: any) => {
+    if (type && !(n.type || '').toLowerCase().includes(type.toLowerCase())) return false
+    if (label && !(n.label || '').toLowerCase().includes(label.toLowerCase())) return false
+    if (category && !(n.category || '').toLowerCase().includes(category.toLowerCase())) return false
+    if (description && !(n.description || '').toLowerCase().includes(description.toLowerCase())) return false
+    return true
+  })
+  return {
+    result: {
+      success: true,
+      message: `匹配到 ${matches.length} 个节点`,
+      data: { nodes: matches.map((n: any) => ({ id: n.id, type: n.type, label: n.label, category: n.category, description: n.description, data: n.data })) },
+    },
+    mutated: false,
+    nodes,
+    edges: ctx.edges,
+  }
+}
+
 function handleAutoLayout(ctx: ToolContext): ToolHandlerResult {
   let { nodes, edges, changes } = ctx
   if (nodes.length === 0) {
@@ -505,6 +530,7 @@ const WORKFLOW_TOOL_HANDLERS = new Map<string, ToolHandler>([
   ['insert_node', handleInsertNode],
   ['batch_update', handleBatchUpdate],
   ['auto_layout', handleAutoLayout],
+  ['search_nodes', handleSearchNodes],
 ])
 
 // ====== 主入口：执行工作流工具 ======

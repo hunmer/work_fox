@@ -16,6 +16,7 @@ export const WORKFLOW_TOOL_OWNERS: Record<string, WorkflowToolOwner> = {
   insert_node: 'main',
   batch_update: 'main',
   auto_layout: 'main',
+  search_nodes: 'main',
   execute_workflow_sync: 'renderer',
   execute_workflow_async: 'renderer',
   get_workflow_result: 'renderer',
