@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import {
   Settings, Palette, Keyboard, Info, Bot, Wrench
 } from 'lucide-vue-next'
@@ -10,7 +10,7 @@ import SettingsAbout from './SettingsAbout.vue'
 import SettingsModels from './SettingsModels.vue'
 import SettingsAgent from './SettingsAgent.vue'
 
-const props = defineProps<{ open: boolean; initialTab?: string; workflowOnly?: boolean }>()
+const props = defineProps<{ open: boolean; initialTab?: string }>()
 const emit = defineEmits<{ 'update:open': [value: boolean] }>()
 
 const allTabs = [
@@ -20,9 +20,7 @@ const allTabs = [
   { key: 'shortcuts', label: '快捷键', icon: Keyboard },
   { key: 'about', label: '关于', icon: Info }
 ]
-const tabs = computed(() => props.workflowOnly
-  ? allTabs.filter((tab) => tab.key === 'agent')
-  : allTabs)
+const tabs = allTabs
 const activeTab = ref('models')
 
 watch(() => props.open, (open) => {
@@ -66,7 +64,7 @@ watch(() => props.open, (open) => {
 
         <div class="flex-1 p-6 overflow-y-auto">
           <SettingsModels v-if="activeTab === 'models'" />
-          <SettingsAgent v-else-if="activeTab === 'agent'" :workflow-only="workflowOnly" />
+          <SettingsAgent v-else-if="activeTab === 'agent'" />
           <SettingsTheme v-else-if="activeTab === 'theme'" />
           <SettingsShortcut v-else-if="activeTab === 'shortcuts'" />
           <SettingsAbout v-else-if="activeTab === 'about'" />

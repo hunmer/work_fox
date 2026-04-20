@@ -378,7 +378,6 @@ function onConnect(params: any) {
     <SettingsDialog
       :open="settingsDialogOpen"
       initial-tab="agent"
-      :workflow-only="true"
       @update:open="settingsDialogOpen = $event"
     />
     <PluginPickerDialog

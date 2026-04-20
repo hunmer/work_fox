@@ -10,6 +10,7 @@ import ChatMessageList from './ChatMessageList.vue'
 import ChatInput from './ChatInput.vue'
 import ModelSelector from './ModelSelector.vue'
 import SessionManager from './SessionManager.vue'
+import WorkflowWorkspaceDialog from './WorkflowWorkspaceDialog.vue'
 import { Button } from '@/components/ui/button'
 import { Settings, X } from 'lucide-vue-next'
 import SettingsDialog from '@/components/settings/SettingsDialog.vue'
@@ -22,7 +23,7 @@ const props = defineProps<{
 const providerStore = useAIProviderStore()
 const uiStore = useChatUIStore()
 const showSettings = ref(false)
-const settingsInitialTab = ref('models')
+const showWorkflowWorkspaceDialog = ref(false)
 const pluginTools = ref<ToolDisplayItem[]>([])
 
 async function loadPluginTools(pluginIds: string[]) {
@@ -93,7 +94,18 @@ function handleClear() {
 }
 
 function handleOpenAgentSettings() {
-  settingsInitialTab.value = 'agent'
+  if (isWorkflowContext.value) {
+    showWorkflowWorkspaceDialog.value = true
+    return
+  }
+  showSettings.value = true
+}
+
+function handleOpenSettings() {
+  if (isWorkflowContext.value) {
+    showWorkflowWorkspaceDialog.value = true
+    return
+  }
   showSettings.value = true
 }
 
@@ -112,7 +124,7 @@ function handleEdit(messageId: string, newContent: string) {
         variant="ghost"
         size="icon"
         class="h-7 w-7"
-        @click="showSettings = true"
+        @click="handleOpenSettings"
       >
         <Settings class="h-4 w-4" />
       </Button>
@@ -160,8 +172,13 @@ function handleEdit(messageId: string, newContent: string) {
     <!-- 设置对话框 -->
     <SettingsDialog
       :open="showSettings"
-      :initial-tab="settingsInitialTab"
+      initial-tab="models"
       @update:open="showSettings = $event"
+    />
+
+    <WorkflowWorkspaceDialog
+      :open="showWorkflowWorkspaceDialog"
+      @update:open="showWorkflowWorkspaceDialog = $event"
     />
   </div>
 </template>
