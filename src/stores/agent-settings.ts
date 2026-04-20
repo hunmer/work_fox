@@ -35,6 +35,7 @@ export const useAgentSettingsStore = defineStore('agent-settings', () => {
   const tabStore = useTabStore()
   const activeWorkflow = computed(() => tabStore.activeStore?.currentWorkflow ?? null)
   const activeWorkflowAgentConfig = computed(() => activeWorkflow.value?.agentConfig ?? null)
+  const minimapVisible = computed(() => globalSettings.value.minimapVisible !== false)
 
   async function init() {
     if (initialized.value) return
@@ -69,6 +70,11 @@ export const useAgentSettingsStore = defineStore('agent-settings', () => {
   function toggleGlobalResource(kind: 'skills' | 'mcps', id: string) {
     const item = globalSettings.value[kind].find((entry) => entry.id === id)
     if (item) item.enabled = !item.enabled
+  }
+
+  async function toggleMinimap() {
+    globalSettings.value.minimapVisible = !minimapVisible.value
+    await saveGlobalSettings()
   }
 
   function ensureWorkflowConfig(): WorkflowAgentConfig | null {
@@ -117,6 +123,7 @@ export const useAgentSettingsStore = defineStore('agent-settings', () => {
     saving,
     globalSettings,
     activeWorkflowAgentConfig,
+    minimapVisible,
     init,
     saveGlobalSettings,
     setGlobalWorkspaceDir,
@@ -128,5 +135,6 @@ export const useAgentSettingsStore = defineStore('agent-settings', () => {
     upsertWorkflowResource,
     removeWorkflowResource,
     toggleWorkflowResource,
+    toggleMinimap,
   }
 })

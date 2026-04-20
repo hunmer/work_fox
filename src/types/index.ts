@@ -285,6 +285,7 @@ export interface AgentGlobalSettings {
   workspaceDir: string
   skills: AgentResourceItem[]
   mcps: AgentResourceItem[]
+  minimapVisible?: boolean
 }
 
 export interface WorkflowAgentConfig {

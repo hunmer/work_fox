@@ -69,6 +69,7 @@ export interface AgentGlobalSettings {
   workspaceDir: string
   skills: AgentResourceItem[]
   mcps: AgentResourceItem[]
+  minimapVisible?: boolean
 }
 
 export interface WorkflowAgentConfig {
@@ -106,6 +107,7 @@ const defaultAgentSettings: AgentGlobalSettings = {
   workspaceDir: '',
   skills: [],
   mcps: [],
+  minimapVisible: true,
 }
 
 const store = new Store<StoreSchema>({
@@ -183,6 +185,7 @@ export function getAgentSettings(): AgentGlobalSettings {
     workspaceDir: value.workspaceDir || '',
     skills: Array.isArray(value.skills) ? value.skills : [],
     mcps: Array.isArray(value.mcps) ? value.mcps : [],
+    minimapVisible: value.minimapVisible !== false,
   }
 }
 
@@ -191,6 +194,7 @@ export function setAgentSettings(settings: AgentGlobalSettings): AgentGlobalSett
     workspaceDir: settings.workspaceDir || '',
     skills: Array.isArray(settings.skills) ? settings.skills : [],
     mcps: Array.isArray(settings.mcps) ? settings.mcps : [],
+    minimapVisible: settings.minimapVisible !== false,
   }
   store.set('agentSettings', normalized)
   return normalized

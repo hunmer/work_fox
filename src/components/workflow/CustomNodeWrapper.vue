@@ -3,7 +3,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import type { NodeProps } from '@vue-flow/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
-import { X, CircleSlash, SkipForward, FileText } from 'lucide-vue-next'
+import { X, CircleSlash, SkipForward, FileText, Info, Copy } from 'lucide-vue-next'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
 import { useWorkflowStore } from '@/stores/workflow'
@@ -15,6 +15,15 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import JsonEditor from '@/components/ui/json-editor/JsonEditor.vue'
 import {
   Tooltip,
   TooltipContent,
@@ -144,12 +153,24 @@ const displayLabel = computed(() => props.data?.label || definition.value?.label
 const CustomViewComponent = computed(() => definition.value?.customView)
 
 /** 自定义视图所需的 props */
+const executionStep = computed(() =>
+  store.executionLog?.steps.find((s) => s.nodeId === props.id)
+)
+
 const customViewProps = computed(() => {
   if (!CustomViewComponent.value) return {}
   if (definition.value?.type === 'gallery_preview') {
     const items = props.data?.items
-    const validItems = Array.isArray(items) ? items : []
-    return { items: nodeStatus.value === 'completed' ? validItems : [] }
+    // items 是真正的数组，直接用
+    if (Array.isArray(items)) {
+      return { items: nodeStatus.value === 'completed' ? items : [] }
+    }
+    // items 是变量表达式，从执行结果取解析后的数据
+    const outputItems = executionStep.value?.output?.items
+    if (Array.isArray(outputItems)) {
+      return { items: outputItems }
+    }
+    return { items: [] }
   }
   return props.data || {}
 })
@@ -180,6 +201,39 @@ function getHandleTop(index: number, total: number): string {
 onMounted(() => {
   refreshNodeInternals('mounted')
 })
+
+const showNodeInfo = ref(false)
+const nodeInfoData = computed(() => {
+  const node = store.currentWorkflow?.nodes.find((n) => n.id === props.id)
+  const step = store.executionLog?.steps.find((s) => s.nodeId === props.id)
+  return {
+    id: props.id,
+    type: props.type,
+    label: props.data?.label || definition.value?.label || props.type,
+    nodeState: node?.nodeState || 'normal',
+    definition: {
+      type: definition.value?.type,
+      icon: definition.value?.icon,
+      category: definition.value?.category,
+    },
+    data: props.data,
+    execution: step
+      ? {
+          status: step.status,
+          startedAt: step.startedAt,
+          finishedAt: step.finishedAt,
+          input: step.input,
+          output: step.output,
+          error: step.error,
+          logs: step.logs,
+        }
+      : null,
+  }
+})
+
+async function copyNodeInfo() {
+  await navigator.clipboard.writeText(JSON.stringify(nodeInfoData.value, null, 2))
+}
 </script>
 
 <template>
@@ -339,6 +393,10 @@ onMounted(() => {
       </ContextMenuItem>
       <template v-if="!isBoundaryNode">
         <ContextMenuSeparator />
+        <ContextMenuItem @click="showNodeInfo = true">
+          <Info class="w-4 h-4 mr-2" />
+          查看节点信息
+        </ContextMenuItem>
         <ContextMenuItem @click="handleClone">
           复制节点
         </ContextMenuItem>
@@ -351,6 +409,23 @@ onMounted(() => {
       </template>
     </ContextMenuContent>
   </ContextMenu>
+
+  <Dialog :open="showNodeInfo" @update:open="showNodeInfo = $event">
+    <DialogContent class="max-w-2xl max-h-[80vh] flex flex-col">
+      <DialogHeader>
+        <DialogTitle>节点信息 - {{ nodeInfoData.label }}</DialogTitle>
+      </DialogHeader>
+      <div class="flex-1 overflow-auto">
+        <JsonEditor :model-value="nodeInfoData" :readonly="true" :height="400" />
+      </div>
+      <DialogFooter>
+        <Button variant="outline" size="sm" @click="copyNodeInfo">
+          <Copy class="w-4 h-4 mr-1" />
+          复制 JSON
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <style scoped>

@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { RotateCcw, RotateCw, LayoutGrid, EyeOff } from 'lucide-vue-next'
+import { RotateCcw, RotateCw, LayoutGrid, EyeOff, Map } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useWorkflowStore } from '@/stores/workflow'
+import { useAgentSettingsStore } from '@/stores/agent-settings'
 import dagre from '@dagrejs/dagre'
 
 const store = useWorkflowStore()
+const agentSettings = useAgentSettingsStore()
 
 function handleAutoLayout() {
   const wf = store.currentWorkflow
@@ -107,6 +109,22 @@ function handleAutoLayout() {
           class="text-xs"
         >
           智能布局
+        </TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-7 w-7 p-0"
+            :class="{ 'text-blue-500': agentSettings.minimapVisible }"
+            @click="agentSettings.toggleMinimap()"
+          >
+            <Map class="w-3.5 h-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top" class="text-xs">
+          {{ agentSettings.minimapVisible ? '隐藏' : '显示' }}小地图
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

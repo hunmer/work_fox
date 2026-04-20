@@ -35,6 +35,7 @@ import { useFlowCanvas } from '@/composables/workflow/useFlowCanvas'
 import { useWorkflowFileActions } from '@/composables/workflow/useWorkflowFileActions'
 import { useClipboard } from '@/composables/workflow/useClipboard'
 import { useEditorShortcuts } from '@/composables/workflow/useEditorShortcuts'
+import { useAgentSettingsStore } from '@/stores/agent-settings'
 
 const props = defineProps<{
   tab: Tab
@@ -45,6 +46,7 @@ provideWorkflowStore(props.store)
 
 const tabStore = useTabStore()
 const store = props.store
+const agentSettings = useAgentSettingsStore()
 const listDialogOpen = ref(false)
 const listDialogCreateMode = ref(false)
 const nodeSelectOpen = ref(false)
@@ -243,6 +245,7 @@ let cleanupFileUpdates: (() => void) | null = null
 let cleanupWorkflowToolRequests: (() => void) | null = null
 let autoSaveTimer: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
+  agentSettings.init()
   cleanupFileUpdates = store.listenForFileUpdates()
   cleanupWorkflowToolRequests = store.listenForWorkflowToolRequests()
   if (!store.currentWorkflow) {
@@ -354,7 +357,7 @@ function onConnect(params: any) {
                 @pane-click="onPaneClick"
               >
                 <Background />
-                <MiniMap />
+                <MiniMap v-if="agentSettings.minimapVisible" />
                 <template #edge-custom="edgeProps">
                   <CustomEdge
                     v-bind="edgeProps"
