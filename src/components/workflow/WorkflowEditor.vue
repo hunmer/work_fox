@@ -53,10 +53,6 @@ const settingsDialogOpen = ref(false)
 const pluginPickerOpen = ref(false)
 const FLOW_ID = `workflow-editor-flow-${props.tab.id}`
 
-watch(() => store.selectedNodeId, (id) => {
-  if (id) store.rightPanelTab = 'properties'
-})
-
 const {
   project,
   vueFlowRef,
@@ -149,9 +145,19 @@ function onNodeSelectDialogClose(open: boolean) {
   }
 }
 
-function onSelectionChange({ nodes: selectedNodes }: any) {
-  console.log('[WorkflowEditor] selection-change:', selectedNodes?.map((n: any) => n.id))
-  store.selectedNodeIds = selectedNodes?.map((n: any) => n.id) || []
+function onNodeClick({ node, event }: any) {
+  const nodeId = node?.id
+  if (!nodeId) return
+  if (event?.shiftKey || event?.metaKey) {
+    const ids = [...store.selectedNodeIds]
+    const idx = ids.indexOf(nodeId)
+    if (idx >= 0) ids.splice(idx, 1)
+    else ids.push(nodeId)
+    store.selectedNodeIds = ids
+  } else {
+    store.selectedNodeIds = [nodeId]
+  }
+  store.rightPanelTab = 'properties'
 }
 
 function onPaneClick() {
@@ -337,9 +343,9 @@ function onConnect(params: any) {
                 @connect-end="onConnectEnd"
                 @dragover="onDragOver"
                 @drop="onDrop"
+                @node-click="onNodeClick"
                 @nodes-initialized="handleNodesInitialized as any"
                 @pane-click="onPaneClick"
-                @selection-change="onSelectionChange"
               >
                 <Background />
                 <MiniMap />

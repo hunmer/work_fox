@@ -169,8 +169,6 @@ function removeImage(index: number) {
           <Crosshair class="size-3" />
           {{ selectedNodes.length === 1 ? (selectedNodes[0].label || selectedNodes[0].type) : `${selectedNodes.length} 个节点` }}
         </Badge>
-        <!-- debug -->
-        <span class="text-[10px] text-muted-foreground">{{ JSON.stringify(selectedNodes?.map(n => n.id)) }}, ctx: {{ uiStore.nodeContextEnabled }}</span>
       </InputGroupAddon>
 
       <!-- 输入框 -->
