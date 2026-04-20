@@ -235,7 +235,7 @@ onMounted(() => {
         </div>
 
         <!-- 自定义视图内容区 -->
-        <div v-if="hasCustomView" class="px-2 pb-2 custom-view-area">
+        <div v-if="hasCustomView" class="px-2 pb-2 custom-view-area" @click.stop>
           <component
             :is="CustomViewComponent"
             v-bind="customViewProps"
