@@ -9,12 +9,28 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   rerun: [toolCall: ToolCall]
+  answerQuestion: [answer: string]
 }>()
 
 const isRerunning = ref(false)
 const showArgs = ref(true)
 const showResult = ref(false)
 const copied = ref(false)
+const selectedAnswers = ref<Record<number, string[]>>({})
+const submitted = ref(false)
+
+interface AskQuestionOption {
+  label: string
+  description?: string
+  preview?: string
+}
+
+interface AskQuestionItem {
+  question: string
+  header?: string
+  options: AskQuestionOption[]
+  multiSelect?: boolean
+}
 
 function copyResult() {
   const text = props.toolCall.error ?? formattedResult.value
@@ -33,6 +49,42 @@ const statusConfig: Record<string, { label: string; class: string; icon: string 
 }
 
 const config = computed(() => statusConfig[props.toolCall.status] ?? statusConfig.pending)
+
+const isAskUserQuestion = computed(() => {
+  return ['askUserQuestion', 'AskUserQuestion', 'ask_user_question'].includes(props.toolCall.name)
+})
+
+const askUserQuestions = computed<AskQuestionItem[]>(() => {
+  const rawQuestions = Array.isArray(props.toolCall.args?.questions)
+    ? props.toolCall.args.questions
+    : []
+
+  return rawQuestions
+    .filter((item): item is Record<string, unknown> => item !== null && typeof item === 'object' && !Array.isArray(item))
+    .map((item) => {
+      const rawOptions = Array.isArray(item.options) ? item.options : []
+      return {
+        question: typeof item.question === 'string' ? item.question : '',
+        header: typeof item.header === 'string' ? item.header : undefined,
+        multiSelect: item.multiSelect === true,
+        options: rawOptions
+          .filter((option): option is Record<string, unknown> => option !== null && typeof option === 'object' && !Array.isArray(option))
+          .map((option) => ({
+            label: typeof option.label === 'string' ? option.label : '',
+            description: typeof option.description === 'string' ? option.description : undefined,
+            preview: typeof option.preview === 'string' ? option.preview : undefined,
+          }))
+          .filter((option) => option.label),
+      }
+    })
+    .filter((item) => item.question && item.options.length > 0)
+})
+
+const hasQuestionSelection = computed(() => askUserQuestions.value.length > 0)
+
+const canSubmitQuestionAnswer = computed(() => {
+  return hasQuestionSelection.value && askUserQuestions.value.every((_, index) => selectedAnswers.value[index]?.length)
+})
 
 const hasArgs = computed(() => {
   return props.toolCall.args && Object.keys(props.toolCall.args).length > 0
@@ -66,6 +118,34 @@ const formattedResult = computed(() => {
   }
   return JSON.stringify(result, null, 2)
 })
+
+function isOptionSelected(questionIndex: number, label: string) {
+  return selectedAnswers.value[questionIndex]?.includes(label) ?? false
+}
+
+function toggleQuestionOption(questionIndex: number, label: string, multiSelect?: boolean) {
+  if (submitted.value) return
+  const current = selectedAnswers.value[questionIndex] ?? []
+  if (!multiSelect) {
+    selectedAnswers.value = { ...selectedAnswers.value, [questionIndex]: [label] }
+    return
+  }
+
+  const next = current.includes(label)
+    ? current.filter((item) => item !== label)
+    : [...current, label]
+  selectedAnswers.value = { ...selectedAnswers.value, [questionIndex]: next }
+}
+
+function submitQuestionAnswer() {
+  if (!canSubmitQuestionAnswer.value || submitted.value) return
+  const lines = askUserQuestions.value.map((question, index) => {
+    const answers = selectedAnswers.value[index] ?? []
+    return `${question.header ? `${question.header}: ` : ''}${question.question}\n选择: ${answers.join(', ')}`
+  })
+  submitted.value = true
+  emit('answerQuestion', lines.join('\n\n'))
+}
 
 const isImageResult = computed(() => {
   const result = props.toolCall.result
@@ -143,7 +223,7 @@ async function handleRerun() {
 
     <!-- 输入参数 -->
     <Collapsible
-      v-if="hasArgs"
+      v-if="hasArgs && !isAskUserQuestion"
       v-model:open="showArgs"
       class="border-t"
     >
@@ -182,6 +262,87 @@ async function handleRerun() {
     >
       <span class="inline-block w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
       <span>接收参数中...</span>
+    </div>
+
+    <!-- askUserQuestion 内嵌选择 UI -->
+    <div
+      v-if="isAskUserQuestion && hasQuestionSelection"
+      class="border-t px-3 py-2 space-y-3"
+    >
+      <div class="text-[11px] text-muted-foreground">
+        Claude 需要你选择后继续。
+      </div>
+
+      <div
+        v-for="(question, questionIndex) in askUserQuestions"
+        :key="`${question.header || 'question'}-${questionIndex}`"
+        class="space-y-2"
+      >
+        <div class="space-y-1">
+          <div
+            v-if="question.header"
+            class="inline-flex rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+          >
+            {{ question.header }}
+          </div>
+          <div class="text-sm font-medium leading-snug">
+            {{ question.question }}
+          </div>
+          <div
+            v-if="question.multiSelect"
+            class="text-[10px] text-muted-foreground"
+          >
+            可多选
+          </div>
+        </div>
+
+        <div class="grid gap-1.5">
+          <button
+            v-for="option in question.options"
+            :key="option.label"
+            type="button"
+            class="text-left rounded-md border px-2.5 py-2 transition-colors"
+            :class="isOptionSelected(questionIndex, option.label)
+              ? 'border-primary bg-primary/10 text-foreground'
+              : 'border-border hover:border-primary/50 hover:bg-muted/50'"
+            :disabled="submitted"
+            @click="toggleQuestionOption(questionIndex, option.label, question.multiSelect)"
+          >
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <div class="text-xs font-semibold">
+                  {{ option.label }}
+                </div>
+                <div
+                  v-if="option.description"
+                  class="mt-0.5 text-[11px] text-muted-foreground leading-snug"
+                >
+                  {{ option.description }}
+                </div>
+              </div>
+              <span
+                v-if="isOptionSelected(questionIndex, option.label)"
+                class="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[10px] text-primary-foreground"
+              >
+                已选
+              </span>
+            </div>
+            <pre
+              v-if="option.preview"
+              class="mt-2 max-h-32 overflow-auto rounded bg-muted/70 p-2 text-[10px] leading-relaxed whitespace-pre-wrap"
+            >{{ option.preview }}</pre>
+          </button>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        class="w-full rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-opacity disabled:opacity-50"
+        :disabled="!canSubmitQuestionAnswer || submitted"
+        @click="submitQuestionAnswer"
+      >
+        {{ submitted ? '已发送选择' : '发送选择' }}
+      </button>
     </div>
 
     <!-- 输出结果 -->

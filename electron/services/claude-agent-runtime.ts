@@ -102,17 +102,13 @@ function resolveClaudeCodeExecutablePath(): string | undefined {
 }
 
 function resolvePermissionMode(runtime?: RuntimeOptions): PermissionMode {
-  return runtime?.permissionMode ?? 'dontAsk'
+  return runtime?.permissionMode ?? 'bypassPermissions'
 }
 
 function resolveBuiltInTools(runtime?: RuntimeOptions): string[] | { type: 'preset'; preset: 'claude_code' } {
-  if (Array.isArray(runtime?.allowedTools) && runtime.allowedTools.length > 0) {
-    return runtime.allowedTools
-  }
-
-  // Default to Claude's full built-in tool preset unless the caller explicitly
-  // narrows the tool list. Otherwise MCP workflow tools can be rejected before
-  // our own canUseTool hook has a chance to authorize them.
+  // `allowedTools` only auto-approves tool use in Claude Agent SDK. It does not
+  // define tool availability; keep the full built-in preset available by default
+  // so MCP workflow tools can still be reached through the SDK permission hook.
   return { type: 'preset', preset: 'claude_code' }
 }
 
@@ -481,6 +477,30 @@ export async function startClaudeAgentRun(
       enabledToolNames: params.enabledToolNames,
       enabledPlugins: runtime?.enabledPlugins,
     })
+    const allowedTools = [
+      ...(Array.isArray(runtime?.allowedTools) ? runtime.allowedTools : []),
+      ...toolAdapter.allowedToolNames,
+    ]
+    const uniqueAllowedTools = [...new Set(allowedTools)]
+    const mcpServerNames = Object.keys(toolAdapter.mcpServers)
+
+    console.debug('[ClaudeAgentRuntime] start run:', {
+      requestId: _requestId,
+      providerId,
+      modelId,
+      mode: params._mode,
+      workflowId: params._workflowId,
+      cwd,
+      additionalDirectories,
+      permissionMode,
+      tools,
+      allowedTools: uniqueAllowedTools,
+      mcpServerNames,
+      enabledToolNames: params.enabledToolNames,
+      enabledPlugins: runtime?.enabledPlugins,
+      loadProjectClaudeMd: runtime?.loadProjectClaudeMd,
+      loadRuleMd: runtime?.loadRuleMd,
+    })
 
     const agentQuery = query({
       prompt: buildPrompt(params.messages),
@@ -494,12 +514,12 @@ export async function startClaudeAgentRun(
         includePartialMessages: true,
         maxTurns: 20,
         tools,
-        allowedTools: Array.isArray(tools) ? tools : undefined,
+        allowedTools: uniqueAllowedTools.length > 0 ? uniqueAllowedTools : undefined,
         permissionMode,
-        allowDangerouslySkipPermissions: permissionMode === 'bypassPermissions',
+        allowDangerouslySkipPermissions: true,
         settingSources: runtime?.loadProjectClaudeMd === false ? [] : ['project'],
         systemPrompt: buildSystemPrompt(params, ruleInstructions),
-        mcpServers: Object.keys(toolAdapter.mcpServers).length > 0 ? toolAdapter.mcpServers : undefined,
+        mcpServers: mcpServerNames.length > 0 ? toolAdapter.mcpServers : undefined,
         canUseTool: toolAdapter.canUseTool,
         env: {
           ...process.env,
@@ -525,6 +545,12 @@ export async function startClaudeAgentRun(
     }
 
     for await (const message of agentQuery) {
+      console.debug('[ClaudeAgentRuntime] stream message:', {
+        requestId: _requestId,
+        type: message.type,
+        subtype: 'subtype' in message ? message.subtype : undefined,
+      })
+
       if (message.type === 'stream_event') {
         bridgePartialMessage(mainWindow, _requestId, streamState, message.event, toolAdapter.resolveDisplayToolName)
         continue
@@ -589,6 +615,11 @@ export async function startClaudeAgentRun(
           })
         } else {
           const errorText = message.errors.join('\n') || 'Claude agent runtime failed'
+          console.debug('[ClaudeAgentRuntime] result error:', {
+            requestId: _requestId,
+            subtype: message.subtype,
+            errors: message.errors,
+          })
           send(mainWindow, 'chat:error', {
             requestId: _requestId,
             error: errorText,
@@ -601,11 +632,16 @@ export async function startClaudeAgentRun(
       return
     }
 
+    console.debug('[ClaudeAgentRuntime] run exception:', {
+      requestId: _requestId,
+      error: error instanceof Error ? error.stack || error.message : String(error),
+    })
     send(mainWindow, 'chat:error', {
       requestId: _requestId,
       error: error instanceof Error ? error.message : String(error),
     })
   } finally {
+    console.debug('[ClaudeAgentRuntime] finish run:', { requestId: _requestId })
     rejectPendingRendererToolsForRequest(_requestId, new Error('Claude agent request finished'))
     const activeRun = activeClaudeRuns.get(_requestId)
     activeRun?.queryHandle.close()

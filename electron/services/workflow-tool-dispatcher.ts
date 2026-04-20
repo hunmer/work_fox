@@ -40,8 +40,16 @@ function cleanupPendingRendererToolRequest(requestId: string): void {
 
 export function resolvePendingRendererTool(requestId: string, result: unknown): boolean {
   const pending = pendingRendererToolRequests.get(requestId)
-  if (!pending) return false
+  if (!pending) {
+    console.debug('[WorkflowToolDispatcher] resolve renderer tool missed:', { requestId, result })
+    return false
+  }
   cleanupPendingRendererToolRequest(requestId)
+  console.debug('[WorkflowToolDispatcher] resolve renderer tool:', {
+    requestId,
+    chatRequestId: pending.chatRequestId,
+    result,
+  })
   pending.resolve(result)
   return true
 }
@@ -52,6 +60,11 @@ export function rejectPendingRendererToolsForRequest(chatRequestId: string, erro
       continue
     }
     cleanupPendingRendererToolRequest(requestId)
+    console.debug('[WorkflowToolDispatcher] reject renderer tool:', {
+      requestId,
+      chatRequestId,
+      error: error.message,
+    })
     pending.reject(error)
   }
 }
@@ -77,9 +90,25 @@ async function executeRendererWorkflowTool(
     ? WORKFLOW_EXECUTION_TIMEOUT_MS
     : RENDERER_TOOL_TIMEOUT_MS
 
+  console.debug('[WorkflowToolDispatcher] renderer tool request:', {
+    chatRequestId,
+    toolUseId,
+    name,
+    workflowId,
+    timeout,
+    args,
+  })
+
   return await new Promise((resolve) => {
     const timer = setTimeout(() => {
       cleanupPendingRendererToolRequest(requestId)
+      console.debug('[WorkflowToolDispatcher] renderer tool timeout:', {
+        requestId,
+        chatRequestId,
+        toolUseId,
+        name,
+        workflowId,
+      })
       resolve({ success: false, message: `渲染进程工具执行超时: ${name}` })
     }, timeout)
 
@@ -97,6 +126,13 @@ async function executeRendererWorkflowTool(
       args,
       workflowId,
     })
+    console.debug('[WorkflowToolDispatcher] renderer tool event sent:', {
+      requestId,
+      chatRequestId,
+      toolUseId,
+      name,
+      workflowId,
+    })
   })
 }
 
@@ -109,6 +145,14 @@ export async function dispatchWorkflowTool(
   workflowId: string,
 ): Promise<ToolResult | unknown> {
   const owner = WORKFLOW_TOOL_OWNERS[name]
+  console.debug('[WorkflowToolDispatcher] dispatch workflow tool:', {
+    chatRequestId,
+    toolUseId,
+    name,
+    workflowId,
+    owner,
+    args,
+  })
 
   if (!owner) {
     return { success: false, message: `未知工作流工具: ${name}` }

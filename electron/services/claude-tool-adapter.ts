@@ -183,6 +183,7 @@ function getMcpToolDisplayName(toolName: string): string {
 export function createClaudeToolAdapter(context: ToolAdapterContext): {
   mcpServers: Record<string, McpServerConfig>
   canUseTool: CanUseTool
+  allowedToolNames: string[]
   resolveDisplayToolName: (toolName: string) => string
   getExecutionContext: (toolUseId: string) => ToolExecutionContext | undefined
   setToolResult: (toolUseId: string, result: unknown) => void
@@ -195,7 +196,15 @@ export function createClaudeToolAdapter(context: ToolAdapterContext): {
   const mcpServers: Record<string, McpServerConfig> = {}
 
   function registerMcpToolName(serverName: string, toolName: string, displayName: string): void {
-    mcpNameToDisplayName.set(`mcp__${serverName}__${toolName}`, displayName)
+    const sdkToolName = `mcp__${serverName}__${toolName}`
+    mcpNameToDisplayName.set(sdkToolName, displayName)
+    console.debug('[ClaudeToolAdapter] registered MCP tool:', {
+      requestId: context.requestId,
+      serverName,
+      toolName,
+      sdkToolName,
+      displayName,
+    })
   }
 
   function enqueuePendingToolUse(displayName: string, toolUseId: string): void {
@@ -299,6 +308,13 @@ export function createClaudeToolAdapter(context: ToolAdapterContext): {
           toZodSchema(definition.input_schema),
           async (args) => {
             const toolUseId = shiftPendingToolUse(definition.name) ?? `${context.requestId}:${definition.name}:${Date.now()}`
+            console.debug('[ClaudeToolAdapter] workflow tool execute:', {
+              requestId: context.requestId,
+              workflowId: context.workflowId,
+              toolUseId,
+              name: definition.name,
+              args,
+            })
             const result = await dispatchWorkflowTool(
               context.mainWindow,
               context.requestId,
@@ -308,6 +324,13 @@ export function createClaudeToolAdapter(context: ToolAdapterContext): {
               context.workflowId!,
             )
             toolResults.set(toolUseId, result)
+            console.debug('[ClaudeToolAdapter] workflow tool result:', {
+              requestId: context.requestId,
+              workflowId: context.workflowId,
+              toolUseId,
+              name: definition.name,
+              result,
+            })
             return toToolResult(result)
           },
         )
@@ -332,16 +355,36 @@ export function createClaudeToolAdapter(context: ToolAdapterContext): {
             async (args) => {
               const resolved = workflowNodeRegistry.getAgentToolHandler(definition.name)
               const toolUseId = shiftPendingToolUse(definition.name) ?? `${context.requestId}:${definition.pluginId}:${definition.name}:${Date.now()}`
+              console.debug('[ClaudeToolAdapter] plugin tool execute:', {
+                requestId: context.requestId,
+                pluginId: definition.pluginId,
+                toolUseId,
+                name: definition.name,
+                args,
+              })
 
               if (!resolved) {
                 const result = { success: false, message: `插件工具不存在: ${definition.name}` }
                 toolResults.set(toolUseId, result)
+                console.debug('[ClaudeToolAdapter] plugin tool missing:', {
+                  requestId: context.requestId,
+                  pluginId: definition.pluginId,
+                  toolUseId,
+                  name: definition.name,
+                })
                 return toToolResult(result)
               }
 
               try {
                 const result = await resolved.handler(definition.name, args, resolved.api)
                 toolResults.set(toolUseId, result)
+                console.debug('[ClaudeToolAdapter] plugin tool result:', {
+                  requestId: context.requestId,
+                  pluginId: definition.pluginId,
+                  toolUseId,
+                  name: definition.name,
+                  result,
+                })
                 return toToolResult(result)
               } catch (error) {
                 const result = {
@@ -349,6 +392,13 @@ export function createClaudeToolAdapter(context: ToolAdapterContext): {
                   message: error instanceof Error ? error.message : String(error),
                 }
                 toolResults.set(toolUseId, result)
+                console.debug('[ClaudeToolAdapter] plugin tool error:', {
+                  requestId: context.requestId,
+                  pluginId: definition.pluginId,
+                  toolUseId,
+                  name: definition.name,
+                  error: result.message,
+                })
                 return toToolResult(result)
               }
             },
@@ -360,8 +410,19 @@ export function createClaudeToolAdapter(context: ToolAdapterContext): {
 
   return {
     mcpServers,
+    allowedToolNames: [...mcpNameToDisplayName.keys()],
     async canUseTool(toolName, input, options) {
       const displayName = mcpNameToDisplayName.get(toolName) ?? getMcpToolDisplayName(toolName)
+      console.debug('[ClaudeToolAdapter] canUseTool allow:', {
+        requestId: context.requestId,
+        toolUseId: options.toolUseID,
+        toolName,
+        displayName,
+        input,
+        suggestions: options.suggestions,
+        blockedPath: options.blockedPath,
+        decisionReason: options.decisionReason,
+      })
       toolExecutions.set(options.toolUseID, {
         originalName: toolName,
         displayName,

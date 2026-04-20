@@ -55,8 +55,12 @@ module.exports = {
           resolution: args.resolution || '2k',
           ...(args.negativePrompt && { negative_prompt: args.negativePrompt }),
         }
+        ctx.logger.info(`请求地址: ${baseUrl}/v1/images/generations`)
+        ctx.logger.info(`模型: ${body.model}, 比例: ${body.ratio}, 分辨率: ${body.resolution}`)
+        ctx.logger.info(`提示词: ${body.prompt}`)
         const result = await ctx.api.postJson(`${baseUrl}/v1/images/generations`, { headers, body, timeout: 600000 })
         const urls = result.data?.map(d => d.url) || []
+        ctx.logger.info(`生成完成，共 ${urls.length} 张图片`)
         return { success: true, message: `生成 ${urls.length} 张图片`, data: { images: urls, created: result.created } }
       },
     },
@@ -113,8 +117,13 @@ module.exports = {
           resolution: args.resolution || '2k',
           ...(args.sampleStrength != null && { sample_strength: args.sampleStrength }),
         }
+        ctx.logger.info(`请求地址: ${baseUrl}/v1/images/compositions`)
+        ctx.logger.info(`模型: ${body.model}, 比例: ${body.ratio}, 分辨率: ${body.resolution}`)
+        ctx.logger.info(`输入图片: ${images.length} 张, 采样强度: ${body.sample_strength ?? '默认'}`)
+        ctx.logger.info(`提示词: ${body.prompt}`)
         const result = await ctx.api.postJson(`${baseUrl}/v1/images/compositions`, { headers, body, timeout: 600000 })
         const urls = result.data?.map(d => d.url) || []
+        ctx.logger.info(`图生图完成，共 ${urls.length} 张图片`)
         return { success: true, message: `图生图完成，生成 ${urls.length} 张图片`, data: { images: urls, created: result.created } }
       },
     },
@@ -166,8 +175,13 @@ module.exports = {
           duration: args.duration || 5,
           ...(args.filePaths && { filePaths: Array.isArray(args.filePaths) ? args.filePaths : JSON.parse(args.filePaths) }),
         }
+        ctx.logger.info(`请求地址: ${baseUrl}/v1/videos/generations`)
+        ctx.logger.info(`模型: ${body.model}, 比例: ${body.ratio}, 时长: ${body.duration}s`)
+        ctx.logger.info(`提示词: ${body.prompt}`)
+        if (body.filePaths) ctx.logger.info(`输入图片: ${body.filePaths.length} 张`)
         const result = await ctx.api.postJson(`${baseUrl}/v1/videos/generations`, { headers, body, timeout: 600000 })
         const urls = result.data?.map(d => d.url) || []
+        ctx.logger.info(`视频生成完成，共 ${urls.length} 个视频`)
         return { success: true, message: '视频生成完成', data: { videos: urls, created: result.created } }
       },
     },

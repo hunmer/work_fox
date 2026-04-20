@@ -88,6 +88,14 @@ function handleRerunTool(toolCall: ToolCall) {
   props.chat.rerunTool(props.message.id, toolCall.id)
 }
 
+async function handleAnswerQuestion(answer: string) {
+  if (!answer.trim()) return
+  if (props.chat.isStreaming) {
+    await props.chat.stopGeneration()
+  }
+  await props.chat.sendMessage(answer)
+}
+
 /** 进入编辑模式 */
 function startEdit() {
   editContent.value = props.message.content
@@ -465,6 +473,7 @@ const segments = computed<ContentSegment[]>(() => {
             <ToolCallCard
               :tool-call="seg.toolCall"
               @rerun="handleRerunTool"
+              @answer-question="handleAnswerQuestion"
             />
           </div>
         </template>
