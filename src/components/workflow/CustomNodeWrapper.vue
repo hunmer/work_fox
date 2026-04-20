@@ -155,9 +155,10 @@ const displayLabel = computed(() => props.data?.label || definition.value?.label
 const CustomViewComponent = computed(() => definition.value?.customView)
 
 /** 自定义视图所需的 props */
-const executionStep = computed(() =>
-  store.executionLog?.steps.find((s) => s.nodeId === props.id)
-)
+const executionStep = computed(() => {
+  const log = store.isPreview ? store.selectedExecutionLog : store.executionLog
+  return log?.steps.find((s) => s.nodeId === props.id)
+})
 
 const customViewProps = computed(() => {
   if (!CustomViewComponent.value) return {}
