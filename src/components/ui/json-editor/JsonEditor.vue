@@ -27,25 +27,27 @@ const emit = defineEmits<{
 const themeStore = useThemeStore()
 const isDark = computed(() => themeStore.isDark)
 
-const value = computed({
-  get: () => props.modelValue,
-  set: (val) => emit('update:modelValue', val),
-})
+const value = computed(() => props.modelValue)
+
+function handleChange(val: any) {
+  if (!props.readonly) emit('update:modelValue', val)
+}
 </script>
 
 <template>
   <div
-    class="json-editor-wrapper rounded-md border border-border overflow-auto"
-    :class="{ 'jse-theme-dark': isDark }"
+    class="json-editor-wrapper rounded-md border border-border overflow-auto w-full"
+    :class="{ 'jse-theme-dark': isDark, 'jse-readonly': readonly }"
     :style="{ height: `${height}px` }"
   >
     <JsonEditorVue
-      v-model="value"
+      :model-value="value"
       :mode="mode"
       :read-only="readonly"
       :main-menu-bar="mainMenuBar"
       :navigation-bar="navigationBar"
       :status-bar="statusBar"
+      @update:model-value="handleChange"
     />
   </div>
 </template>
@@ -53,6 +55,21 @@ const value = computed({
 <style>
 .json-editor-wrapper .jse-main {
   height: 100%;
+}
+
+.json-editor-wrapper.jse-readonly .jse-value,
+.json-editor-wrapper.jse-readonly .jse-key,
+.json-editor-wrapper.jse-readonly .jse-string,
+.json-editor-wrapper.jse-readonly .jse-number,
+.json-editor-wrapper.jse-readonly .jse-boolean,
+.json-editor-wrapper.jse-readonly .jse-null {
+  pointer-events: none;
+}
+
+.json-editor-wrapper.jse-readonly .jse-context-menu,
+.json-editor-wrapper.jse-readonly .jse-main-menu,
+.json-editor-wrapper.jse-readonly .jse-selection {
+  display: none !important;
 }
 
 .jse-theme-dark {

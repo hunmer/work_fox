@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useWorkflowStore } from '@/stores/workflow'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Play, Pause, Square, ChevronDown, ChevronUp, ChevronRight, CheckCircle, XCircle, Loader2, Circle, Trash2, AlertTriangle, FileText, Info, AlertCircle as AlertCircleIcon } from 'lucide-vue-next'
-import type { ExecutionLog, ExecutionStep } from '@/lib/workflow/types'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import JsonEditor from '@/components/ui/json-editor/JsonEditor.vue'
+import { Play, Pause, Square, ChevronDown, ChevronUp, CheckCircle, XCircle, Loader2, Circle, Trash2, AlertTriangle, Info, AlertCircle as AlertCircleIcon } from 'lucide-vue-next'
+import type { ExecutionLog } from '@/lib/workflow/types'
+
+const stepTabs = ref<Record<string, string>>({})
 
 const store = useWorkflowStore()
 const expanded = defineModel<boolean>('expanded', { default: false })
@@ -41,23 +44,10 @@ function formatTime(ts: number): string {
   return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
-function formatRelativeOffset(startTs: number, workflowStartTs: number): string {
-  const offset = ((startTs - workflowStartTs) / 1000).toFixed(1)
-  return `+${offset}s`
-}
-
 function formatDuration(start: number, end?: number): string {
   const ms = (end || Date.now()) - start
+  if (ms < 1000) return `${ms}ms`
   return `${(ms / 1000).toFixed(1)}s`
-}
-
-function formatJson(data: any): string {
-  if (data === undefined || data === null) return ''
-  try {
-    return typeof data === 'string' ? data : JSON.stringify(data, null, 2)
-  } catch {
-    return String(data)
-  }
 }
 
 function selectLog(log: ExecutionLog) {
@@ -86,7 +76,7 @@ const displayLog = computed(() => store.selectedExecutionLog)
         size="sm"
         class="h-6 text-xs gap-1 px-2"
         :disabled="!canStart"
-        @click="store.startExecution()"
+        @click="store.startExecution(); expanded = true"
       >
         <Play class="w-3 h-3" /> 执行
       </Button>
@@ -225,7 +215,7 @@ const displayLog = computed(() => store.selectedExecutionLog)
 
         <ResizableHandle with-handle />
 
-        <!-- 右侧：节点执行详情 -->
+        <!-- 右侧：节点执行详情 - 横向滚动卡片 -->
         <ResizablePanel
           :default-size="75"
           :min-size="40"
@@ -236,65 +226,123 @@ const displayLog = computed(() => store.selectedExecutionLog)
                 {{ displayLog ? `${formatTime(displayLog.startedAt)} · ${displayLog.steps.length} 节点` : '执行详情' }}
               </span>
             </div>
-            <ScrollArea
+            <div
               v-if="displayLog"
-              class="flex-1 min-h-0"
+              class="execution-cards flex-1 min-h-0 flex gap-2 p-2 overflow-x-auto"
             >
-              <div class="p-2 space-y-1">
+              <div
+                v-for="step in displayLog.steps"
+                :key="step.nodeId"
+                class="shrink-0 w-[280px] border border-border rounded-md flex flex-col h-full bg-background overflow-hidden"
+              >
+                <!-- 卡片 Header：状态 + 名称 + 时间 -->
+                <div class="flex items-center gap-1.5 px-2.5 py-1.5 border-b border-border">
+                  <CheckCircle
+                    v-if="step.status === 'completed'"
+                    class="w-3 h-3 text-green-500 shrink-0"
+                  />
+                  <XCircle
+                    v-else-if="step.status === 'error'"
+                    class="w-3 h-3 text-red-500 shrink-0"
+                  />
+                  <Loader2
+                    v-else-if="step.status === 'running'"
+                    class="w-3 h-3 text-blue-500 animate-spin shrink-0"
+                  />
+                  <Circle
+                    v-else
+                    class="w-3 h-3 text-muted-foreground shrink-0"
+                  />
+                  <span class="text-xs font-medium truncate flex-1">{{ step.nodeLabel }}</span>
+                  <span class="text-[10px] text-muted-foreground shrink-0">
+                    {{ step.finishedAt ? formatDuration(step.startedAt, step.finishedAt) : '...' }}
+                  </span>
+                </div>
+
+                <!-- 错误信息 -->
                 <div
-                  v-for="step in displayLog.steps"
-                  :key="step.nodeId"
-                  class="border border-border rounded p-2"
+                  v-if="step.error"
+                  class="px-2.5 py-1 text-[10px] text-red-500 bg-red-500/10 border-b border-border"
                 >
-                  <!-- 节点头部：状态 + 名称 + 相对时间 + 时长 -->
-                  <div class="flex items-center gap-1.5">
-                    <CheckCircle
-                      v-if="step.status === 'completed'"
-                      class="w-3 h-3 text-green-500 shrink-0"
+                  {{ step.error }}
+                </div>
+
+                <!-- Tabs：输入 / 输出 / 日志 -->
+                <Tabs
+                  :model-value="stepTabs[step.nodeId] || 'input'"
+                  class="flex-1 flex flex-col min-h-0"
+                  @update:model-value="stepTabs[step.nodeId] = $event"
+                >
+                  <TabsList class="w-full h-7 rounded-none border-b border-border bg-transparent px-1">
+                    <TabsTrigger
+                      value="input"
+                      class="text-[10px] h-5 px-2 flex-1"
+                    >
+                      输入
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="output"
+                      class="text-[10px] h-5 px-2 flex-1"
+                    >
+                      输出
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="logs"
+                      class="text-[10px] h-5 px-2 flex-1"
+                    >
+                      日志
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent
+                    value="input"
+                    class="flex-1 min-h-0 mt-0"
+                  >
+                    <JsonEditor
+                      v-if="step.input !== undefined && step.input !== null"
+                      :model-value="step.input"
+                      :readonly="true"
+                      :height="400"
+                      mode="tree"
+                      class="h-full [&_.json-editor-wrapper]:h-full [&_.json-editor-wrapper]:border-0"
                     />
-                    <XCircle
-                      v-else-if="step.status === 'error'"
-                      class="w-3 h-3 text-red-500 shrink-0"
-                    />
-                    <Loader2
-                      v-else-if="step.status === 'running'"
-                      class="w-3 h-3 text-blue-500 animate-spin shrink-0"
-                    />
-                    <Circle
+                    <div
                       v-else
-                      class="w-3 h-3 text-muted-foreground shrink-0"
+                      class="p-2 text-[10px] text-muted-foreground"
+                    >
+                      无输入
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent
+                    value="output"
+                    class="flex-1 min-h-0 mt-0"
+                  >
+                    <JsonEditor
+                      v-if="step.output !== undefined && step.output !== null"
+                      :model-value="step.output"
+                      :readonly="true"
+                      :height="400"
+                      mode="tree"
+                      class="h-full [&_.json-editor-wrapper]:h-full [&_.json-editor-wrapper]:border-0"
                     />
+                    <div
+                      v-else
+                      class="p-2 text-[10px] text-muted-foreground"
+                    >
+                      无输出
+                    </div>
+                  </TabsContent>
 
-                    <span class="text-xs font-medium truncate flex-1">{{ step.nodeLabel }}</span>
-                    <span class="text-[10px] text-muted-foreground shrink-0">
-                      {{ formatRelativeOffset(step.startedAt, displayLog.startedAt) }}
-                    </span>
-                    <span class="text-[10px] text-muted-foreground shrink-0 ml-1">
-                      {{ step.finishedAt ? formatDuration(step.startedAt, step.finishedAt) : '...' }}
-                    </span>
-                  </div>
-
-                  <!-- 错误信息 -->
-                  <div
-                    v-if="step.error"
-                    class="mt-1 text-[10px] text-red-500 bg-red-500/10 rounded px-1.5 py-0.5"
+                  <TabsContent
+                    value="logs"
+                    class="flex-1 min-h-0 mt-0"
                   >
-                    {{ step.error }}
-                  </div>
-
-                  <!-- 日志信息 -->
-                  <Collapsible
-                    v-if="step.logs && step.logs.length > 0"
-                    :default-open="false"
-                    class="mt-1"
-                  >
-                    <CollapsibleTrigger class="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full">
-                      <ChevronRight class="w-2.5 h-2.5 transition-transform [[data-state=open]>&]:rotate-90" />
-                      <FileText class="w-2.5 h-2.5" />
-                      日志 ({{ step.logs.length }})
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <div class="mt-0.5 space-y-px">
+                    <ScrollArea class="h-full">
+                      <div
+                        v-if="step.logs && step.logs.length > 0"
+                        class="p-2 space-y-px"
+                      >
                         <div
                           v-for="(log, idx) in step.logs"
                           :key="idx"
@@ -311,41 +359,17 @@ const displayLog = computed(() => store.selectedExecutionLog)
                           <span class="break-all">{{ log.message }}</span>
                         </div>
                       </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-
-                  <!-- 输入信息（可折叠，默认展开） -->
-                  <Collapsible
-                    v-if="step.input !== undefined && step.input !== null"
-                    :default-open="true"
-                    class="mt-1"
-                  >
-                    <CollapsibleTrigger class="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full">
-                      <ChevronRight class="w-2.5 h-2.5 transition-transform [[data-state=open]>&]:rotate-90" />
-                      输入
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <pre class="mt-0.5 text-[10px] bg-muted/50 rounded px-1.5 py-1 overflow-auto max-h-[80px] whitespace-pre-wrap break-all">{{ formatJson(step.input) }}</pre>
-                    </CollapsibleContent>
-                  </Collapsible>
-
-                  <!-- 输出信息（可折叠，默认展开） -->
-                  <Collapsible
-                    v-if="step.output !== undefined && step.output !== null"
-                    :default-open="true"
-                    class="mt-1"
-                  >
-                    <CollapsibleTrigger class="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full">
-                      <ChevronRight class="w-2.5 h-2.5 transition-transform [[data-state=open]>&]:rotate-90" />
-                      输出
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <pre class="mt-0.5 text-[10px] bg-muted/50 rounded px-1.5 py-1 overflow-auto max-h-[80px] whitespace-pre-wrap break-all">{{ formatJson(step.output) }}</pre>
-                    </CollapsibleContent>
-                  </Collapsible>
-                </div>
+                      <div
+                        v-else
+                        class="p-2 text-[10px] text-muted-foreground"
+                      >
+                        无日志
+                      </div>
+                    </ScrollArea>
+                  </TabsContent>
+                </Tabs>
               </div>
-            </ScrollArea>
+            </div>
             <div
               v-else
               class="flex-1 flex items-center justify-center text-[10px] text-muted-foreground"
@@ -358,3 +382,12 @@ const displayLog = computed(() => store.selectedExecutionLog)
     </div>
   </div>
 </template>
+
+<style scoped>
+.execution-cards {
+  scrollbar-width: none;
+}
+.execution-cards::-webkit-scrollbar {
+  display: none;
+}
+</style>

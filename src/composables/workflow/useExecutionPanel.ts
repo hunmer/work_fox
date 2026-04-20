@@ -3,7 +3,8 @@ import type { Ref } from 'vue'
 
 export function useExecutionPanel() {
   const EXEC_PANEL_SIZE_KEY = 'workflow-exec-panel-size'
-  const executionBarExpanded = ref(false)
+  const EXEC_PANEL_EXPANDED_KEY = 'workflow-exec-panel-expanded'
+  const executionBarExpanded = ref(localStorage.getItem(EXEC_PANEL_EXPANDED_KEY) === 'true')
   const savedExecPanelSize = ref(Number(localStorage.getItem(EXEC_PANEL_SIZE_KEY)) || 25)
   const execPanelRef = ref<InstanceType<typeof import('@/components/ui/resizable').ResizablePanel> | null>(null)
 
@@ -15,6 +16,7 @@ export function useExecutionPanel() {
   }
 
   watch(executionBarExpanded, (expanded) => {
+    localStorage.setItem(EXEC_PANEL_EXPANDED_KEY, String(expanded))
     if (expanded) {
       nextTick(() => {
         nextTick(() => {

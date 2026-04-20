@@ -280,13 +280,14 @@ function confirmImport() {
           <!-- 输出结果 -->
           <div
             v-if="store.debugNodeResult.output !== undefined"
-            class="mt-1"
+            class="mt-1 w-full"
           >
             <JsonEditor
               :model-value="store.debugNodeResult.output"
               :read-only="true"
               mode="tree"
               :height="240"
+              class="w-full"
             />
           </div>
         </div>

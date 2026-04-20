@@ -173,7 +173,7 @@ onBeforeUnmount(() => {
 
   <!-- 全屏对话框 -->
   <Dialog :open="dialogOpen" @update:open="($event) => { if (!$event) closeFullscreen() }">
-    <DialogContent class="w-[80vw] max-w-none h-[80vh] flex flex-col p-0 gap-0">
+    <DialogContent :show-close-button="false" class="w-[80vw] h-[80vh] flex flex-col p-0 gap-0" style="max-width: 80vw;">
       <DialogHeader class="px-4 py-2 border-b border-border flex-row items-center justify-between space-y-0">
         <DialogTitle class="text-sm">代码编辑器</DialogTitle>
         <Button variant="outline" size="sm" class="h-7 text-xs" @click="closeFullscreen">
