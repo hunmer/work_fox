@@ -1,8 +1,8 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { abortClaudeAgentRun, startClaudeAgentRun } from '../services/claude-agent-runtime'
 import { resolvePendingRendererTool } from '../services/workflow-tool-dispatcher'
+import { testProviderConnection } from '../services/ai-provider-test'
 import { listAIProviders, getAIProvider, createAIProvider, updateAIProvider, deleteAIProvider } from '../services/store'
-import { testProviderConnection } from '../services/ai-proxy'
 import { workflowNodeRegistry } from '../services/workflow-node-registry'
 
 export function registerChatIpcHandlers(): void {

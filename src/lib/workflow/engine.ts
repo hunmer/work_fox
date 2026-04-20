@@ -2,6 +2,8 @@
 import { toRaw } from 'vue'
 import type { WorkflowNode, WorkflowEdge, ExecutionLog, ExecutionStep, ConditionItem } from './types'
 import { getNodeDefinition } from './nodeRegistry'
+import { listenToChatStream } from '@/lib/agent/stream'
+import { useAIProviderStore } from '@/stores/ai-provider'
 
 export type EngineStatus = 'idle' | 'running' | 'paused' | 'error'
 
@@ -19,6 +21,12 @@ export class WorkflowEngine {
   private onLogUpdate?: (log: ExecutionLog) => void
   private onNodeStatusChange?: (nodeId: string, status: ExecutionStep['status']) => void
   private activeBranches: Map<string, string> = new Map() // switchNodeId -> selectedHandle
+  private runtimeConfig?: {
+    workflowId?: string
+    workflowName?: string
+    workflowDescription?: string
+    enabledPlugins?: string[]
+  }
 
   constructor(
     nodes: WorkflowNode[],
@@ -27,12 +35,19 @@ export class WorkflowEngine {
       onLogUpdate?: (log: ExecutionLog) => void
       onNodeStatusChange?: (nodeId: string, status: ExecutionStep['status']) => void
     },
+    runtimeConfig?: {
+      workflowId?: string
+      workflowName?: string
+      workflowDescription?: string
+      enabledPlugins?: string[]
+    },
   ) {
     this.nodes = nodes
     this.edges = edges
     this.context = {}
     this.onLogUpdate = callbacks?.onLogUpdate
     this.onNodeStatusChange = callbacks?.onNodeStatusChange
+    this.runtimeConfig = runtimeConfig
   }
 
   get status(): EngineStatus {
@@ -242,8 +257,8 @@ export class WorkflowEngine {
         return this.executeToast(resolvedData.message || '', resolvedData.type || 'info')
       case 'switch':
         return this.executeSwitch(resolvedData.conditions || [])
-      case 'agent_chat':
-        return this.executeAgentChat(resolvedData.prompt || '', resolvedData.systemPrompt || '')
+      case 'agent_run':
+        return this.executeAgentRun(resolvedData)
       default:
         return this.executeBrowserTool(node.type, resolvedData)
     }
@@ -266,8 +281,119 @@ export class WorkflowEngine {
     return { message, type }
   }
 
-  private async executeAgentChat(prompt: string, systemPrompt: string): Promise<any> {
-    throw new Error('agent_chat 节点需要集成 AI provider，待后续实现')
+  private async executeAgentRun(data: Record<string, any>): Promise<any> {
+    const prompt = typeof data.prompt === 'string' ? data.prompt : ''
+    if (!prompt.trim()) {
+      throw new Error('agent_run 节点缺少 prompt')
+    }
+
+    const providerStore = useAIProviderStore()
+    if (!providerStore.currentProvider || !providerStore.currentModel) {
+      throw new Error('请先在聊天面板中选择 AI Provider 和模型')
+    }
+
+    let assistantText = ''
+    const toolCalls: Array<Record<string, unknown>> = []
+    let usage: { inputTokens: number; outputTokens: number } | null = null
+
+    const additionalDirectories = typeof data.additionalDirectories === 'string'
+      ? data.additionalDirectories
+        .split('\n')
+        .map((item: string) => item.trim())
+        .filter(Boolean)
+      : []
+
+    const requestId = crypto.randomUUID()
+    const systemSections = [
+      '你是 WorkFox 工作流中的 Claude 执行型节点。',
+      '回复使用中文。',
+      '优先直接完成当前节点任务，并输出可供下游节点消费的结果。',
+      this.runtimeConfig?.workflowName
+        ? `当前工作流: ${this.runtimeConfig.workflowName}${this.runtimeConfig.workflowId ? ` (${this.runtimeConfig.workflowId})` : ''}`
+        : '',
+      typeof this.runtimeConfig?.workflowDescription === 'string' && this.runtimeConfig.workflowDescription.trim()
+        ? `工作流描述:\n${this.runtimeConfig.workflowDescription.trim()}`
+        : '',
+      typeof data.systemPrompt === 'string' && data.systemPrompt.trim()
+        ? `节点附加说明:\n${data.systemPrompt.trim()}`
+        : '',
+    ].filter(Boolean)
+
+    const completionFinished = new Promise<void>((resolve, reject) => {
+      const cleanup = listenToChatStream(requestId,
+        {
+          onToken: (token) => { assistantText += token },
+          onToolCall: (call) => {
+            toolCalls.push({
+              id: call.id,
+              name: call.name,
+              args: JSON.parse(JSON.stringify(call.args ?? {})),
+            })
+          },
+          onToolCallArgs: (event) => {
+            const toolCall = toolCalls.find((item) => item.id === event.toolUseId)
+            if (toolCall) {
+              toolCall.args = JSON.parse(JSON.stringify(event.args ?? {}))
+            }
+          },
+          onToolResult: (event) => {
+            const toolCall = toolCalls.find((item) => item.id === event.toolUseId)
+            if (toolCall) {
+              toolCall.result = JSON.parse(JSON.stringify(event.result ?? null))
+              toolCall.status = 'completed'
+            }
+          },
+          onThinking: () => {},
+          onUsage: (nextUsage) => { usage = nextUsage },
+          onDone: () => {
+            cleanup()
+            resolve()
+          },
+          onError: (error) => {
+            cleanup()
+            reject(error)
+          },
+        },
+      )
+    })
+
+    await window.api.chat.completions({
+      _requestId: requestId,
+      providerId: providerStore.currentProvider.id,
+      modelId: providerStore.currentModel.id,
+      system: systemSections.join('\n\n'),
+      messages: [{ role: 'user', content: prompt }],
+      stream: true,
+      maxTokens: providerStore.currentModel.maxTokens || 4096,
+      ...(providerStore.currentModel.supportsThinking ? { thinking: { type: 'enabled' as const, budgetTokens: 2000 } } : {}),
+      runtime: {
+        cwd: typeof data.cwd === 'string' && data.cwd.trim() ? data.cwd.trim() : undefined,
+        additionalDirectories,
+        permissionMode: typeof data.permissionMode === 'string' ? data.permissionMode : 'dontAsk',
+        extraInstructions: typeof data.extraInstructions === 'string' ? data.extraInstructions : undefined,
+        loadProjectClaudeMd: data.loadProjectClaudeMd !== false,
+        loadRuleMd: data.loadRuleMd !== false,
+        enabledPlugins: this.runtimeConfig?.enabledPlugins,
+      },
+    })
+
+    await completionFinished
+
+    return {
+      content: assistantText.trim(),
+      toolCalls,
+      usage,
+      prompt,
+      systemPrompt: typeof data.systemPrompt === 'string' ? data.systemPrompt : '',
+      runtime: {
+        cwd: typeof data.cwd === 'string' ? data.cwd : undefined,
+        additionalDirectories,
+        permissionMode: typeof data.permissionMode === 'string' ? data.permissionMode : undefined,
+        loadProjectClaudeMd: data.loadProjectClaudeMd !== false,
+        loadRuleMd: data.loadRuleMd !== false,
+        extraInstructions: typeof data.extraInstructions === 'string' ? data.extraInstructions : undefined,
+      },
+    }
   }
 
   private executeSwitch(conditions: ConditionItem[]): any {

@@ -112,11 +112,26 @@ class WorkflowNodeRegistry {
     return result
   }
 
+  /** 获取指定插件列表的 Agent 工具及来源插件 */
+  getAgentToolsWithPluginIds(pluginIds: string[]): Array<AgentToolDefinition & { pluginId: string }> {
+    const result: Array<AgentToolDefinition & { pluginId: string }> = []
+    for (const pluginId of pluginIds) {
+      const entry = this.entries.get(pluginId)
+      if (!entry?.agentTools) {
+        continue
+      }
+      for (const tool of entry.agentTools) {
+        result.push({ ...tool, pluginId })
+      }
+    }
+    return result
+  }
+
   /** 查找 Agent 工具的 handler 和 api */
-  getAgentToolHandler(toolName: string): { handler: AgentToolHandler; api: Record<string, any> } | undefined {
+  getAgentToolHandler(toolName: string): { pluginId: string; handler: AgentToolHandler; api: Record<string, any> } | undefined {
     for (const entry of this.entries.values()) {
       if (entry.agentTools?.some(t => t.name === toolName) && entry.agentToolHandler) {
-        return { handler: entry.agentToolHandler, api: entry.api || {} }
+        return { pluginId: entry.pluginId, handler: entry.agentToolHandler, api: entry.api || {} }
       }
     }
     return undefined

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { onMounted, computed, ref, watch } from 'vue'
-import { RefreshCw, Search, FolderOpen, PackagePlus, Store } from 'lucide-vue-next'
+import { RefreshCw, Search, FolderOpen, PackagePlus } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Switch } from '@/components/ui/switch'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Dialog,
   DialogContent,
@@ -29,7 +29,7 @@ const emit = defineEmits<{ 'update:open': [value: boolean] }>()
 const pluginStore = usePluginStore()
 
 // --- 商店模式状态 ---
-const storeMode = ref(false)
+const activeTab = ref<'local' | 'store'>('local')
 const remotePlugins = ref<RemotePlugin[]>([])
 const remoteLoading = ref(false)
 const loadingPluginId = ref<string | null>(null)
@@ -52,7 +52,7 @@ function resolveStoreUrl(relativePath: string): string {
 }
 
 // --- 派生数据 ---
-const isStoreMode = computed(() => storeMode.value)
+const isStoreMode = computed(() => activeTab.value === 'store')
 
 const allTags = computed(() => {
   const tagSet = new Set<string>()
@@ -122,9 +122,9 @@ async function fetchRemotePlugins() {
   }
 }
 
-async function handleStoreModeToggle(val: boolean) {
-  storeMode.value = val
-  if (val) {
+async function handleTabChange(val: string | number) {
+  activeTab.value = val as 'local' | 'store'
+  if (val === 'store' && remotePlugins.value.length === 0) {
     await fetchRemotePlugins()
   }
 }
@@ -206,7 +206,7 @@ watch(() => props.open, async (val) => {
     await pluginStore.init()
   } else {
     // 关闭时重置状态
-    storeMode.value = false
+    activeTab.value = 'local'
     clearFilters()
   }
 })
@@ -214,21 +214,23 @@ watch(() => props.open, async (val) => {
 
 <template>
   <Dialog :open="open" @update:open="emit('update:open', $event)">
-    <DialogContent class="sm:max-w-[800px] h-[600px] flex flex-col p-0 gap-0">
+    <DialogContent class="sm:max-w-[80vw] h-[600px] flex flex-col p-0 gap-0">
       <!-- 标题栏 -->
-      <DialogHeader class="flex items-center gap-2 px-4 py-2 border-b border-border flex-shrink-0 flex-row">
+      <DialogHeader class="flex items-center gap-2 px-4 pr-10 py-2 border-b border-border flex-shrink-0 flex-row">
         <DialogTitle class="text-sm font-semibold flex-shrink-0">
-          {{ isStoreMode ? '插件商店' : '插件管理' }}
+          插件管理
         </DialogTitle>
         <div class="flex-1" />
-        <div class="flex items-center gap-1.5 mr-2">
-          <Store class="w-3.5 h-3.5 text-muted-foreground" />
-          <span class="text-xs text-muted-foreground">商店</span>
-          <Switch
-            :model-value="storeMode"
-            @update:model-value="handleStoreModeToggle"
-          />
-        </div>
+        <Tabs v-model="activeTab" @update:model-value="handleTabChange">
+          <TabsList class="h-7">
+            <TabsTrigger value="local" class="text-xs px-3 h-5">
+              本地
+            </TabsTrigger>
+            <TabsTrigger value="store" class="text-xs px-3 h-5">
+              在线
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
         <template v-if="!isStoreMode">
           <Button
             variant="ghost"
@@ -342,7 +344,7 @@ watch(() => props.open, async (val) => {
           <!-- 正常列表 -->
           <div
             v-else-if="hasPlugins && hasFilteredResults"
-            class="grid grid-cols-2 md:grid-cols-3 gap-4"
+            class="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4"
           >
             <PluginCard
               v-for="plugin in filteredPlugins"

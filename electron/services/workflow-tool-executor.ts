@@ -19,7 +19,7 @@ const NODE_TYPE_DEFINITIONS: NodeTypeDefinition[] = [
   { type: 'end', label: '结束', category: '流程控制', description: '工作流出口节点，仅支持输入连接' },
   { type: 'run_code', label: '运行 JS 代码', category: '流程控制', description: '执行自定义 JavaScript 代码，可通过 context 访问上游数据' },
   { type: 'toast', label: 'Toast 消息', category: '流程控制', description: '显示 Toast 通知消息' },
-  { type: 'agent_chat', label: 'AI 对话', category: 'AI', description: '调用 AI 处理文本，prompt 支持 $context 变量替换' },
+  { type: 'agent_run', label: 'AI 执行', category: 'AI', description: '调用 Claude Agent 运行任务，支持目录、规则和工具' },
 ]
 
 // ====== 接口定义 ======

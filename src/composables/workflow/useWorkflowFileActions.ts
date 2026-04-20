@@ -80,7 +80,8 @@ export function useWorkflowFileActions(
   async function onListSelect(workflow: any) {
     if (workflow) {
       await store.loadData()
-      store.currentWorkflow = store.workflows.find((w) => w.id === workflow.id) || workflow
+      const loaded = store.workflows.find((w) => w.id === workflow.id) || workflow
+      store.currentWorkflow = JSON.parse(JSON.stringify(loaded))
       store.selectedNodeId = null
     }
   }

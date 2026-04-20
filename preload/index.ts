@@ -23,6 +23,7 @@ export interface ChatCompletionParams {
     loadProjectClaudeMd?: boolean
     loadRuleMd?: boolean
     ruleFileNames?: string[]
+    enabledPlugins?: string[]
   }
 }
 

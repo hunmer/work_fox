@@ -31,6 +31,12 @@
 - 现有聊天入口可在不重写 UI 的前提下切换到 Claude runtime：只需保留 `chat:completions` / `chat:abort` IPC 名称，并在主进程桥接 `stream_event` -> `chat:*`。
 - 现有 `runAgentStream()` 会把最后一条用户消息同时出现在 `history` 和 `input` 中；切换到 transcript prompt 模式后需要显式去重，否则 Claude 会看到重复用户请求。
 - Batch 1 暂未迁移旧 tool schema；当前 runtime 仅启用 Claude Code 内置工具的最小权限模式，因此“兼容现有 tools/plugin tools”仍属于后续 Phase 7 范围。
+- Claude SDK 的自定义 MCP 工具在模型上下文中会显示为 `mcp__{server}__{tool}`；如果不做映射，现有 WorkFox 聊天 UI 会直接暴露该内部命名。
+- 通过 `canUseTool` 可以拿到 Claude 的 `toolUseID`，可用于在主进程建立“Claude tool call -> WorkFox tool display name / args”映射，从而兼容当前 `chat:tool-call` / `chat:tool-result` 协议。
+- `workflow-tool:execute` 的 renderer 监听器虽然已存在于 `src/stores/workflow.ts`，但此前并未在 `WorkflowEditor.vue` 中挂载，因此 renderer-owned workflow tools 实际会超时；已在本轮修复。
+- 当前仓库中的 skills 耦合点基本只剩 `src/components/chat/ChatInput.vue` 和浏览器系统 prompt；未发现对应的主进程 skill 服务，因此直接移除比保留空壳更合理。
+- 旧 `electron/services/ai-proxy.ts` 在 chat runtime 切换后已不再被主链路引用，仅剩 `aiProvider:test` 复用；将其测试逻辑拆出后，整个旧文件可以安全删除。
+- workflow `agent_run` 节点可以直接复用现有 `chat:completions` IPC 和 Claude runtime，不必新增第二套 workflow-only main 进程执行器。
 
 ## Technical Decisions
 | Decision | Rationale |
@@ -47,6 +53,11 @@
 | Batch 1 不引入 Claude SDK 工具适配 | 先验证 runtime、事件流和 Electron 打包，再进入工具兼容层 |
 | Batch 1 使用 transcript prompt 兼容现有聊天历史 | `query()` 并不直接吃完整 Messages API history，先用 prompt 折叠上下文可快速打通主链路 |
 | Batch 1 默认走 `permissionMode: "dontAsk"` 或只读/最小工具集合 | 未实现宿主级审批 UI 前，避免 Claude runtime 在工具权限处卡死 |
+| Phase 7 采用 in-process MCP server 暴露 WorkFox 本地工具 | 这是 Claude Agent SDK 原生的自定义工具接入方式，且最容易兼容 workflow / plugin tools |
+| Claude 自定义工具名在 UI 层必须还原为 WorkFox 原始工具名 | 现有聊天记录、重试工具、流式工具卡片都依赖稳定的应用内工具名 |
+| workflow `agent_run` 节点复用 `chat:completions` IPC | 这样可直接继承 Claude runtime 的目录、规则、权限和工具适配能力 |
+| skills 退场直接做产品入口删除，不额外补迁移脚本 | 当前仓库未发现完整的 skill 后端，保留 UI 只会制造误导 |
+| `aiProvider:test` 独立为单文件服务后删除 `ai-proxy.ts` | 保证代码库内只保留一套 chat / agent 执行实现 |
 
 ## Issues Encountered
 | Issue | Resolution |
@@ -55,16 +66,19 @@
 | 当前 workflow 侧并无已落地的 agent runtime 可供替换 | 将“替换范围”定义为统一替换现有 chat/agent 内核，并为 workflow 新建执行型节点接入点 |
 | Claude Agent SDK 与 Electron main 打包是否完全兼容仍未知 | 将 Runtime PoC 和打包验证列为 Batch 1 必做项 |
 | 当前仓库完整 TypeScript 类型检查本身存在多处历史错误 | 本轮改用 `pnpm build` 作为 Batch 1 的集成验证，同时将 `tsc` 报错标记为仓库存量问题，不与 Claude runtime 集成结果混淆 |
+| workflow renderer 工具虽然有 dispatcher，但未实际监听 | 在 `WorkflowEditor.vue` 挂载 `listenForWorkflowToolRequests()` 后解决 |
 
 ## Resources
 - Claude Agent SDK TypeScript 文档: https://platform.claude.com/docs/en/agent-sdk/typescript
 - Claude Agent SDK Streaming Output: https://docs.claude.com/en/docs/claude-code/sdk/sdk-typescript
 - Claude Agent SDK 仓库: https://github.com/anthropics/claude-agent-sdk-typescript
-- 当前主进程代理实现: `/Users/Zhuanz/Documents/work_fox/electron/services/ai-proxy.ts`
+- 当前主进程 Claude runtime: `/Users/Zhuanz/Documents/work_fox/electron/services/claude-agent-runtime.ts`
+- Claude 工具适配层: `/Users/Zhuanz/Documents/work_fox/electron/services/claude-tool-adapter.ts`
+- Provider 连通性测试: `/Users/Zhuanz/Documents/work_fox/electron/services/ai-provider-test.ts`
 - 当前 agent 入口: `/Users/Zhuanz/Documents/work_fox/src/lib/agent/agent.ts`
 - 当前 workflow engine: `/Users/Zhuanz/Documents/work_fox/src/lib/workflow/engine.ts`
 - 当前插件节点/工具注册表: `/Users/Zhuanz/Documents/work_fox/electron/services/workflow-node-registry.ts`
-- 当前 skills UI: `/Users/Zhuanz/Documents/work_fox/src/components/chat/ChatInput.vue`
+- 已移除的旧 skills UI 入口: `/Users/Zhuanz/Documents/work_fox/src/components/chat/ChatInput.vue`
 - planning-with-files 技能说明: `/Users/Zhuanz/Documents/work_fox/.claude/skills/planning-with-files/SKILL.md`
 - 详细迁移计划: `/Users/Zhuanz/Documents/work_fox/docs/superpowers/plans/2026-04-20-claude-agent-sdk-migration.md`
 

@@ -211,9 +211,11 @@ watch(() => store.currentWorkflow, (val) => {
 
 // 定时自动保存：10秒内有变更则保存
 let cleanupFileUpdates: (() => void) | null = null
+let cleanupWorkflowToolRequests: (() => void) | null = null
 let autoSaveTimer: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
   cleanupFileUpdates = store.listenForFileUpdates()
+  cleanupWorkflowToolRequests = store.listenForWorkflowToolRequests()
   if (route.query.open === '1' && !store.currentWorkflow) {
     openWorkflow()
   }
@@ -225,6 +227,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   cleanupFileUpdates?.()
+  cleanupWorkflowToolRequests?.()
   if (autoSaveTimer) clearInterval(autoSaveTimer)
 })
 

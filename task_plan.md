@@ -4,7 +4,7 @@
 用 Claude Agent SDK 替换当前基于 Anthropic Messages API 的自建 agent/chat 执行链路，使 workflow 下的 agent 拥有真实执行能力、支持工作区目录与 `CLAUDE.md` 规则加载、兼容现有 tools/plugin tools 调用，并移除旧的应用内 skills 模块。
 
 ## Current Phase
-Phase 7
+Phase 10
 
 ## Phases
 
@@ -51,28 +51,28 @@ Phase 7
 - **Status:** complete
 
 ### Phase 7: Tool Adapter Integration
-- [ ] 设计并实现内置工具、workflow tools、plugin tools 的 Claude 兼容适配层
-- [ ] 解决工具命名空间与 handler 路由映射
-- [ ] 验证工具调用事件与结果回流
-- **Status:** pending
+- [x] 设计并实现内置工具、workflow tools、plugin tools 的 Claude 兼容适配层
+- [x] 解决工具命名空间与 handler 路由映射
+- [x] 验证工具调用事件与结果回流
+- **Status:** complete
 
 ### Phase 8: Workflow Agent Migration
-- [ ] 用 `agent_run` 替换 `agent_chat`
-- [ ] 扩展 workflow node schema 支持 `cwd`、规则加载与权限配置
-- [ ] 让 workflow engine 通过新 agent runtime 执行
-- **Status:** pending
+- [x] 用 `agent_run` 替换 `agent_chat`
+- [x] 扩展 workflow node schema 支持 `cwd`、规则加载与权限配置
+- [x] 让 workflow engine 通过新 agent runtime 执行
+- **Status:** complete
 
 ### Phase 9: Skills Removal
-- [ ] 删除 renderer skills UI、相关 prompt 文案与残留 API
-- [ ] 扫描并移除 skill IPC / 服务 / 数据存储残留
-- [ ] 评估是否需要历史 skill 导出或迁移
-- **Status:** pending
+- [x] 删除 renderer skills UI、相关 prompt 文案与残留 API
+- [x] 扫描并移除 skill IPC / 服务 / 数据存储残留
+- [x] 评估是否需要历史 skill 导出或迁移
+- **Status:** complete
 
 ### Phase 10: Final Cleanup & Validation
-- [ ] 退役旧 `ai-proxy` 链路与多余兼容代码
-- [ ] 完成构建、回归验证和迁移说明
-- [ ] 向用户交付实施结果与剩余风险
-- **Status:** pending
+- [x] 退役旧 `ai-proxy` 链路与多余兼容代码
+- [x] 完成构建、回归验证和迁移说明
+- [x] 向用户交付实施结果与剩余风险
+- **Status:** complete
 
 ## Key Questions
 1. Claude Agent SDK 替换后，前端是否继续保留当前 `chat` 流式渲染协议，还是同步改 UI 协议？
@@ -99,6 +99,11 @@ Phase 7
 | Claude SDK 自定义工具先不在 Batch 1 落地 | 官方 Node SDK 走 in-process MCP 暴露更合适，首批先聚焦 runtime 切换与打包验证 |
 | Batch 1 的聊天历史先折叠成 transcript prompt，而不是直接迁移为 Claude session persistence | 这样可以最小改动打通主链路，后续再升级到 resume/session 模式 |
 | Batch 1 先使用内置 Claude Code 工具的只读/最小权限模式，不接入现有 workflow/plugin tools | 当前目标是验证 runtime 和打包集成，工具兼容层放到 Phase 7 |
+| Phase 7 通过本地 in-process MCP server 暴露 browser/workflow/plugin tools | 这是 Claude Agent SDK 最自然的自定义工具接入方式，也最利于复用现有主进程工具实现 |
+| 自定义 MCP 工具名统一还原为 WorkFox 原始工具名再进入现有 UI 事件流 | 否则前端会暴露 `mcp__server__tool`，影响显示、重试和兼容性 |
+| `agent_run` 节点直接复用 `chat:completions` IPC 和 Claude runtime，而不是再做独立 workflow main 服务 | 这样可直接复用规则加载、权限模式、工具适配和 abort 逻辑 |
+| skills 直接退场，不保留空壳 UI | 当前仓库未发现完整的 skill main 进程实现，继续保留只会制造误导 |
+| `aiProvider:test` 单独拆成 `ai-provider-test.ts` 后删除旧 `ai-proxy.ts` | 避免仓库内同时保留两套 chat 执行链路造成维护歧义 |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
@@ -112,3 +117,4 @@ Phase 7
 - 详细迁移设计文档已写入 `docs/superpowers/plans/2026-04-20-claude-agent-sdk-migration.md`
 - 2026-04-20 已确认 Claude Agent SDK 关键约束：`settingSources` 默认不会加载文件系统配置；要启用项目级 `CLAUDE.md` 需配合 `systemPrompt preset=claude_code`；实时流式 UI 需依赖 `includePartialMessages`
 - 2026-04-20 已完成 Batch 1 PoC：`chat:completions` 已切到 Claude Agent SDK，`pnpm build` 通过；下一阶段重点是把 workflow tools / plugin tools 经 adapter 接回 Claude runtime
+- 2026-04-20 已完成 Phase 7-10 主实现：Claude runtime 已接入 browser/workflow/plugin tools adapter，workflow `agent_run` 已替换旧 `agent_chat`，skills UI 与旧 `ai-proxy` 已移除，`pnpm build` 再次通过

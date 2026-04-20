@@ -74,18 +74,6 @@ export async function runAgentStream(
     ? [...WORKFLOW_TOOL_DEFINITIONS]
     : createToolDiscoveryTools()
 
-  // 工作流模式：仅当编辑模式关闭时才加载插件 Agent 工具（让 AI 直接运行插件）
-  if (isWorkflow && !workflowEditMode && options?.enabledPlugins?.length) {
-    try {
-      const pluginTools = await window.api.plugin.getAgentTools(JSON.parse(JSON.stringify(options.enabledPlugins)))
-      if (pluginTools?.length) {
-        tools = [...pluginTools]
-      }
-    } catch (err) {
-      console.warn('[Agent] 加载插件 Agent 工具失败:', err)
-    }
-  }
-
   // 系统提示词
   const systemPrompt = isWorkflow
     ? buildWorkflowSystemPrompt(options!.workflowSummary!)
@@ -128,6 +116,9 @@ export async function runAgentStream(
         ? {
             _mode: 'workflow' as const,
             _workflowId: options!.workflowId,
+            runtime: {
+              enabledPlugins: options?.enabledPlugins,
+            },
           }
         : {
             targetTabId: targetTabId ?? undefined,

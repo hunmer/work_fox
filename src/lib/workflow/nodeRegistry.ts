@@ -93,7 +93,7 @@ function getToolIcon(name: string): string {
     hover_element: 'Pointer',
     run_code: 'Terminal',
     toast: 'Bell',
-    agent_chat: 'Bot',
+    agent_run: 'Bot',
     switch: 'GitBranch',
     start: 'LogIn',
     end: 'LogOut',

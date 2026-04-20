@@ -125,7 +125,7 @@ function createExecutionLogManager(currentWorkflow: Ref<Workflow | null>, api: (
   async function deleteExecutionLog(logId: string): Promise<void> {
     const workflowId = currentWorkflow.value?.id
     if (!workflowId) return
-    await api().executionLog.delete(workflowId, logId)
+    await api().executionLog.delete(logId)
     executionLogs.value = executionLogs.value.filter((l) => l.id !== logId)
     if (selectedExecutionLogId.value === logId) selectedExecutionLogId.value = null
   }
@@ -419,6 +419,11 @@ function createExecutionActions(
     engine.value = new WorkflowEngine(currentWorkflow.value.nodes, currentWorkflow.value.edges, {
       onLogUpdate: (log) => { executionLog.value = { ...log } },
       onNodeStatusChange: () => {},
+    }, {
+      workflowId: currentWorkflow.value.id,
+      workflowName: currentWorkflow.value.name,
+      workflowDescription: currentWorkflow.value.description,
+      enabledPlugins: currentWorkflow.value.enabledPlugins || [],
     })
 
     const log = await engine.value.start()
@@ -469,7 +474,12 @@ function createDebugActions(
     debugNodeResult.value = null
     debugNodeId.value = nodeId
 
-    const tempEngine = new WorkflowEngine([node], [])
+    const tempEngine = new WorkflowEngine([node], [], undefined, {
+      workflowId: currentWorkflow.value.id,
+      workflowName: currentWorkflow.value.name,
+      workflowDescription: currentWorkflow.value.description,
+      enabledPlugins: currentWorkflow.value.enabledPlugins || [],
+    })
     const result = await tempEngine.debugSingleNode(node, executionContext.value)
 
     debugNodeResult.value = result

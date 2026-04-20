@@ -1,9 +1,12 @@
 import { constants as fsConstants } from 'node:fs'
 import { access, readFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { AbortError, query, type PermissionMode, type Query } from '@anthropic-ai/claude-agent-sdk'
 import { BrowserWindow } from 'electron'
+import { createClaudeToolAdapter } from './claude-tool-adapter'
 import { getAIProvider } from './store'
+import { rejectPendingRendererToolsForRequest } from './workflow-tool-dispatcher'
 
 interface RuntimeOptions {
   cwd?: string
@@ -14,6 +17,7 @@ interface RuntimeOptions {
   loadProjectClaudeMd?: boolean
   loadRuleMd?: boolean
   ruleFileNames?: string[]
+  enabledPlugins?: string[]
 }
 
 interface ClaudeRuntimeRequest {
@@ -62,6 +66,7 @@ interface StreamBridgeState {
 const READ_ONLY_TOOLS = ['Read', 'Glob', 'Grep', 'LS']
 const EDIT_TOOLS = ['Read', 'Glob', 'Grep', 'LS', 'Edit', 'MultiEdit', 'Write']
 const DEFAULT_RULE_FILE_NAMES = ['rule.md']
+const PLATFORM_BINARY_PACKAGE = `@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}`
 const RUNTIME_SYSTEM_PROMPT = [
   '你是 WorkFox 中的 Claude 执行型 agent。',
   '回复使用中文。',
@@ -83,6 +88,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
+}
+
+function resolveClaudeCodeExecutablePath(): string | undefined {
+  try {
+    const projectRequire = createRequire(import.meta.url)
+    const sdkEntry = projectRequire.resolve('@anthropic-ai/claude-agent-sdk')
+    const sdkRequire = createRequire(sdkEntry)
+    return sdkRequire.resolve(`${PLATFORM_BINARY_PACKAGE}/claude`)
+  } catch {
+    return undefined
+  }
 }
 
 function resolvePermissionMode(runtime?: RuntimeOptions): PermissionMode {
@@ -328,6 +344,7 @@ function bridgePartialMessage(
   requestId: string,
   state: StreamBridgeState,
   streamEvent: unknown,
+  resolveDisplayToolName: (toolName: string) => string,
 ): void {
   if (!isRecord(streamEvent)) {
     return
@@ -347,7 +364,8 @@ function bridgePartialMessage(
       const contentBlock = isRecord(streamEvent.content_block) ? streamEvent.content_block : undefined
       if (contentBlock?.type === 'tool_use') {
         const toolUseId = typeof contentBlock.id === 'string' ? contentBlock.id : `tool-${Date.now()}`
-        const toolName = typeof contentBlock.name === 'string' ? contentBlock.name : 'unknown'
+        const rawToolName = typeof contentBlock.name === 'string' ? contentBlock.name : 'unknown'
+        const toolName = resolveDisplayToolName(rawToolName)
         const args = isRecord(contentBlock.input) ? cloneJson(contentBlock.input) : {}
 
         state.tools.set(toolUseId, {
@@ -459,12 +477,21 @@ export async function startClaudeAgentRun(
     const ruleInstructions = await loadRuleInstructions(runtime, cwd)
     const permissionMode = resolvePermissionMode(runtime)
     const tools = resolveBuiltInTools(runtime)
+    const toolAdapter = createClaudeToolAdapter({
+      mainWindow,
+      requestId: _requestId,
+      mode: params._mode === 'workflow' ? 'workflow' : 'browser',
+      workflowId: params._workflowId,
+      enabledToolNames: params.enabledToolNames,
+      enabledPlugins: runtime?.enabledPlugins,
+    })
 
     const agentQuery = query({
       prompt: buildPrompt(params.messages),
       options: {
         abortController,
         model: modelId,
+        pathToClaudeCodeExecutable: resolveClaudeCodeExecutablePath(),
         cwd,
         additionalDirectories,
         persistSession: false,
@@ -476,6 +503,8 @@ export async function startClaudeAgentRun(
         allowDangerouslySkipPermissions: permissionMode === 'bypassPermissions',
         settingSources: runtime?.loadProjectClaudeMd === false ? [] : ['project'],
         systemPrompt: buildSystemPrompt(params, ruleInstructions),
+        mcpServers: Object.keys(toolAdapter.mcpServers).length > 0 ? toolAdapter.mcpServers : undefined,
+        canUseTool: toolAdapter.canUseTool,
         env: {
           ...process.env,
           ANTHROPIC_API_KEY: provider.apiKey,
@@ -501,7 +530,7 @@ export async function startClaudeAgentRun(
 
     for await (const message of agentQuery) {
       if (message.type === 'stream_event') {
-        bridgePartialMessage(mainWindow, _requestId, streamState, message.event)
+        bridgePartialMessage(mainWindow, _requestId, streamState, message.event, toolAdapter.resolveDisplayToolName)
         continue
       }
 
@@ -516,13 +545,17 @@ export async function startClaudeAgentRun(
 
       if (message.type === 'tool_progress') {
         if (!streamState.tools.has(message.tool_use_id)) {
+          const executionContext = toolAdapter.getExecutionContext(message.tool_use_id)
+          const displayName = executionContext?.displayName ?? toolAdapter.resolveDisplayToolName(message.tool_name)
+          const args = executionContext?.args ?? {}
+
           streamState.tools.set(message.tool_use_id, {
             id: message.tool_use_id,
-            name: message.tool_name,
-            args: {},
+            name: displayName,
+            args,
             completed: false,
           })
-          emitToolCall(mainWindow, _requestId, message.tool_use_id, message.tool_name, {})
+          emitToolCall(mainWindow, _requestId, message.tool_use_id, displayName, args)
         }
         continue
       }
@@ -534,7 +567,14 @@ export async function startClaudeAgentRun(
             continue
           }
           tool.completed = true
-          completeToolCall(mainWindow, _requestId, toolUseId, tool.name, { summary: message.summary })
+          const knownResult = toolAdapter.getToolResult(toolUseId)
+          completeToolCall(
+            mainWindow,
+            _requestId,
+            toolUseId,
+            tool.name,
+            knownResult ?? { summary: message.summary },
+          )
         }
         continue
       }
@@ -570,6 +610,7 @@ export async function startClaudeAgentRun(
       error: error instanceof Error ? error.message : String(error),
     })
   } finally {
+    rejectPendingRendererToolsForRequest(_requestId, new Error('Claude agent request finished'))
     const activeRun = activeClaudeRuns.get(_requestId)
     activeRun?.queryHandle.close()
     activeClaudeRuns.delete(_requestId)
@@ -582,6 +623,7 @@ export function abortClaudeAgentRun(requestId: string): { aborted: boolean; reas
     return { aborted: false, reason: 'not found' }
   }
 
+  rejectPendingRendererToolsForRequest(requestId, new Error('Claude agent request aborted'))
   activeRun.abortController.abort()
   activeRun.queryHandle.close()
   activeClaudeRuns.delete(requestId)
