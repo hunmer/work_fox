@@ -192,7 +192,7 @@ onMounted(() => {
       <div
         class="group/node border-2 rounded-lg shadow-sm w-full h-full cursor-pointer transition-colors relative"
         :class="[statusColor, stateBackground, props.selected ? 'ring-2 ring-primary' : '']"
-        @click="store.selectedNodeId = String(id)"
+        @click="store.selectedNodeIds = [String(id)]"
       >
         <!-- 输入连接点 -->
         <Handle

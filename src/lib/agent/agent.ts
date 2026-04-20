@@ -33,7 +33,7 @@ export interface AgentStreamOptions {
   /** 工作流专属 runtime 参数 */
   runtime?: ChatCompletionParams['runtime']
   /** 当前选中的节点（用于聚焦上下文） */
-  selectedNode?: { id: string; type: string; label: string; data: Record<string, any> } | null
+  selectedNodes?: Array<{ id: string; type: string; label: string; data: Record<string, any> }> | null
 }
 
 /**
@@ -80,7 +80,7 @@ export async function runAgentStream(
 
   // 系统提示词
   const systemPrompt = isWorkflow
-    ? buildWorkflowSystemPrompt(options!.workflowSummary!, options?.selectedNode)
+    ? buildWorkflowSystemPrompt(options!.workflowSummary!, options?.selectedNodes)
     : BROWSER_AGENT_SYSTEM_PROMPT
 
   const requestId = crypto.randomUUID()

@@ -145,12 +145,16 @@ function onNodeSelectDialogClose(open: boolean) {
   }
 }
 
+function onSelectionChange({ nodes: selectedNodes }: any) {
+  store.selectedNodeIds = selectedNodes?.map((n: any) => n.id) || []
+}
+
 function onNodeClick({ node }: any) {
-  store.selectedNodeId = node?.id || null
+  store.selectedNodeIds = node?.id ? [node.id] : []
 }
 
 function onPaneClick() {
-  store.selectedNodeId = null
+  store.selectedNodeIds = []
 }
 
 function onDragOver(event: DragEvent) {
@@ -192,7 +196,7 @@ function openRecentWorkflow(id: string) {
   const wf = store.workflows.find(w => w.id === id)
   if (wf) {
     store.currentWorkflow = JSON.parse(JSON.stringify(wf))
-    store.selectedNodeId = null
+    store.selectedNodeIds = []
   }
 }
 
@@ -335,6 +339,7 @@ function onConnect(params: any) {
                 @node-click="onNodeClick"
                 @nodes-initialized="handleNodesInitialized as any"
                 @pane-click="onPaneClick"
+                @selection-change="onSelectionChange"
               >
                 <Background />
                 <MiniMap />

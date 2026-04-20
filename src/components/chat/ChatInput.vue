@@ -34,7 +34,7 @@ const props = defineProps<{
   enabledTools?: Record<string, boolean>
   isWorkflowContext?: boolean
   workflowEditMode?: boolean
-  selectedNode?: { id: string; type: string; label: string } | null
+  selectedNodes?: Array<{ id: string; type: string; label: string }>
 }>()
 
 const emit = defineEmits<{
@@ -157,7 +157,7 @@ function removeImage(index: number) {
 
       <!-- 选中节点 Badge -->
       <InputGroupAddon
-        v-if="isWorkflowContext && selectedNode"
+        v-if="isWorkflowContext && selectedNodes?.length"
         align="block-start"
         class="px-2 pt-1"
       >
@@ -167,7 +167,7 @@ function removeImage(index: number) {
           @click="uiStore.toggleNodeContext()"
         >
           <Crosshair class="size-3" />
-          {{ selectedNode.label || selectedNode.type }}
+          {{ selectedNodes.length === 1 ? (selectedNodes[0].label || selectedNodes[0].type) : `${selectedNodes.length} 个节点` }}
         </Badge>
       </InputGroupAddon>
 

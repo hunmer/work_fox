@@ -318,7 +318,7 @@ function createCrudActions(
 
 function createEditActions(
   currentWorkflow: Ref<Workflow | null>,
-  selectedNodeId: Ref<string | null>,
+  selectedNodeIds: Ref<string[]>,
   executionStatus: Ref<EngineStatus>,
   executionLog: Ref<ExecutionLog | null>,
   executionContext: Ref<Record<string, any>>,
@@ -341,7 +341,7 @@ function createEditActions(
         JSON.parse(JSON.stringify(agentSettingsStore.globalSettings)),
       ),
     }
-    selectedNodeId.value = null
+    selectedNodeIds.value = []
     executionStatus.value = 'idle'
     executionLog.value = null
     executionContext.value = {}
@@ -365,7 +365,7 @@ function createEditActions(
     currentWorkflow.value.edges = currentWorkflow.value.edges.filter(
       (e) => e.source !== nodeId && e.target !== nodeId,
     )
-    if (selectedNodeId.value === nodeId) selectedNodeId.value = null
+    selectedNodeIds.value = selectedNodeIds.value.filter((id) => id !== nodeId)
   }
 
   function cloneNode(nodeId: string): WorkflowNode | null {
@@ -595,7 +595,7 @@ export function createWorkflowStore(tabId: string) {
     const workflows = ref<Workflow[]>([])
     const workflowFolders = ref<WorkflowFolder[]>([])
     const currentWorkflow = ref<Workflow | null>(null)
-    const selectedNodeId = ref<string | null>(null)
+    const selectedNodeIds = ref<string[]>([])
     const executionStatus = ref<EngineStatus>('idle')
     const executionLog = ref<ExecutionLog | null>(null)
     const executionContext = ref<Record<string, any>>({})
@@ -606,7 +606,7 @@ export function createWorkflowStore(tabId: string) {
     const versionMgr = createVersionManager(currentWorkflow, api)
     const dirtyTracker = createDirtyTracker()
     const crudActions = createCrudActions(workflows, workflowFolders, currentWorkflow, api, dirtyTracker, versionMgr)
-    const editActions = createEditActions(currentWorkflow, selectedNodeId, executionStatus, executionLog, executionContext, undoRedo)
+    const editActions = createEditActions(currentWorkflow, selectedNodeIds, executionStatus, executionLog, executionContext, undoRedo)
     const execActions = createExecutionActions(currentWorkflow, executionStatus, executionLog, executionContext, engine, execLogMgr)
     const debugActions = createDebugActions(currentWorkflow, executionContext)
     const aiActions = createAIActions(currentWorkflow, undoRedo)
@@ -614,9 +614,16 @@ export function createWorkflowStore(tabId: string) {
     const rootFolders = computed(() =>
       workflowFolders.value.filter((f) => f.parentId === null).sort((a, b) => a.order - b.order),
     )
+    const selectedNodeId = computed(() => selectedNodeIds.value[0] ?? null)
     const selectedNode = computed(() => {
       if (!selectedNodeId.value || !currentWorkflow.value) return null
       return currentWorkflow.value.nodes.find((n) => n.id === selectedNodeId.value) || null
+    })
+    const selectedNodes = computed(() => {
+      if (!selectedNodeIds.value.length || !currentWorkflow.value) return []
+      return selectedNodeIds.value
+        .map((id) => currentWorkflow.value!.nodes.find((n) => n.id === id))
+        .filter(Boolean) as WorkflowNode[]
     })
     const selectedExecutionLog = computed<ExecutionLog | null>(() => {
       const id = execLogMgr.selectedExecutionLogId.value
@@ -637,8 +644,8 @@ export function createWorkflowStore(tabId: string) {
 
     return {
       tabId,
-      workflows, workflowFolders, currentWorkflow, selectedNodeId,
-      rootFolders, selectedNode, executionValidationError,
+      workflows, workflowFolders, currentWorkflow, selectedNodeId, selectedNodeIds,
+      rootFolders, selectedNode, selectedNodes, executionValidationError,
       executionStatus, executionLog, executionContext,
       executionLogs: execLogMgr.executionLogs,
       selectedExecutionLogId: execLogMgr.selectedExecutionLogId,

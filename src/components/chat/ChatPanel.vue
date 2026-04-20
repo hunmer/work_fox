@@ -77,10 +77,10 @@ const isWorkflowContext = computed(() => {
   return !!session?.workflowId
 })
 
-const selectedNode = computed(() => {
-  const node = tabStore.activeStore?.selectedNode
-  if (!node) return null
-  return { id: node.id, type: node.type, label: node.label }
+const selectedNodes = computed(() => {
+  const nodes = tabStore.activeStore?.selectedNodes
+  if (!nodes?.length) return []
+  return nodes.map((n) => ({ id: n.id, type: n.type, label: n.label }))
 })
 
 function handleToggleWorkflowEdit(enabled: boolean) {
@@ -169,7 +169,7 @@ function handleEdit(messageId: string, newContent: string) {
       :enabled-tools="enabledTools"
       :is-workflow-context="isWorkflowContext"
       :workflow-edit-mode="uiStore.workflowEditMode"
-      :selected-node="selectedNode"
+      :selected-nodes="selectedNodes"
       @send="handleSend"
       @stop="chat.stopGeneration()"
       @clear="handleClear"

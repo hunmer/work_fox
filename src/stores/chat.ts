@@ -75,7 +75,7 @@ function buildWorkflowOptions(
   const sessionData = sessions.value.find((s) => s.id === currentSessionId.value)
   if (!sessionData?.workflowId || !workflowStore?.currentWorkflow) return undefined
   const agentConfig = workflowStore.currentWorkflow.agentConfig
-  const selectedNode = nodeContextEnabled ? workflowStore.selectedNode : null
+  const selectedNodes = nodeContextEnabled ? workflowStore.selectedNodes : []
   return {
     mode: 'workflow' as const,
     workflowId: workflowStore.currentWorkflow.id,
@@ -88,7 +88,7 @@ function buildWorkflowOptions(
     },
     enabledPlugins: workflowStore.currentWorkflow.enabledPlugins || [],
     workflowEditMode,
-    selectedNode: selectedNode ? { id: selectedNode.id, type: selectedNode.type, label: selectedNode.label, data: selectedNode.data } : null,
+    selectedNodes: selectedNodes.map(n => ({ id: n.id, type: n.type, label: n.label, data: n.data })),
     runtime: {
       cwd: agentConfig?.workspaceDir || agentSettingsStore.globalSettings.workspaceDir || undefined,
       additionalDirectories: agentConfig?.dataDir ? [agentConfig.dataDir] : undefined,

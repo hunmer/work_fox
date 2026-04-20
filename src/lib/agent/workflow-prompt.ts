@@ -41,7 +41,7 @@ export const WORKFLOW_AGENT_SYSTEM_PROMPT = `你是 WorkFox 的工作流编辑�
 
 export function buildWorkflowSystemPrompt(
   workflow: WorkflowSummary,
-  selectedNode?: { id: string; type: string; label: string; data: Record<string, any> } | null,
+  selectedNodes?: Array<{ id: string; type: string; label: string; data: Record<string, any> }> | null,
 ): string {
   const summary = {
     id: workflow.id,
@@ -51,18 +51,18 @@ export function buildWorkflowSystemPrompt(
     edges: workflow.edges,
   }
 
-  const selectedNodeSection = selectedNode
+  const selectedNodesSection = selectedNodes?.length
     ? `
 
 ## 当前选中节点
 
-用户当前聚焦的节点：
+用户当前聚焦的节点（${selectedNodes.length} 个）：
 
 \`\`\`json
-${JSON.stringify(selectedNode, null, 2)}
+${JSON.stringify(selectedNodes, null, 2)}
 \`\`\`
 
-请优先关注此节点的编辑和操作。`
+请优先关注这些节点的编辑和操作。`
     : ''
 
   return `${WORKFLOW_AGENT_SYSTEM_PROMPT}
@@ -75,5 +75,5 @@ ${JSON.stringify(selectedNode, null, 2)}
 
 \`\`\`json
 ${JSON.stringify(summary, null, 2)}
-\`\`\`${selectedNodeSection}`
+\`\`\`${selectedNodesSection}`
 }

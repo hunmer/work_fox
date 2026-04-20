@@ -89,7 +89,7 @@ export function useWorkflowFileActions(
       await store.loadData()
       const loaded = store.workflows.find((w) => w.id === workflow.id) || workflow
       store.currentWorkflow = JSON.parse(JSON.stringify(loaded))
-      store.selectedNodeId = null
+      store.selectedNodeIds = []
       tabStore.updateTabWorkflow(tabStore.activeTabId!, loaded.id, loaded.name)
     }
   }
