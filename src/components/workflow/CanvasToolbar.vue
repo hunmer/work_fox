@@ -1,10 +1,38 @@
 <script setup lang="ts">
-import { RotateCcw, RotateCw } from 'lucide-vue-next'
+import { RotateCcw, RotateCw, LayoutGrid } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useWorkflowStore } from '@/stores/workflow'
+import dagre from '@dagrejs/dagre'
 
 const store = useWorkflowStore()
+
+function handleAutoLayout() {
+  const wf = store.currentWorkflow
+  if (!wf) return
+
+  store.undoRedo.pushUndo('智能布局')
+
+  const g = new dagre.graphlib.Graph()
+  g.setDefaultEdgeLabel(() => ({}))
+  g.setGraph({ rankdir: 'LR', nodesep: 60, ranksep: 80 })
+
+  for (const node of wf.nodes) {
+    g.setNode(node.id, { width: 200, height: 80 })
+  }
+  for (const edge of wf.edges) {
+    g.setEdge(edge.source, edge.target)
+  }
+
+  dagre.layout(g)
+
+  for (const node of wf.nodes) {
+    const pos = g.node(node.id)
+    if (pos) {
+      node.position = { x: pos.x - 100, y: pos.y - 40 }
+    }
+  }
+}
 </script>
 
 <template>

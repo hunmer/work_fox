@@ -1,31 +1,59 @@
 <script setup lang="ts">
 import { useWorkflowStore } from '@/stores/workflow'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { History } from 'lucide-vue-next'
+import { History, Undo2, Trash2 } from 'lucide-vue-next'
 
 const store = useWorkflowStore()
 
 function formatTime(ts: number): string {
   const d = new Date(ts)
   const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+function restoreTo(index: number) {
+  store.restoreToStep(index)
+}
+
+function clearHistory() {
+  store.undoStack.splice(0)
+  store.redoStack.splice(0)
+  store.operationLog.splice(0)
 }
 </script>
 
 <template>
   <div class="flex flex-col h-full">
+    <div v-if="store.operationLog.length > 0" class="flex items-center justify-end px-2 py-1 border-b">
+      <button
+        class="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1 transition-colors"
+        @click="clearHistory"
+      >
+        <Trash2 class="w-3 h-3" />
+        清空
+      </button>
+    </div>
     <ScrollArea class="flex-1">
       <div class="p-2 space-y-0.5">
         <div
           v-for="(op, index) in store.operationLog"
           :key="index"
-          class="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs"
+          class="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs group transition-colors"
+          :class="op.snapshot
+            ? 'cursor-pointer hover:bg-accent'
+            : 'opacity-50 cursor-default'
+          "
+          @click="op.snapshot && restoreTo(index)"
         >
           <History class="w-3 h-3 text-muted-foreground shrink-0" />
           <span class="flex-1 truncate">{{ op.description }}</span>
           <span class="text-[10px] text-muted-foreground shrink-0">
             {{ formatTime(op.timestamp) }}
           </span>
+          <Undo2
+            v-if="op.snapshot"
+            class="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+          />
         </div>
 
         <div
@@ -39,7 +67,7 @@ function formatTime(ts: number): string {
           v-if="store.operationLog.length > 0"
           class="text-[10px] text-muted-foreground text-center pt-2"
         >
-          共 {{ store.operationLog.length }} 条操作记录（最多 1000 条）
+          点击记录可恢复到该步骤
         </div>
       </div>
     </ScrollArea>

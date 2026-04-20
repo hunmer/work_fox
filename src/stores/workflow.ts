@@ -56,7 +56,7 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () =>
   const MAX_HISTORY = 1000
   const undoStack = ref<string[]>([])
   const redoStack = ref<string[]>([])
-  const operationLog = ref<{ description: string; timestamp: number }[]>([])
+  const operationLog = ref<{ description: string; timestamp: number; snapshot?: string }[]>([])
 
   function captureSnapshot(): string {
     if (!currentWorkflow.value) return ''
@@ -76,7 +76,22 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () =>
     undoStack.value.push(snapshot)
     if (undoStack.value.length > MAX_HISTORY) undoStack.value.shift()
     redoStack.value = []
-    operationLog.value.unshift({ description, timestamp: Date.now() })
+    operationLog.value.unshift({ description, timestamp: Date.now(), snapshot })
+    if (operationLog.value.length > MAX_HISTORY) operationLog.value.length = MAX_HISTORY
+    persistLog()
+  }
+
+  function restoreToStep(index: number): void {
+    const entry = operationLog.value[index]
+    if (!entry?.snapshot) return
+    undoStack.value.push(captureSnapshot())
+    redoStack.value = []
+    applySnapshot(entry.snapshot)
+    operationLog.value.unshift({
+      description: `恢复到: ${entry.description}`,
+      timestamp: Date.now(),
+      snapshot: captureSnapshot(),
+    })
     if (operationLog.value.length > MAX_HISTORY) operationLog.value.length = MAX_HISTORY
     persistLog()
   }
@@ -85,7 +100,7 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () =>
     if (undoStack.value.length === 0) return
     redoStack.value.push(captureSnapshot())
     applySnapshot(undoStack.value.pop()!)
-    operationLog.value.unshift({ description: '撤销操作', timestamp: Date.now() })
+    operationLog.value.unshift({ description: '撤销操作', timestamp: Date.now(), snapshot: captureSnapshot() })
     if (operationLog.value.length > MAX_HISTORY) operationLog.value.length = MAX_HISTORY
     persistLog()
   }
@@ -94,7 +109,7 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () =>
     if (redoStack.value.length === 0) return
     undoStack.value.push(captureSnapshot())
     applySnapshot(redoStack.value.pop()!)
-    operationLog.value.unshift({ description: '重做操作', timestamp: Date.now() })
+    operationLog.value.unshift({ description: '重做操作', timestamp: Date.now(), snapshot: captureSnapshot() })
     if (operationLog.value.length > MAX_HISTORY) operationLog.value.length = MAX_HISTORY
     persistLog()
   }
@@ -109,7 +124,8 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () =>
     saveTimer = setTimeout(() => {
       const a = api()
       if (a?.operationHistory?.save) {
-        a.operationHistory.save(currentWorkflow.value!.id, JSON.parse(JSON.stringify(operationLog.value)))
+        const entries = operationLog.value.map(({ snapshot: _s, ...rest }) => rest)
+        a.operationHistory.save(currentWorkflow.value!.id, entries)
       }
     }, 500)
   }
@@ -129,7 +145,7 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () =>
   }
 
   return {
-    undoStack, redoStack, operationLog, pushUndo, undo, redo,
+    undoStack, redoStack, operationLog, pushUndo, undo, redo, restoreToStep,
     reset: () => { undoStack.value = []; redoStack.value = []; operationLog.value = [] },
     loadOperationHistory: loadFromDisk,
     canUndo, canRedo,
@@ -262,7 +278,6 @@ function createCrudActions(
       currentWorkflow.value = created
     }
     dirtyTracker.markClean()
-    await versionMgr.saveVersion()
   }
 
   async function deleteWorkflow(id: string): Promise<void> {
@@ -644,6 +659,7 @@ export function createWorkflowStore(tabId: string) {
       undoStack: undoRedo.undoStack,
       redoStack: undoRedo.redoStack,
       operationLog: undoRedo.operationLog,
+      restoreToStep: undoRedo.restoreToStep,
       versions: versionMgr.versions,
       loadVersions: versionMgr.loadVersions,
       saveVersion: versionMgr.saveVersion,

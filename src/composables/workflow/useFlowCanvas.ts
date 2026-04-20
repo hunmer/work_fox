@@ -1,8 +1,9 @@
-import { computed, watch, nextTick } from 'vue'
+import { computed, watch, nextTick, onUnmounted } from 'vue'
 import { useVueFlow, MarkerType } from '@vue-flow/core'
 import type { WorkflowStore } from '@/stores/workflow'
 
 export function useFlowCanvas(store: WorkflowStore, flowId: string) {
+  const flowStore = useVueFlow(flowId)
   const {
     onNodesChange,
     onEdgesChange,
@@ -10,7 +11,12 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     setViewport,
     fitView,
     updateNodeInternals,
-  } = useVueFlow(flowId)
+  } = flowStore
+
+  // HMR 清理：销毁 VueFlow 全局 store，防止 HMR 后节点位置混乱
+  onUnmounted(() => {
+    flowStore.$destroy?.()
+  })
 
   onNodesChange((changes) => {
     for (const change of changes) {

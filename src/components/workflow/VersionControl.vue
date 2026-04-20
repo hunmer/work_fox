@@ -2,7 +2,7 @@
 import { useWorkflowStore } from '@/stores/workflow'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
-import { Trash2, ArrowDownToLine } from 'lucide-vue-next'
+import { Trash2, ArrowDownToLine, Save } from 'lucide-vue-next'
 
 const store = useWorkflowStore()
 
@@ -10,6 +10,11 @@ function formatTime(ts: number): string {
   const d = new Date(ts)
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+async function handleSaveVersion() {
+  if (!store.currentWorkflow) return
+  await store.saveVersion()
 }
 
 async function handleRestoreVersion(versionId: string) {
@@ -23,6 +28,18 @@ async function handleDeleteVersion(versionId: string) {
 
 <template>
   <div class="flex flex-col h-full">
+    <div class="p-2 border-b">
+      <Button
+        variant="outline"
+        size="sm"
+        class="w-full"
+        :disabled="!store.currentWorkflow"
+        @click="handleSaveVersion"
+      >
+        <Save class="w-3.5 h-3.5 mr-1.5" />
+        保存当前版本
+      </Button>
+    </div>
     <ScrollArea class="flex-1">
       <div class="p-2 space-y-1">
         <div

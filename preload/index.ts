@@ -107,8 +107,8 @@ const api = {
   workflowVersion: {
     list: (workflowId: string): Promise<any[]> => ipcRenderer.invoke('workflowVersion:list', workflowId),
     add: (workflowId: string, name: string, nodes: any[], edges: any[]): Promise<any> => ipcRenderer.invoke('workflowVersion:add', workflowId, name, nodes, edges),
-    get: (id: string): Promise<any> => ipcRenderer.invoke('workflowVersion:get', id),
-    delete: (id: string): Promise<void> => ipcRenderer.invoke('workflowVersion:delete', id),
+    get: (workflowId: string, versionId: string): Promise<any> => ipcRenderer.invoke('workflowVersion:get', workflowId, versionId),
+    delete: (workflowId: string, versionId: string): Promise<void> => ipcRenderer.invoke('workflowVersion:delete', workflowId, versionId),
     clear: (workflowId: string): Promise<void> => ipcRenderer.invoke('workflowVersion:clear', workflowId),
     nextName: (workflowId: string): Promise<string> => ipcRenderer.invoke('workflowVersion:nextName', workflowId),
   },
