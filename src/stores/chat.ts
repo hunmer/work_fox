@@ -51,6 +51,18 @@ function buildStreamUpdates(
   }
 }
 
+function isAskUserQuestionToolName(name: string): boolean {
+  return name
+    .replace(/^mcp__.*?__/, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toLowerCase()
+    .includes('askuserquestion')
+}
+
+function hasAskUserQuestionPayload(args: Record<string, unknown> | undefined): boolean {
+  return Array.isArray(args?.questions) && args.questions.length > 0
+}
+
 /** 构建工作流模式选项 */
 function buildWorkflowOptions(
   sessions: { value: ChatSession[] },
@@ -85,7 +97,18 @@ function buildWorkflowOptions(
 
 function createSessionActions(scope: string, sessions: Ref<ChatSession[]>, currentSessionId: Ref<string | null>, messages: Ref<ChatMessage[]>) {
   async function loadSessions() {
-    sessions.value = await dbListSessionsByScope(scope)
+    if (scope === 'workflow') {
+      // workflow scope: 按当前 workflowId 从文件加载
+      const workflowStore = useTabStore().activeStore
+      const workflowId = workflowStore?.currentWorkflow?.id
+      if (workflowId) {
+        sessions.value = await window.api.chatHistory.listSessions(workflowId)
+      } else {
+        sessions.value = []
+      }
+    } else {
+      sessions.value = await dbListSessionsByScope(scope)
+    }
   }
 
   async function createSession() {
@@ -94,8 +117,14 @@ function createSessionActions(scope: string, sessions: Ref<ChatSession[]>, curre
     if (!providerStore.currentProvider || !providerStore.currentModel) {
       throw new Error('请先选择 AI 模型')
     }
+    let workflowId: string | null = null
+    if (scope === 'workflow') {
+      const workflowStore = useTabStore().activeStore
+      workflowId = workflowStore?.currentWorkflow?.id ?? null
+    }
     const session = await dbCreateSession(
       scope, providerStore.currentModel.id, providerStore.currentProvider.id, uiStore.targetTabId,
+      workflowId,
     )
     sessions.value.unshift(session)
     currentSessionId.value = session.id
@@ -123,6 +152,10 @@ function createSessionActions(scope: string, sessions: Ref<ChatSession[]>, curre
 
   async function switchToWorkflowSession(workflowId: string | undefined) {
     if (!workflowId) return
+    // 先加载该 workflow 的会话列表
+    const fileSessions = await window.api.chatHistory.listSessions(workflowId)
+    sessions.value = fileSessions
+
     const existing = sessions.value.find((s) => s.workflowId === workflowId)
     if (existing) {
       if (currentSessionId.value === existing.id) return
@@ -156,22 +189,75 @@ function createStreamCallbacks(
   streamingUsage: Ref<{ inputTokens: number; outputTokens: number } | null>,
   retryStatus: Ref<{ attempt: number; maxRetries: number; delayMs: number; status: number } | null>,
   resetStreamState: () => void,
+  pauseForUserQuestion: () => void,
 ) {
   let streamingRenderOrder = 0
+  let pausedForUserQuestion = false
+
+  function maybePauseForUserQuestion(call: ToolCall | undefined) {
+    if (call && (isAskUserQuestionToolName(call.name) || call.name.toLowerCase().includes('question'))) {
+      console.debug('[chat-store] askUserQuestion candidate:', {
+        id: call.id,
+        name: call.name,
+        status: call.status,
+        argsKeys: Object.keys(call.args ?? {}),
+        hasQuestions: hasAskUserQuestionPayload(call.args),
+        args: call.args,
+      })
+    }
+    if (pausedForUserQuestion || !call || !isAskUserQuestionToolName(call.name) || !hasAskUserQuestionPayload(call.args)) {
+      return
+    }
+    pausedForUserQuestion = true
+    console.debug('[chat-store] pause for askUserQuestion:', {
+      id: call.id,
+      name: call.name,
+      args: call.args,
+    })
+    pauseForUserQuestion()
+  }
 
   return {
     onToken: (token: string) => { streamingToken.value += token },
     onToolCall: (call: ToolCall) => {
+      console.debug('[chat-store] onToolCall:', {
+        id: call.id,
+        name: call.name,
+        status: call.status,
+        argsKeys: Object.keys(call.args ?? {}),
+        isAskUserQuestion: isAskUserQuestionToolName(call.name),
+        args: call.args,
+      })
       call.textPosition = streamingToken.value.length
       call.renderOrder = streamingRenderOrder++
       streamingToolCalls.value.push(call)
+      maybePauseForUserQuestion(call)
     },
     onToolCallArgs: (event: { toolUseId: string; args: Record<string, unknown> }) => {
       const tc = streamingToolCalls.value.find((t) => t.id === event.toolUseId)
-      if (tc) tc.args = event.args
+      console.debug('[chat-store] onToolCallArgs:', {
+        toolUseId: event.toolUseId,
+        found: !!tc,
+        name: tc?.name,
+        argsKeys: Object.keys(event.args ?? {}),
+        hasQuestions: hasAskUserQuestionPayload(event.args),
+        args: event.args,
+      })
+      if (tc) {
+        tc.args = event.args
+        maybePauseForUserQuestion(tc)
+      }
     },
     onToolResult: (event: { toolUseId: string; name: string; result: unknown }) => {
       const tc = streamingToolCalls.value.find((t) => t.id === event.toolUseId)
+      console.debug('[chat-store] onToolResult:', {
+        toolUseId: event.toolUseId,
+        name: event.name,
+        found: !!tc,
+        toolName: tc?.name,
+        isAskUserQuestion: isAskUserQuestionToolName(event.name) || (tc ? isAskUserQuestionToolName(tc.name) : false),
+        result: event.result,
+      })
       if (tc && !(tc.completedAt && tc.status === 'completed')) {
         tc.status = 'completed'
         tc.result = event.result
@@ -340,6 +426,28 @@ export function createChatStore(scope: string) {
 
     // ===== 消息发送 =====
 
+    async function pauseGenerationForUserQuestion() {
+      if (!abortController.value) return
+      if (currentRequestId) {
+        window.api.chat.abort(currentRequestId).catch(() => {})
+        currentRequestId = null
+      }
+      abortController.value = null
+      streamCleanup?.()
+      streamCleanup = null
+
+      const msgId = streamingMessageId.value
+      if (msgId) {
+        const updates = buildStreamUpdates(streamingToken, streamingToolCalls, streamingThinkingBlocks, streamingUsage)
+        delete updates.usage
+        await persistMessageUpdate(msgId, messages, updates)
+      }
+
+      isStreaming.value = false
+      streamingMessageId.value = null
+      retryStatus.value = null
+    }
+
     async function streamAssistantReply(content: string, images?: string[]) {
       const sessionId = currentSessionId.value!
       const providerStore = useAIProviderStore()
@@ -370,6 +478,7 @@ export function createChatStore(scope: string) {
         const callbacks = createStreamCallbacks(
           assistantMsg, messages, streamingToken, streamingToolCalls,
           streamingThinkingBlocks, streamingUsage, retryStatus, resetStreamState,
+          () => { pauseGenerationForUserQuestion().catch(() => {}) },
         )
         const result = await runAgentStream(
           history, content, images, callbacks,

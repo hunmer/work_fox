@@ -44,6 +44,29 @@ const api = {
       ipcRenderer.invoke('chat:abort', requestId),
   },
 
+  chatHistory: {
+    listSessions: (workflowId: string): Promise<any[]> =>
+      ipcRenderer.invoke('chatHistory:listSessions', workflowId),
+    createSession: (workflowId: string, session: any): Promise<any> =>
+      ipcRenderer.invoke('chatHistory:createSession', workflowId, session),
+    updateSession: (workflowId: string, sessionId: string, updates: any): Promise<void> =>
+      ipcRenderer.invoke('chatHistory:updateSession', workflowId, sessionId, updates),
+    deleteSession: (workflowId: string, sessionId: string): Promise<void> =>
+      ipcRenderer.invoke('chatHistory:deleteSession', workflowId, sessionId),
+    listMessages: (workflowId: string, sessionId: string): Promise<any[]> =>
+      ipcRenderer.invoke('chatHistory:listMessages', workflowId, sessionId),
+    addMessage: (workflowId: string, sessionId: string, message: any): Promise<any> =>
+      ipcRenderer.invoke('chatHistory:addMessage', workflowId, sessionId, message),
+    updateMessage: (workflowId: string, sessionId: string, messageId: string, updates: any): Promise<void> =>
+      ipcRenderer.invoke('chatHistory:updateMessage', workflowId, sessionId, messageId, updates),
+    deleteMessage: (workflowId: string, sessionId: string, messageId: string): Promise<void> =>
+      ipcRenderer.invoke('chatHistory:deleteMessage', workflowId, sessionId, messageId),
+    deleteMessages: (workflowId: string, sessionId: string, messageIds: string[]): Promise<void> =>
+      ipcRenderer.invoke('chatHistory:deleteMessages', workflowId, sessionId, messageIds),
+    clearMessages: (workflowId: string, sessionId: string): Promise<void> =>
+      ipcRenderer.invoke('chatHistory:clearMessages', workflowId, sessionId),
+  },
+
   workflowTool: {
     respond: (requestId: string, result: unknown): Promise<{ resolved: boolean }> =>
       ipcRenderer.invoke('workflow-tool:respond', requestId, result),

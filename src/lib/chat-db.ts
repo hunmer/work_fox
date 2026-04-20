@@ -31,6 +31,14 @@ class ChatDB extends Dexie {
 export const chatDb = new ChatDB()
 export const MAX_MESSAGES_PER_SESSION = 5000
 
+// ===== 辅助：判断 session 是否是 workflow scope 且有 workflowId =====
+
+async function getWorkflowId(sessionId: string): Promise<string | null> {
+  const session = await chatDb.sessions.get(sessionId)
+  if (session?.scope === 'workflow' && session.workflowId) return session.workflowId
+  return null
+}
+
 // ===== 会话操作 =====
 
 export async function createSession(
@@ -54,12 +62,15 @@ export async function createSession(
     updatedAt: now,
     messageCount: 0,
   }
-  await chatDb.sessions.add(session)
-  return session
-}
 
-export async function listSessions(): Promise<ChatSession[]> {
-  return chatDb.sessions.orderBy('updatedAt').reverse().toArray()
+  // IndexedDB 始终写入（作为缓存/索引）
+  await chatDb.sessions.add(session)
+
+  if (scope === 'workflow' && workflowId) {
+    await window.api.chatHistory.createSession(workflowId, session)
+  }
+
+  return session
 }
 
 export async function listSessionsByScope(scope: string): Promise<ChatSession[]> {
@@ -71,15 +82,27 @@ export async function listSessionsByScope(scope: string): Promise<ChatSession[]>
 }
 
 export async function deleteSession(id: string): Promise<void> {
+  const session = await chatDb.sessions.get(id)
+  if (session?.scope === 'workflow' && session.workflowId) {
+    await window.api.chatHistory.deleteSession(session.workflowId, id)
+  }
   await chatDb.messages.where('sessionId').equals(id).delete()
   await chatDb.sessions.delete(id)
 }
 
 export async function updateSessionTitle(id: string, title: string): Promise<void> {
+  const session = await chatDb.sessions.get(id)
+  if (session?.scope === 'workflow' && session.workflowId) {
+    await window.api.chatHistory.updateSession(session.workflowId, id, { title, updatedAt: Date.now() })
+  }
   await chatDb.sessions.update(id, { title, updatedAt: Date.now() })
 }
 
 export async function updateSessionBrowserView(id: string, browserViewId: string | null): Promise<void> {
+  const session = await chatDb.sessions.get(id)
+  if (session?.scope === 'workflow' && session.workflowId) {
+    await window.api.chatHistory.updateSession(session.workflowId, id, { browserViewId, updatedAt: Date.now() })
+  }
   await chatDb.sessions.update(id, { browserViewId, updatedAt: Date.now() })
 }
 
@@ -88,10 +111,17 @@ export async function updateSessionBrowserView(id: string, browserViewId: string
 export async function addMessage(message: Omit<ChatMessage, 'id'>): Promise<ChatMessage> {
   const id = crypto.randomUUID()
   const msg: ChatMessage = { ...message, id }
+
+  const session = await chatDb.sessions.get(message.sessionId)
+
+  // IndexedDB 始终写入
   await chatDb.messages.add(msg)
 
+  if (session?.scope === 'workflow' && session.workflowId) {
+    await window.api.chatHistory.addMessage(session.workflowId, message.sessionId, msg)
+  }
+
   // 更新会话的 updatedAt 和 messageCount
-  const session = await chatDb.sessions.get(message.sessionId)
   if (session) {
     await chatDb.sessions.update(message.sessionId, {
       updatedAt: Date.now(),
@@ -99,7 +129,7 @@ export async function addMessage(message: Omit<ChatMessage, 'id'>): Promise<Chat
     })
   }
 
-  // 超过上限时删除最早的消息
+  // 超过上限时删除最早的消息（DB 侧）
   const count = await chatDb.messages.where('sessionId').equals(message.sessionId).count()
   if (count > MAX_MESSAGES_PER_SESSION) {
     const oldest = await chatDb.messages
@@ -114,6 +144,11 @@ export async function addMessage(message: Omit<ChatMessage, 'id'>): Promise<Chat
 }
 
 export async function listMessages(sessionId: string): Promise<ChatMessage[]> {
+  // 优先从文件读取 workflow scope 的消息
+  const wid = await getWorkflowId(sessionId)
+  if (wid) {
+    return window.api.chatHistory.listMessages(wid, sessionId)
+  }
   return chatDb.messages
     .where('sessionId')
     .equals(sessionId)
@@ -122,13 +157,27 @@ export async function listMessages(sessionId: string): Promise<ChatMessage[]> {
 
 export async function updateMessage(id: string, updates: Partial<ChatMessage>): Promise<void> {
   await chatDb.messages.update(id, updates)
+
+  // 从 DB 找 sessionId，再查 workflowId
+  const msg = await chatDb.messages.get(id)
+  if (msg?.sessionId) {
+    const wid = await getWorkflowId(msg.sessionId)
+    if (wid) {
+      await window.api.chatHistory.updateMessage(wid, msg.sessionId, id, updates)
+    }
+  }
 }
 
 export async function deleteMessage(id: string): Promise<void> {
   const msg = await chatDb.messages.get(id)
   if (!msg) return
   await chatDb.messages.delete(id)
+
   if (msg.sessionId) {
+    const wid = await getWorkflowId(msg.sessionId)
+    if (wid) {
+      await window.api.chatHistory.deleteMessage(wid, msg.sessionId, id)
+    }
     const session = await chatDb.sessions.get(msg.sessionId)
     if (session) {
       await chatDb.sessions.update(msg.sessionId, {
@@ -141,10 +190,22 @@ export async function deleteMessage(id: string): Promise<void> {
 
 export async function deleteMessages(ids: string[]): Promise<void> {
   if (!ids.length) return
+  const first = await chatDb.messages.get(ids[0])
   await chatDb.messages.bulkDelete(ids)
+
+  if (first?.sessionId) {
+    const wid = await getWorkflowId(first.sessionId)
+    if (wid) {
+      await window.api.chatHistory.deleteMessages(wid, first.sessionId, ids)
+    }
+  }
 }
 
 export async function clearMessages(sessionId: string): Promise<void> {
+  const wid = await getWorkflowId(sessionId)
+  if (wid) {
+    await window.api.chatHistory.clearMessages(wid, sessionId)
+  }
   await chatDb.messages.where('sessionId').equals(sessionId).delete()
   await chatDb.sessions.update(sessionId, {
     messageCount: 0,

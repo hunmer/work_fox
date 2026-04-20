@@ -4,6 +4,7 @@ import { resolvePendingRendererTool } from '../services/workflow-tool-dispatcher
 import { testProviderConnection } from '../services/ai-provider-test'
 import { listAIProviders, getAIProvider, createAIProvider, updateAIProvider, deleteAIProvider } from '../services/store'
 import { workflowNodeRegistry } from '../services/workflow-node-registry'
+import * as chatHistory from '../services/chat-history-store'
 
 export function registerChatIpcHandlers(): void {
   ipcMain.handle('agent:execTool', async (_event, toolType: string, params: Record<string, any>) => {
@@ -63,4 +64,16 @@ export function registerChatIpcHandlers(): void {
   ipcMain.handle('aiProvider:update', (_event, id, data) => { updateAIProvider(id, data); return getAIProvider(id) })
   ipcMain.handle('aiProvider:delete', (_event, id) => { deleteAIProvider(id); return true })
   ipcMain.handle('aiProvider:test', (_event, id) => testProviderConnection(id))
+
+  // Chat History (workflow scope)
+  ipcMain.handle('chatHistory:listSessions', (_e, workflowId: string) => chatHistory.listSessions(workflowId))
+  ipcMain.handle('chatHistory:createSession', (_e, workflowId: string, session: any) => chatHistory.createSession(workflowId, session))
+  ipcMain.handle('chatHistory:updateSession', (_e, workflowId: string, sessionId: string, updates: any) => chatHistory.updateSession(workflowId, sessionId, updates))
+  ipcMain.handle('chatHistory:deleteSession', (_e, workflowId: string, sessionId: string) => chatHistory.deleteSession(workflowId, sessionId))
+  ipcMain.handle('chatHistory:listMessages', (_e, workflowId: string, sessionId: string) => chatHistory.listMessages(workflowId, sessionId))
+  ipcMain.handle('chatHistory:addMessage', (_e, workflowId: string, sessionId: string, message: any) => chatHistory.addMessage(workflowId, sessionId, message))
+  ipcMain.handle('chatHistory:updateMessage', (_e, workflowId: string, sessionId: string, messageId: string, updates: any) => chatHistory.updateMessage(workflowId, sessionId, messageId, updates))
+  ipcMain.handle('chatHistory:deleteMessage', (_e, workflowId: string, sessionId: string, messageId: string) => chatHistory.deleteMessage(workflowId, sessionId, messageId))
+  ipcMain.handle('chatHistory:deleteMessages', (_e, workflowId: string, sessionId: string, messageIds: string[]) => chatHistory.deleteMessages(workflowId, sessionId, messageIds))
+  ipcMain.handle('chatHistory:clearMessages', (_e, workflowId: string, sessionId: string) => chatHistory.clearMessages(workflowId, sessionId))
 }

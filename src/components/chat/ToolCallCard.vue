@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { ToolCall } from '@/types'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 
@@ -50,14 +50,48 @@ const statusConfig: Record<string, { label: string; class: string; icon: string 
 
 const config = computed(() => statusConfig[props.toolCall.status] ?? statusConfig.pending)
 
+function normalizeToolName(name: string): string {
+  return name
+    .replace(/^mcp__.*?__/, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toLowerCase()
+}
+
 const isAskUserQuestion = computed(() => {
-  return ['askUserQuestion', 'AskUserQuestion', 'ask_user_question'].includes(props.toolCall.name)
+  return normalizeToolName(props.toolCall.name).includes('askuserquestion')
 })
 
 const askUserQuestions = computed<AskQuestionItem[]>(() => {
+  const result = props.toolCall.result
+  const resultObject = result && typeof result === 'object' && !Array.isArray(result)
+    ? result as Record<string, unknown>
+    : undefined
+  const resultText = resultObject?.content && Array.isArray(resultObject.content)
+    ? resultObject.content
+        .filter((item): item is Record<string, unknown> => item !== null && typeof item === 'object' && !Array.isArray(item))
+        .map((item) => (typeof item.text === 'string' ? item.text : ''))
+        .find(Boolean)
+    : undefined
+
+  let parsedResultText: Record<string, unknown> | undefined
+  if (resultText) {
+    try {
+      const parsed = JSON.parse(resultText)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        parsedResultText = parsed as Record<string, unknown>
+      }
+    } catch {
+      parsedResultText = undefined
+    }
+  }
+
   const rawQuestions = Array.isArray(props.toolCall.args?.questions)
     ? props.toolCall.args.questions
-    : []
+    : Array.isArray(resultObject?.questions)
+      ? resultObject.questions
+      : Array.isArray(parsedResultText?.questions)
+        ? parsedResultText.questions
+        : []
 
   return rawQuestions
     .filter((item): item is Record<string, unknown> => item !== null && typeof item === 'object' && !Array.isArray(item))
@@ -81,6 +115,35 @@ const askUserQuestions = computed<AskQuestionItem[]>(() => {
 })
 
 const hasQuestionSelection = computed(() => askUserQuestions.value.length > 0)
+
+watch(
+  () => ({
+    id: props.toolCall.id,
+    name: props.toolCall.name,
+    normalizedName: normalizeToolName(props.toolCall.name),
+    status: props.toolCall.status,
+    argsKeys: Object.keys(props.toolCall.args ?? {}),
+    hasArgsQuestions: Array.isArray(props.toolCall.args?.questions),
+    resultType: props.toolCall.result == null
+      ? 'none'
+      : Array.isArray(props.toolCall.result)
+        ? 'array'
+        : typeof props.toolCall.result,
+    resultKeys: props.toolCall.result && typeof props.toolCall.result === 'object' && !Array.isArray(props.toolCall.result)
+      ? Object.keys(props.toolCall.result as Record<string, unknown>)
+      : [],
+    isAskUserQuestion: isAskUserQuestion.value,
+    questionCount: askUserQuestions.value.length,
+    args: props.toolCall.args,
+    result: props.toolCall.result,
+  }),
+  (snapshot) => {
+    if (snapshot.isAskUserQuestion || snapshot.name.toLowerCase().includes('question')) {
+      console.debug('[ToolCallCard] tool snapshot:', snapshot)
+    }
+  },
+  { immediate: true, deep: true },
+)
 
 const canSubmitQuestionAnswer = computed(() => {
   return hasQuestionSelection.value && askUserQuestions.value.every((_, index) => selectedAnswers.value[index]?.length)
@@ -222,48 +285,6 @@ async function handleRerun() {
     </div>
 
     <!-- 输入参数 -->
-    <Collapsible
-      v-if="hasArgs && !isAskUserQuestion"
-      v-model:open="showArgs"
-      class="border-t"
-    >
-      <CollapsibleTrigger class="w-full flex items-center gap-1 px-3 py-1 text-muted-foreground hover:text-foreground cursor-pointer text-[11px]">
-        <svg
-          class="h-3 w-3 transition-transform"
-          :class="showArgs ? 'rotate-90' : ''"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path d="M9 18l6-6-6-6" />
-        </svg>
-        <span>输入参数</span>
-        <span class="text-[10px] opacity-60">({{ argEntries.length }})</span>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <div class="px-3 pb-2 space-y-1">
-          <div
-            v-for="entry in argEntries"
-            :key="entry.key"
-            class="flex gap-2"
-          >
-            <span class="font-mono text-blue-600 dark:text-blue-400 shrink-0">{{ entry.key }}:</span>
-            <span class="font-mono text-muted-foreground break-all">{{ entry.value }}</span>
-          </div>
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
-
-    <!-- 无参数时的提示（仅 running 状态显示） -->
-    <div
-      v-else-if="toolCall.status === 'running'"
-      class="px-3 py-1 border-t text-[11px] text-muted-foreground flex items-center gap-1"
-    >
-      <span class="inline-block w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-      <span>接收参数中...</span>
-    </div>
-
     <!-- askUserQuestion 内嵌选择 UI -->
     <div
       v-if="isAskUserQuestion && hasQuestionSelection"
@@ -343,6 +364,59 @@ async function handleRerun() {
       >
         {{ submitted ? '已发送选择' : '发送选择' }}
       </button>
+    </div>
+
+    <Collapsible
+      v-else-if="hasArgs && !isAskUserQuestion"
+      v-model:open="showArgs"
+      class="border-t"
+    >
+      <CollapsibleTrigger class="w-full flex items-center gap-1 px-3 py-1 text-muted-foreground hover:text-foreground cursor-pointer text-[11px]">
+        <svg
+          class="h-3 w-3 transition-transform"
+          :class="showArgs ? 'rotate-90' : ''"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path d="M9 18l6-6-6-6" />
+        </svg>
+        <span>输入参数</span>
+        <span class="text-[10px] opacity-60">({{ argEntries.length }})</span>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div class="px-3 pb-2 space-y-1">
+          <div
+            v-for="entry in argEntries"
+            :key="entry.key"
+            class="flex gap-2"
+          >
+            <span class="font-mono text-blue-600 dark:text-blue-400 shrink-0">{{ entry.key }}:</span>
+            <span class="font-mono text-muted-foreground break-all">{{ entry.value }}</span>
+          </div>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+
+    <!-- 无参数时的提示（仅 running 状态显示） -->
+    <div
+      v-else-if="isAskUserQuestion"
+      class="px-3 py-2 border-t text-[11px] text-amber-700 dark:text-amber-300 space-y-1"
+    >
+      <div class="font-medium">
+        等待问题参数...
+      </div>
+      <div class="text-muted-foreground">
+        已识别为 askUserQuestion，但当前卡片还没有解析到 questions。请查看控制台 [ToolCallCard] 调试输出。
+      </div>
+    </div>
+    <div
+      v-else-if="toolCall.status === 'running'"
+      class="px-3 py-1 border-t text-[11px] text-muted-foreground flex items-center gap-1"
+    >
+      <span class="inline-block w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+      <span>接收参数中...</span>
     </div>
 
     <!-- 输出结果 -->

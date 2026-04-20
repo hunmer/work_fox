@@ -78,6 +78,7 @@ onMounted(() => {
 })
 
 function handleKeydown(e: KeyboardEvent) {
+  if (e.isComposing || e.key === 'Process') return
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     handleSend()
