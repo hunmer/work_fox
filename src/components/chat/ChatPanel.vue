@@ -60,6 +60,15 @@ function handleToggleTool(toolName: string) {
   uiStore.toggleTool(toolName)
 }
 
+const isWorkflowContext = computed(() => {
+  const session = props.chat.currentSession
+  return !!session?.workflowId
+})
+
+function handleToggleWorkflowEdit(enabled: boolean) {
+  uiStore.setWorkflowEditMode(enabled)
+}
+
 function handleSend(content: string, images: string[]) {
   props.chat.sendMessage(content, images.length > 0 ? images : undefined)
 }
@@ -124,10 +133,13 @@ function handleEdit(messageId: string, newContent: string) {
       :disabled="!providerStore.currentModel"
       :tools="toolDisplayItems"
       :enabled-tools="enabledTools"
+      :is-workflow-context="isWorkflowContext"
+      :workflow-edit-mode="uiStore.workflowEditMode"
       @send="handleSend"
       @stop="chat.stopGeneration()"
       @clear="handleClear"
       @toggle-tool="handleToggleTool"
+      @toggle-workflow-edit="handleToggleWorkflowEdit"
     />
 
     <!-- 设置对话框 -->

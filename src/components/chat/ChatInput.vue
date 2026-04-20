@@ -61,6 +61,8 @@ const props = defineProps<{
   disabled?: boolean
   tools?: ToolDisplayItem[]
   enabledTools?: Record<string, boolean>
+  isWorkflowContext?: boolean
+  workflowEditMode?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -68,6 +70,7 @@ const emit = defineEmits<{
   stop: []
   clear: []
   toggleTool: [toolName: string]
+  toggleWorkflowEdit: [enabled: boolean]
 }>()
 
 const inputText = ref('')
@@ -310,6 +313,22 @@ async function confirmDelete() {
               </span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem
+              v-if="isWorkflowContext"
+              class="flex items-center justify-between gap-3"
+              @select.prevent
+            >
+              <div class="flex flex-col gap-0.5 min-w-0">
+                <span class="text-xs font-medium">工作流编辑模式</span>
+                <span class="text-[11px] text-muted-foreground leading-tight">AI 创建节点而非直接运行工具</span>
+              </div>
+              <Switch
+                :model-value="workflowEditMode !== false"
+                class="shrink-0"
+                @update:model-value="emit('toggleWorkflowEdit', $event)"
+              />
+            </DropdownMenuItem>
+            <DropdownMenuSeparator v-if="isWorkflowContext" />
             <template
               v-for="([category, categoryTools], gi) in groupedTools"
               :key="category"

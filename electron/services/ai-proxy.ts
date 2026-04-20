@@ -57,8 +57,10 @@ export async function proxyChatCompletions(
   activeRequests.set(_requestId, abortController)
 
   const send = (channel: string, data: unknown) => {
+    // 前端 window.api.on 监听的是不带 on: 前缀的频道名
+    const ch = channel.startsWith('on:') ? channel.slice(3) : channel
     if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(channel, data)
+      mainWindow.webContents.send(ch, data)
     }
   }
 
@@ -261,8 +263,10 @@ async function parseSSEStream(
 
   while (true) {
     const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
+    if (done) { console.log('[ai-proxy] SSE stream ended (done=true)'); break }
+    const chunk = decoder.decode(value, { stream: true })
+    console.log('[ai-proxy] SSE raw chunk:', JSON.stringify(chunk.slice(0, 500)))
+    buffer += chunk
     const lines = buffer.split('\n')
     buffer = lines.pop() ?? ''
 

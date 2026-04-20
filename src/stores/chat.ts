@@ -54,6 +54,7 @@ function buildStreamUpdates(
 function buildWorkflowOptions(
   sessions: { value: ChatSession[] },
   currentSessionId: { value: string | null },
+  workflowEditMode: boolean,
 ) {
   const workflowStore = useTabStore().activeStore
   const sessionData = sessions.value.find((s) => s.id === currentSessionId.value)
@@ -69,6 +70,7 @@ function buildWorkflowOptions(
       edges: workflowStore.currentWorkflow.edges.map(e => ({ id: e.id, source: e.source, target: e.target })),
     },
     enabledPlugins: workflowStore.currentWorkflow.enabledPlugins || [],
+    workflowEditMode,
   }
 }
 
@@ -365,7 +367,7 @@ export function createChatStore(scope: string) {
         const result = await runAgentStream(
           history, content, images, callbacks,
           uiStore.targetTabId, uiStore.enabledToolNames,
-          buildWorkflowOptions(sessions, currentSessionId),
+          buildWorkflowOptions(sessions, currentSessionId, uiStore.workflowEditMode),
         )
         if (result) { currentRequestId = result.requestId; streamCleanup = result.cleanup }
       } catch (error) {

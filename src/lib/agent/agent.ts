@@ -20,6 +20,8 @@ export interface AgentStreamOptions {
   }
   /** 当前工作流启用的插件 ID 列表（仅 workflow 模式） */
   enabledPlugins?: string[]
+  /** 工作流编辑模式：true=用 workflow-tools 创建节点，false=用插件工具直接运行（默认 true） */
+  workflowEditMode?: boolean
 }
 
 /**
@@ -67,16 +69,17 @@ export async function runAgentStream(
   ]
 
   // 工作流模式使用专用工具定义，浏览器模式使用工具发现系统
+  const workflowEditMode = isWorkflow ? (options?.workflowEditMode !== false) : false
   let tools = isWorkflow
     ? [...WORKFLOW_TOOL_DEFINITIONS]
     : createToolDiscoveryTools()
 
-  // 工作流模式：合并已启用插件的 Agent 工具
-  if (isWorkflow && options?.enabledPlugins?.length) {
+  // 工作流模式：仅当编辑模式关闭时才加载插件 Agent 工具（让 AI 直接运行插件）
+  if (isWorkflow && !workflowEditMode && options?.enabledPlugins?.length) {
     try {
       const pluginTools = await window.api.plugin.getAgentTools(JSON.parse(JSON.stringify(options.enabledPlugins)))
       if (pluginTools?.length) {
-        tools = [...tools, ...pluginTools]
+        tools = [...pluginTools]
       }
     } catch (err) {
       console.warn('[Agent] 加载插件 Agent 工具失败:', err)

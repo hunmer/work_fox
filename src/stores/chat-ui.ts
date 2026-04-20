@@ -22,6 +22,7 @@ export const useChatUIStore = defineStore('chat-ui', () => {
   const isPanelVisible = ref(localStorage.getItem(PANEL_VISIBLE_KEY) === '1')
   const targetTabId = ref<string | null>(localStorage.getItem(TARGET_TAB_KEY))
   const enabledTools = ref<Record<string, boolean>>(loadEnabledTools())
+  const workflowEditMode = ref(true)
 
   function togglePanel() {
     isPanelVisible.value = !isPanelVisible.value
@@ -42,6 +43,10 @@ export const useChatUIStore = defineStore('chat-ui', () => {
     localStorage.setItem(ENABLED_TOOLS_KEY, JSON.stringify(enabledTools.value))
   }
 
+  function setWorkflowEditMode(enabled: boolean) {
+    workflowEditMode.value = enabled
+  }
+
   function isToolEnabled(name: string): boolean {
     return enabledTools.value[name] !== false
   }
@@ -59,9 +64,11 @@ export const useChatUIStore = defineStore('chat-ui', () => {
     targetTabId,
     enabledTools,
     enabledToolNames,
+    workflowEditMode,
     togglePanel,
     setTargetTab,
     toggleTool,
     isToolEnabled,
+    setWorkflowEditMode,
   }
 })
