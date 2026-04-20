@@ -1,0 +1,126 @@
+{
+  "timestamp": "2026-04-20T17:34:22+08:00",
+  "project": "work-fox",
+  "version": "0.0.1",
+  "description": "Workflow + AI Agent 桌面应用",
+  "rootClaude": "CLAUDE.md",
+  "modules": [
+    {
+      "path": "src/",
+      "claudeMd": "src/CLAUDE.md",
+      "language": "TypeScript / Vue",
+      "entry": "src/main.ts",
+      "description": "渲染进程（Vue 3 SPA）-- 前端 UI 层",
+      "keyFiles": [
+        "src/main.ts",
+        "src/App.vue",
+        "src/router/index.ts",
+        "src/types/index.ts",
+        "src/stores/chat.ts",
+        "src/stores/workflow.ts",
+        "src/stores/ai-provider.ts",
+        "src/stores/tab.ts",
+        "src/lib/agent/agent.ts",
+        "src/lib/agent/stream.ts",
+        "src/lib/agent/tools.ts",
+        "src/lib/agent/workflow-tools.ts",
+        "src/lib/workflow/engine.ts",
+        "src/lib/workflow/nodeRegistry.ts",
+        "src/lib/workflow/types.ts",
+        "src/lib/chat-db.ts"
+      ],
+      "interfaces": [
+        "src/components/chat/ChatPanel.vue",
+        "src/components/workflow/WorkflowEditor.vue",
+        "src/components/settings/SettingsDialog.vue"
+      ],
+      "testDir": null,
+      "configFiles": []
+    },
+    {
+      "path": "electron/",
+      "claudeMd": "electron/CLAUDE.md",
+      "language": "TypeScript",
+      "entry": "electron/main.ts",
+      "description": "Electron 主进程 -- 后端服务层",
+      "keyFiles": [
+        "electron/main.ts",
+        "electron/services/claude-agent-runtime.ts",
+        "electron/services/workflow-store.ts",
+        "electron/services/plugin-manager.ts",
+        "electron/services/store.ts",
+        "electron/services/chat-history-store.ts",
+        "electron/services/workflow-tool-dispatcher.ts",
+        "electron/services/claude-tool-adapter.ts"
+      ],
+      "interfaces": [
+        "electron/ipc/chat.ts",
+        "electron/ipc/workflow.ts",
+        "electron/ipc/plugin.ts",
+        "electron/ipc/workflow-version.ts",
+        "electron/ipc/execution-log.ts",
+        "electron/ipc/shortcut.ts",
+        "electron/ipc/tabs.ts",
+        "electron/ipc/agent-settings.ts"
+      ],
+      "testDir": null,
+      "configFiles": []
+    },
+    {
+      "path": "preload/",
+      "claudeMd": "preload/CLAUDE.md",
+      "language": "TypeScript",
+      "entry": "preload/index.ts",
+      "description": "Electron Preload -- IPC 桥接层",
+      "keyFiles": [
+        "preload/index.ts"
+      ],
+      "interfaces": [],
+      "testDir": null,
+      "configFiles": []
+    },
+    {
+      "path": "resources/",
+      "claudeMd": "resources/CLAUDE.md",
+      "language": "JavaScript",
+      "entry": null,
+      "description": "内置插件（window-manager / file-system / fetch / jimeng）",
+      "keyFiles": [
+        "resources/plugins/plugins.json",
+        "resources/plugins/window-manager/main.js",
+        "resources/plugins/file-system/main.js",
+        "resources/plugins/fetch/main.js",
+        "resources/plugins/jimeng/main.js"
+      ],
+      "interfaces": [],
+      "testDir": null,
+      "configFiles": []
+    }
+  ],
+  "rootConfigFiles": [
+    "package.json",
+    "electron.vite.config.ts",
+    "tsconfig.json",
+    "tsconfig.node.json",
+    "tsconfig.web.json",
+    "electron-builder.json",
+    ".gitignore"
+  ],
+  "coverage": {
+    "totalSourceFiles": 175,
+    "scannedFiles": 45,
+    "coveragePercent": 25.7,
+    "note": "扫描覆盖了所有入口文件、核心引擎、关键服务、类型定义和 IPC handlers。UI 组件库（src/components/ui/）约 130 个文件未逐一读取（属于 shadcn-vue 风格的基础组件，非业务逻辑）。",
+    "modulesCovered": 4,
+    "modulesTotal": 4
+  },
+  "ignoredStats": {
+    "nodeModules": true,
+    "outDir": true,
+    "distApp": false,
+    "reason": ".gitignore 配置了 node_modules/ 和 out/，扫描时已排除"
+  },
+  "gaps": [],
+  "truncated": false,
+  "nextSteps": []
+}

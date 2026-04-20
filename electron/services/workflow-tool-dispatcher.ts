@@ -13,6 +13,7 @@ export const WORKFLOW_TOOL_OWNERS: Record<string, WorkflowToolOwner> = {
   delete_node: 'main',
   create_edge: 'main',
   delete_edge: 'main',
+  insert_node: 'main',
   batch_update: 'main',
   auto_layout: 'main',
   execute_workflow_sync: 'renderer',

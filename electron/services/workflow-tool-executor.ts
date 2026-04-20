@@ -418,6 +418,61 @@ function handleBatchUpdate(ctx: ToolContext): ToolHandlerResult {
   }
 }
 
+function handleInsertNode(ctx: ToolContext): ToolHandlerResult {
+  const { args, nodes, edges, changes } = ctx
+  const { edgeId, type, label } = args || {}
+  if (!edgeId || !type) {
+    return { result: { success: false, message: '缺少必填参数: edgeId, type' }, mutated: false, nodes, edges }
+  }
+  // 查找原边
+  const edgeIdx = edges.findIndex((e: any) => e.id === edgeId)
+  if (edgeIdx === -1) {
+    return { result: { success: false, message: `边 ${edgeId} 不存在` }, mutated: false, nodes, edges }
+  }
+  const originalEdge = edges[edgeIdx]
+  // 验证节点类型
+  const typeDef = findNodeType(type)
+  if (!typeDef) {
+    return { result: { success: false, message: `未知节点类型: ${type}` }, mutated: false, nodes, edges }
+  }
+  // 创建新节点
+  const nodeId = randomUUID()
+  const newNode = {
+    id: nodeId,
+    type,
+    label: label || typeDef.label,
+    position: { x: 0, y: 0 },
+    data: args?.data || {},
+  }
+  nodes.push(newNode)
+  changes.upsertNodes.push(newNode)
+  // 删除原边
+  edges.splice(edgeIdx, 1)
+  changes.deleteEdgeIds.push(edgeId)
+  // 创建 source → 新节点
+  const sh = originalEdge.sourceHandle || 'default'
+  const edge1Id = `e-${originalEdge.source}-${sh}-${nodeId}-default`
+  const edge1 = { id: edge1Id, source: originalEdge.source, target: nodeId, sourceHandle: sh, targetHandle: 'default' }
+  edges.push(edge1)
+  changes.upsertEdges.push(edge1)
+  // 创建 新节点 → target
+  const th = originalEdge.targetHandle || 'default'
+  const edge2Id = `e-${nodeId}-default-${originalEdge.target}-${th}`
+  const edge2 = { id: edge2Id, source: nodeId, target: originalEdge.target, sourceHandle: 'default', targetHandle: th }
+  edges.push(edge2)
+  changes.upsertEdges.push(edge2)
+  return {
+    result: {
+      success: true,
+      message: `已在边 ${edgeId} 上插入节点 ${newNode.label} (${nodeId})`,
+      data: { nodeId, edge1Id, edge2Id },
+    },
+    mutated: true,
+    nodes,
+    edges,
+  }
+}
+
 function handleAutoLayout(ctx: ToolContext): ToolHandlerResult {
   let { nodes, edges, changes } = ctx
   if (nodes.length === 0) {
@@ -447,6 +502,7 @@ const WORKFLOW_TOOL_HANDLERS = new Map<string, ToolHandler>([
   ['delete_node', handleDeleteNode],
   ['create_edge', handleCreateEdge],
   ['delete_edge', handleDeleteEdge],
+  ['insert_node', handleInsertNode],
   ['batch_update', handleBatchUpdate],
   ['auto_layout', handleAutoLayout],
 ])
