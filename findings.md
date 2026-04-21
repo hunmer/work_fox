@@ -258,6 +258,20 @@
   - `currentIndex`
   - execution log 构建
   - execution history 持久化
+
+## Phase 8 Reconnect Observability Findings
+
+- `src/lib/ws-bridge.ts` 现已补齐前端可消费的连接事件：
+  - `ws:connected`
+  - `ws:reconnected`
+  - `ws:reconnecting`
+  - `ws:error`
+- [src/stores/workflow.ts](/Users/Zhuanz/Documents/work_fox/src/stores/workflow.ts) 已将 backend 连接状态收口为：
+  - `backendConnectionState`
+  - `backendReconnectAttempt`
+  - `backendLastError`
+- [src/components/workflow/ExecutionBar.vue](/Users/Zhuanz/Documents/work_fox/src/components/workflow/ExecutionBar.vue) 已在执行栏提示“后端重连中 / 后端异常”，满足 interaction 恢复阶段的最低可观测性要求。
+- 当前仍未做 execution event backlog / snapshot recovery；短暂断线后如前端漏掉中间 execution event，现阶段不会自动补拉快照。
 - backend 现会发出完整 execution event 流：
   - `workflow:started/paused/resumed/completed/error`
   - `node:start/progress/complete/error`
@@ -298,11 +312,17 @@
 - backend execution 已支持两类本地桥接：
   - `agent_run` -> `interaction_required(type=agent_chat)`
   - `window-manager` 节点 -> `interaction_required(type=node_execution)`
+- 当前 workflow 里的浏览器工具节点只有 `delay`；它并不来自插件目录，而是 renderer 的 [nodeRegistry.ts](/Users/Zhuanz/Documents/work_fox/src/lib/workflow/nodeRegistry.ts) 基于 `BROWSER_TOOL_LIST` 动态生成。
+- 因此“补浏览器工具节点 bridge”的当前落地点不是 backend plugin registry，而是 Electron 本地 `agent:execTool` fallback。现已新增 [workflow-browser-node-runtime.ts](/Users/Zhuanz/Documents/work_fox/electron/services/workflow-browser-node-runtime.ts) 承接 `delay`，并让 backend `delay` 节点走同一条 `node_execution` interaction bridge。
+- 断线恢复首版已落地：
+  - [src/lib/ws-bridge.ts](/Users/Zhuanz/Documents/work_fox/src/lib/ws-bridge.ts) 会持久化 stable `clientId` 并在 WS close 后自动重连
+  - [connection-manager.ts](/Users/Zhuanz/Documents/work_fox/backend/ws/connection-manager.ts) 允许 renderer 用稳定 `clientId` 重新附着同一逻辑客户端
+  - [interaction-manager.ts](/Users/Zhuanz/Documents/work_fox/backend/workflow/interaction-manager.ts) 在断线后不会立刻 fail pending interaction，而是保留一段 grace period；若同一 `clientId` 重连，则自动重发未完成的 `interaction_required`
 - renderer 已新增 [src/lib/backend-api/interaction.ts](/Users/Zhuanz/Documents/work_fox/src/lib/backend-api/interaction.ts)，统一把 interaction request 映射回现有本地执行能力：
   - `agent_chat` 复用 `window.api.chat.completions`
   - `node_execution` 复用 `window.api.agent.execTool`
 - 为避免本地执行与后端桥接逻辑分叉，已抽出 [src/lib/workflow/agent-run.ts](/Users/Zhuanz/Documents/work_fox/src/lib/workflow/agent-run.ts) 作为共享 `agent_run` 执行 helper，`WorkflowEngine` 本地路径与 WS interaction handler 共用这套实现。
 - 本轮完成后，backend build 通过；`tsconfig.web.json` 仍失败，但失败项回到仓库既有问题，未新增 interaction bridge 相关报错。
 - 剩余缺口：
-  - 浏览器工具节点尚未在 backend registry 中声明并转发到 `node_execution`
-  - interaction request 在 renderer 重连后的恢复/补发策略仍未实现
+  - 浏览器工具节点一旦从 `delay` 扩容到更多本地能力，需要独立的 capability/source-of-truth，而不是继续散落在 renderer node registry 和 Electron runtime 两处
+  - 前端已显示“WS 正在重连 / 后端异常”的执行态提示，但仍没有 execution backlog / snapshot 补拉机制

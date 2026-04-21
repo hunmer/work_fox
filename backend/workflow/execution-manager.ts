@@ -375,6 +375,8 @@ export class BackendWorkflowExecutionManager {
         }
       case 'switch':
         return this.executeSwitch(session, resolvedData.conditions || [])
+      case 'delay':
+        return this.executeMainProcessNode(session, node, resolvedData, appendNodeLog)
       case 'agent_run':
         return this.executeAgentRun(session, node, resolvedData, appendNodeLog)
       default:

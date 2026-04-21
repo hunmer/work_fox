@@ -450,6 +450,9 @@ function createExecutionActions(
   execLogMgr: ReturnType<typeof createExecutionLogManager>,
 ) {
   let currentExecutionId: string | null = null
+  const backendConnectionState = ref<'idle' | 'connected' | 'reconnecting' | 'error'>('idle')
+  const backendReconnectAttempt = ref(0)
+  const backendLastError = ref<string | null>(null)
 
   function handleExecutionEvent(channel: ExecutionEventChannel, payload: ExecutionEventMap[ExecutionEventChannel]) {
     const workflowId = currentWorkflow.value?.id
@@ -520,6 +523,27 @@ function createExecutionActions(
     for (const channel of executionChannels) {
       wsBridge.on(channel, (data) => handleExecutionEvent(channel, data as ExecutionEventMap[typeof channel]))
     }
+    wsBridge.on('ws:connected', () => {
+      backendConnectionState.value = 'connected'
+      backendReconnectAttempt.value = 0
+      backendLastError.value = null
+    })
+    wsBridge.on('ws:reconnected', () => {
+      backendConnectionState.value = 'connected'
+    })
+    wsBridge.on('ws:reconnecting', (payload) => {
+      const state = payload as { attempt?: number }
+      backendConnectionState.value = 'reconnecting'
+      backendReconnectAttempt.value = state.attempt || 0
+    })
+    wsBridge.on('ws:error', (error) => {
+      backendConnectionState.value = 'error'
+      backendLastError.value = error instanceof Error
+        ? error.message
+        : typeof error === 'object' && error && 'message' in error
+          ? String((error as { message?: unknown }).message)
+          : String(error)
+    })
   }
 
   async function startExecution(): Promise<void> {
@@ -581,7 +605,15 @@ function createExecutionActions(
     engine.value?.stop()
   }
 
-  return { startExecution, pauseExecution, resumeExecution, stopExecution }
+  return {
+    startExecution,
+    pauseExecution,
+    resumeExecution,
+    stopExecution,
+    backendConnectionState,
+    backendReconnectAttempt,
+    backendLastError,
+  }
 }
 
 // ====== 单节点调试 ======

@@ -22,15 +22,31 @@ type PendingRequest = {
 
 type EventHandler = (data: unknown) => void
 
+const CLIENT_ID_STORAGE_KEY = 'workfox.backendClientId'
+
+interface WSReconnectState {
+  attempt: number
+  delayMs: number
+}
+
 export class WSBridge {
   private ws: WebSocket | null = null
   private pending = new Map<string, PendingRequest>()
   private eventHandlers = new Map<string, Set<EventHandler>>()
   private interactionHandler?: (req: InteractionRequest) => Promise<InteractionResponse | { data: unknown; cancelled?: boolean }>
   private endpoint?: { url: string; token: string }
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private reconnectAttempts = 0
+  private manualClose = false
+  private clientId = this.loadClientId()
 
   async connect(url?: string, token?: string): Promise<void> {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) return
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+    this.manualClose = false
     if (!url || !token) {
       this.endpoint = await window.api.backend.getEndpoint()
     } else {
@@ -40,11 +56,17 @@ export class WSBridge {
     await new Promise<void>((resolve, reject) => {
       const url = new URL(this.endpoint!.url)
       url.searchParams.set('token', this.endpoint!.token)
+      if (this.clientId) {
+        url.searchParams.set('clientId', this.clientId)
+      }
       const ws = new WebSocket(url.toString())
 
       ws.addEventListener('open', () => {
         this.ws = ws
+        this.reconnectAttempts = 0
         this.sendHello()
+        this.emit('ws:connected', { clientId: this.clientId })
+        this.emit('ws:reconnected', { clientId: this.clientId })
         resolve()
       })
       ws.addEventListener('message', (event) => this.handleMessage(event.data))
@@ -52,11 +74,17 @@ export class WSBridge {
       ws.addEventListener('close', () => {
         this.ws = null
         this.rejectAllPending(new Error('WebSocket closed'))
+        this.scheduleReconnect()
       })
     })
   }
 
   disconnect(): void {
+    this.manualClose = true
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
     this.ws?.close()
     this.ws = null
   }
@@ -111,6 +139,7 @@ export class WSBridge {
     if (!this.ws) return
     const hello: WSClientHello = {
       protocolVersion: 1,
+      clientId: this.clientId || undefined,
     }
     this.ws.send(JSON.stringify(hello))
   }
@@ -152,6 +181,9 @@ export class WSBridge {
     }
 
     if ('protocolVersion' in (message as any)) {
+      if ('clientId' in (message as any) && typeof (message as any).clientId === 'string') {
+        this.setClientId((message as any).clientId)
+      }
       this.emit('ws:hello', message)
     }
   }
@@ -216,6 +248,40 @@ export class WSBridge {
       clearTimeout(pending.timeout)
       pending.reject(error)
       this.pending.delete(id)
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.manualClose || !this.endpoint || this.reconnectTimer) return
+    const delayMs = Math.min(1000 * Math.max(1, this.reconnectAttempts + 1), 5000)
+    this.reconnectAttempts += 1
+    this.emit('ws:reconnecting', {
+      attempt: this.reconnectAttempts,
+      delayMs,
+    } satisfies WSReconnectState)
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
+      void this.connect(this.endpoint?.url, this.endpoint?.token).catch((error) => {
+        this.emit('ws:error', error)
+        this.scheduleReconnect()
+      })
+    }, delayMs)
+  }
+
+  private loadClientId(): string {
+    try {
+      return window.localStorage.getItem(CLIENT_ID_STORAGE_KEY) || crypto.randomUUID()
+    } catch {
+      return crypto.randomUUID()
+    }
+  }
+
+  private setClientId(clientId: string): void {
+    this.clientId = clientId
+    try {
+      window.localStorage.setItem(CLIENT_ID_STORAGE_KEY, clientId)
+    } catch {
+      // ignore localStorage access issues
     }
   }
 }

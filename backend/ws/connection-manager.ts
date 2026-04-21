@@ -26,6 +26,7 @@ export class ConnectionManager {
   private clientsById = new Map<string, ClientSession>()
   private heartbeatTimer: NodeJS.Timeout | null = null
   private interactionResponseHandler?: (response: InteractionResponse, clientId: string) => void
+  private connectHandlers = new Set<(clientId: string) => void>()
   private disconnectHandlers = new Set<(clientId: string) => void>()
 
   constructor(
@@ -50,7 +51,7 @@ export class ConnectionManager {
   }
 
   private handleConnection(socket: WebSocket, request: IncomingMessage): void {
-    const clientId = randomUUID()
+    const clientId = this.extractClientId(request) || randomUUID()
     const token = this.extractToken(request)
     if (this.config.sessionToken && token !== this.config.sessionToken) {
       this.send(socket, {
@@ -66,9 +67,19 @@ export class ConnectionManager {
       socket,
       lastSeenAt: Date.now(),
     }
+    const existing = this.clientsById.get(clientId)
+    if (existing && existing.socket !== socket) {
+      this.clients.delete(existing.socket)
+      try {
+        existing.socket.close()
+      } catch {
+        // ignore close race
+      }
+    }
     this.clients.set(socket, session)
     this.clientsById.set(clientId, session)
     this.logger.info('WS client connected', { clientId })
+    for (const handler of this.connectHandlers) handler(clientId)
 
     this.send(socket, {
       protocolVersion: 1,
@@ -101,6 +112,13 @@ export class ConnectionManager {
     if (!request.url) return undefined
     const url = new URL(request.url, 'http://127.0.0.1')
     return url.searchParams.get('token') || undefined
+  }
+
+  private extractClientId(request: IncomingMessage): string | undefined {
+    if (!request.url) return undefined
+    const url = new URL(request.url, 'http://127.0.0.1')
+    const clientId = url.searchParams.get('clientId') || undefined
+    return clientId?.trim() || undefined
   }
 
   private async handleMessage(session: ClientSession, raw: string): Promise<void> {
@@ -160,6 +178,11 @@ export class ConnectionManager {
   onClientDisconnected(handler: (clientId: string) => void): () => void {
     this.disconnectHandlers.add(handler)
     return () => this.disconnectHandlers.delete(handler)
+  }
+
+  onClientConnected(handler: (clientId: string) => void): () => void {
+    this.connectHandlers.add(handler)
+    return () => this.connectHandlers.delete(handler)
   }
 
   private send(socket: WebSocket, payload: unknown): void {

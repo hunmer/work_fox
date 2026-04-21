@@ -4,21 +4,31 @@ import { resolvePendingRendererTool } from '../services/workflow-tool-dispatcher
 import { testProviderConnection } from '../services/ai-provider-test'
 import { listAIProviders, getAIProvider, createAIProvider, updateAIProvider, deleteAIProvider } from '../services/store'
 import { workflowNodeRegistry } from '../services/workflow-node-registry'
+import { executeWorkflowBrowserNode } from '../services/workflow-browser-node-runtime'
 import * as chatHistory from '../services/chat-history-store'
 
 export function registerChatIpcHandlers(): void {
   ipcMain.handle('agent:execTool', async (_event, toolType: string, params: Record<string, any>) => {
     const handler = workflowNodeRegistry.getHandler(toolType)
-    if (!handler) {
-      return { error: `Tool not available: ${toolType}` }
-    }
-    const api = workflowNodeRegistry.getApiForNodeType(toolType) || {}
     const logs: Array<{ level: 'info' | 'warning' | 'error'; message: string; timestamp: number }> = []
     const logger = {
       info(message: string) { logs.push({ level: 'info', message, timestamp: Date.now() }) },
       warning(message: string) { logs.push({ level: 'warning', message, timestamp: Date.now() }) },
       error(message: string) { logs.push({ level: 'error', message, timestamp: Date.now() }) },
     }
+
+    if (!handler) {
+      try {
+        const result = await executeWorkflowBrowserNode(toolType, params)
+        return isPlainObject(result)
+          ? { ...result, _logs: logs }
+          : { result, _logs: logs }
+      } catch (err: any) {
+        return { success: false, message: err.message, _logs: logs }
+      }
+    }
+
+    const api = (workflowNodeRegistry.getApiForNodeType(toolType) || {}) as any
     try {
       const result = await handler(
         {
@@ -76,4 +86,8 @@ export function registerChatIpcHandlers(): void {
   ipcMain.handle('chatHistory:deleteMessage', (_e, workflowId: string, sessionId: string, messageId: string) => chatHistory.deleteMessage(workflowId, sessionId, messageId))
   ipcMain.handle('chatHistory:deleteMessages', (_e, workflowId: string, sessionId: string, messageIds: string[]) => chatHistory.deleteMessages(workflowId, sessionId, messageIds))
   ipcMain.handle('chatHistory:clearMessages', (_e, workflowId: string, sessionId: string) => chatHistory.clearMessages(workflowId, sessionId))
+}
+
+function isPlainObject(value: unknown): value is Record<string, any> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

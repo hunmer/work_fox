@@ -264,3 +264,80 @@
   - 把浏览器工具节点也纳入 backend registry 的 `node_execution` bridge
   - 补 interaction reconnect / orphaned request 恢复策略
   - 再评估是否要把更多 Electron-only 插件节点统一标记为 `requiresMainProcessBridge`
+
+### Session 10
+
+- 继续收口“浏览器工具节点”这条本地执行链，避免 Phase 8 只覆盖 `agent_run` / `window-manager`。
+- 核对后确认：
+  - 当前 workflow 侧浏览器节点实际只有 `delay`
+  - 它来自 renderer [src/lib/workflow/nodeRegistry.ts](/Users/Zhuanz/Documents/work_fox/src/lib/workflow/nodeRegistry.ts)，不是 `resources/plugins/*/workflow.js`
+  - Electron `agent:execTool` 之前并不能执行它
+- 新增 [electron/services/workflow-browser-node-runtime.ts](/Users/Zhuanz/Documents/work_fox/electron/services/workflow-browser-node-runtime.ts)，先为 workflow 节点场景补最小本地执行能力：
+  - `delay`
+- 修改 [electron/ipc/chat.ts](/Users/Zhuanz/Documents/work_fox/electron/ipc/chat.ts)：
+  - 当 `workflowNodeRegistry` 中找不到 handler 时，回退到 `workflow-browser-node-runtime`
+- 修改 [backend/workflow/execution-manager.ts](/Users/Zhuanz/Documents/work_fox/backend/workflow/execution-manager.ts)：
+  - `delay` 节点改为走 `executeMainProcessNode(...)`
+  - backend 执行 `delay` 时也通过 `interaction_required(type=node_execution)` 回到 Electron 本地
+- 验证：
+  - `pnpm build:backend` 通过
+  - `pnpm exec tsc -p tsconfig.node.json --noEmit` 仍失败，但失败项回到仓库既有 `tsconfig.node` include / Claude SDK hook typing / plugin-fs 类型问题；本轮新增的 `chat.ts` 和浏览器节点 bridge 错误已清掉
+
+### Next Recommended Step
+
+- 继续 `Phase 8/9`：
+  - 设计 interaction reconnect / orphaned request 恢复策略
+  - 为未来新增浏览器 workflow 节点准备统一 capability 清单，避免 renderer node registry 和 Electron runtime 再次分叉
+
+### Session 11
+
+- 继续推进 Phase 8 的“不要一断就失败”，补 interaction reconnect / resend 首版恢复机制。
+- 修改 [src/lib/ws-bridge.ts](/Users/Zhuanz/Documents/work_fox/src/lib/ws-bridge.ts)：
+  - 增加稳定 `clientId` 持久化
+  - 连接时把 `clientId` 带给 backend
+  - WS close 后自动按退避策略重连
+- 修改 [backend/ws/connection-manager.ts](/Users/Zhuanz/Documents/work_fox/backend/ws/connection-manager.ts)：
+  - 接受稳定 `clientId`
+  - 允许同一 `clientId` 重新附着
+  - 新增 `onClientConnected(...)`
+- 修改 [backend/workflow/interaction-manager.ts](/Users/Zhuanz/Documents/work_fox/backend/workflow/interaction-manager.ts)：
+  - pending interaction 保存完整 payload
+  - client disconnect 后进入 grace period，而不是立即 reject
+  - 同一 `clientId` 重连时自动重发未完成 interaction request
+- 验证：
+  - `pnpm build:backend` 通过
+  - `pnpm exec tsc -p tsconfig.web.json --noEmit` 仍失败，但没有新增 reconnect / interaction 相关错误
+
+### Next Recommended Step
+
+- 继续 `Phase 8/10`：
+  - 把 `ws reconnecting / reconnected / interaction resent` 暴露给前端执行态 UI
+  - 再决定是否要把 execution event backlog / snapshot recovery 也补上
+
+### Session 12
+
+- 收口 Phase 8 的前端可观测性，优先补 execution 期间的 backend 连接状态提示。
+- 修改 [src/lib/ws-bridge.ts](/Users/Zhuanz/Documents/work_fox/src/lib/ws-bridge.ts)：
+  - 新增 `ws:connected`
+  - 新增 `ws:reconnected`
+  - 新增 `ws:reconnecting`
+- 修改 [src/stores/workflow.ts](/Users/Zhuanz/Documents/work_fox/src/stores/workflow.ts)：
+  - 新增 `backendConnectionState`
+  - 新增 `backendReconnectAttempt`
+  - 新增 `backendLastError`
+  - 在 backend 模式下订阅 WS 连接事件
+- 修改 [src/components/workflow/ExecutionBar.vue](/Users/Zhuanz/Documents/work_fox/src/components/workflow/ExecutionBar.vue)：
+  - 在执行栏显示后端重连中 / 连接异常提示
+- 验证：
+  - `pnpm build:backend` 通过
+  - `pnpm exec tsc -p tsconfig.web.json --noEmit` 仍失败，但失败项仍为仓库既有问题：
+    - `src/composables/useNotification.ts`
+    - `src/composables/workflow/useExecutionPanel.ts`
+    - `src/lib/agent/workflow-renderer-tools.ts`
+    - `src/lib/lucide-resolver.ts`
+    - `src/types/index.ts`
+  - 本轮未新增 execution / reconnect / execution bar 相关类型错误
+
+### Next Recommended Step
+
+- 如果继续快速推进，优先补 `execution event backlog / snapshot recovery`，否则短暂断线后前端仍可能缺少部分中间事件。

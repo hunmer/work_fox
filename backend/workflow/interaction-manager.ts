@@ -25,22 +25,30 @@ interface RequestInteractionParams {
 }
 
 interface PendingInteraction {
+  id: string
   clientId: string
   executionId: string
   workflowId: string
   nodeId: string
   interactionType: InteractionType
+  payload: InteractionRequest
   resolve: (response: InteractionResponse['data']) => void
   reject: (error: Error) => void
   timer: NodeJS.Timeout
+  reconnectTimer?: NodeJS.Timeout
 }
 
 export class BackendInteractionManager {
   private pending = new Map<string, PendingInteraction>()
+  private reconnectGraceMs: number
 
   constructor(private options: InteractionManagerOptions) {
+    this.reconnectGraceMs = Math.min(options.defaultTimeoutMs, 30_000)
     this.options.connectionManager.setInteractionResponseHandler((response, clientId) => {
       this.handleResponse(response, clientId)
+    })
+    this.options.connectionManager.onClientConnected((clientId) => {
+      this.handleClientReconnect(clientId)
     })
     this.options.connectionManager.onClientDisconnected((clientId) => {
       this.handleClientDisconnect(clientId)
@@ -69,11 +77,13 @@ export class BackendInteractionManager {
       }, timeoutMs)
 
       this.pending.set(id, {
+        id,
         clientId: params.clientId,
         executionId: params.executionId,
         workflowId: params.workflowId,
         nodeId: params.nodeId,
         interactionType: params.interactionType,
+        payload,
         resolve,
         reject,
         timer,
@@ -94,6 +104,7 @@ export class BackendInteractionManager {
     if (pending.clientId !== clientId) return
 
     clearTimeout(pending.timer)
+    if (pending.reconnectTimer) clearTimeout(pending.reconnectTimer)
     this.pending.delete(response.id)
 
     if (response.error) {
@@ -112,11 +123,44 @@ export class BackendInteractionManager {
   private handleClientDisconnect(clientId: string): void {
     for (const [id, pending] of this.pending.entries()) {
       if (pending.clientId !== clientId) continue
-      clearTimeout(pending.timer)
-      this.pending.delete(id)
-      pending.reject(new Error(createErrorShape('CONNECTION_CLOSED', `执行端连接已断开，交互中止: ${pending.interactionType}`).message))
-      this.options.logger.warn('Interaction aborted because client disconnected', {
+      if (pending.reconnectTimer) continue
+      pending.reconnectTimer = setTimeout(() => {
+        this.pending.delete(id)
+        clearTimeout(pending.timer)
+        pending.reject(new Error(createErrorShape('CONNECTION_CLOSED', `执行端连接已断开，交互中止: ${pending.interactionType}`).message))
+        this.options.logger.warn('Interaction aborted because reconnect grace period expired', {
+          clientId,
+          executionId: pending.executionId,
+          workflowId: pending.workflowId,
+          nodeId: pending.nodeId,
+          interactionType: pending.interactionType,
+        })
+      }, this.reconnectGraceMs)
+
+      this.options.logger.warn('Interaction waiting for client reconnect', {
         clientId,
+        executionId: pending.executionId,
+        workflowId: pending.workflowId,
+        nodeId: pending.nodeId,
+        interactionType: pending.interactionType,
+      })
+    }
+  }
+
+  private handleClientReconnect(clientId: string): void {
+    for (const pending of this.pending.values()) {
+      if (pending.clientId !== clientId) continue
+      if (pending.reconnectTimer) {
+        clearTimeout(pending.reconnectTimer)
+        pending.reconnectTimer = undefined
+      }
+
+      const sent = this.options.connectionManager.sendToClient(clientId, pending.payload)
+      if (!sent) continue
+
+      this.options.logger.info('Re-sent pending interaction after client reconnect', {
+        clientId,
+        interactionId: pending.id,
         executionId: pending.executionId,
         workflowId: pending.workflowId,
         nodeId: pending.nodeId,

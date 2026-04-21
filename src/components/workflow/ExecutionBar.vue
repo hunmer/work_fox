@@ -72,6 +72,17 @@ function selectLog(log: ExecutionLog) {
 }
 
 const displayLog = computed(() => store.selectedExecutionLog)
+const backendStatusText = computed(() => {
+  if (store.backendConnectionState === 'idle' || store.backendConnectionState === 'connected') {
+    return ''
+  }
+  if (store.backendConnectionState === 'reconnecting') {
+    return store.backendReconnectAttempt > 0
+      ? `后端重连中 #${store.backendReconnectAttempt}`
+      : '后端重连中'
+  }
+  return store.backendLastError ? `后端异常: ${store.backendLastError}` : '后端连接异常'
+})
 </script>
 
 <template>
@@ -128,6 +139,12 @@ const displayLog = computed(() => store.selectedExecutionLog)
       </Button>
 
       <div class="ml-auto flex items-center gap-3 text-[10px] text-muted-foreground">
+        <span
+          v-if="backendStatusText"
+          class="text-amber-600 dark:text-amber-400"
+        >
+          {{ backendStatusText }}
+        </span>
         <span v-if="progressText">进度: {{ progressText }}</span>
         <span v-if="elapsedText">耗时: {{ elapsedText }}</span>
         <span>{{ store.executionStatus }}</span>

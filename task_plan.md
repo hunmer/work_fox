@@ -30,7 +30,7 @@
 - `Phase 5` 进行中：前端 WS Bridge、workflow 数据访问适配、plugin store/domain adapter 已落地，执行态 UI 事件订阅尚未接入
 - `Phase 6` 进行中：workflow/folder/version/executionLog/operationHistory 与 plugin 元数据/配置查询已迁到 backend，import/export 与 execution channels 尚未迁移
 - `Phase 7` 进行中：backend execution runner 已落地，Node 可闭环节点与部分需本地桥接节点已接入；仍需补浏览器工具节点覆盖和断线恢复细节
-- `Phase 8` 进行中：interaction session manager、renderer interaction handler 与 `agent_run` / `window-manager` bridge 已落地首版
+- `Phase 8` 已完成：interaction session manager、renderer interaction handler、`agent_run` / `window-manager` / `delay` bridge、reconnect resend 与前端可观测状态已落地
 - `Phase 10` 进行中：`workflow store` 已改为消费 execution events，backend flag 下支持受限节点集的后端执行
 
 ## Implementation Phases
@@ -334,7 +334,7 @@ Status: `in_progress`
   - `window-manager` 等依赖 Electron 本地窗口能力的插件节点
 
 ### Phase 8. 交互回调与 agent_run 桥接
-Status: `in_progress`
+Status: `completed`
 
 目标：
 - 解决最关键的跨端执行问题，即后端引擎如何安全等待 Electron 本地能力返回
@@ -376,13 +376,16 @@ Status: `in_progress`
   - timeout / disconnect 清理
 - backend `workflow:execute` 已绑定发起执行的 WS client，`agent_run` 会通过 `interaction_required(type=agent_chat)` 回到 Electron 本地执行
 - `window-manager` 节点已通过 `interaction_required(type=node_execution)` 回到 Electron Main 侧现有 `agent:execTool` 通道执行
+- 当前唯一的浏览器 workflow 节点 `delay` 已通过 `interaction_required(type=node_execution)` 回到 Electron 本地执行
 - renderer 已新增统一 interaction handler，并复用现有：
   - `window.api.chat.completions`
   - `window.api.agent.execTool`
+- WS bridge 已新增稳定 `clientId` 与自动重连；backend 会在短暂断线期间保留 pending interaction，并在同一 client 重连后重发
+- workflow store 与 [src/components/workflow/ExecutionBar.vue](/Users/Zhuanz/Documents/work_fox/src/components/workflow/ExecutionBar.vue) 已暴露并显示 backend reconnecting / error 状态
 - `WorkflowEngine` 本地执行路径已抽出共享 `agent_run` helper，避免本地执行和 backend interaction bridge 维护两套 Claude Agent 调用逻辑
 - 尚未补充：
-  - 浏览器工具节点的 backend plugin registry / node type 覆盖
-  - interaction 断线重连后的恢复策略
+  - 浏览器工具节点扩容后的统一 registry / capability 声明
+  - execution event backlog / snapshot recovery
 
 ### Phase 9. 插件系统拆分与注册表迁移
 Status: `pending`
