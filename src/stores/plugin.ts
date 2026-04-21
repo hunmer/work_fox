@@ -84,6 +84,26 @@ export const usePluginStore = defineStore('plugin', () => {
     return window.api.plugin.saveConfig(pluginId, data)
   }
 
+  async function listPluginSchemes(workflowId: string, pluginId: string): Promise<string[]> {
+    return window.api.workflow.listPluginSchemes(workflowId, pluginId)
+  }
+
+  async function createPluginScheme(workflowId: string, pluginId: string, schemeName: string): Promise<void> {
+    return window.api.workflow.createPluginScheme(workflowId, pluginId, schemeName)
+  }
+
+  async function deletePluginScheme(workflowId: string, pluginId: string, schemeName: string): Promise<void> {
+    return window.api.workflow.deletePluginScheme(workflowId, pluginId, schemeName)
+  }
+
+  async function readPluginScheme(workflowId: string, pluginId: string, schemeName: string): Promise<Record<string, string>> {
+    return window.api.workflow.readPluginScheme(workflowId, pluginId, schemeName)
+  }
+
+  async function savePluginScheme(workflowId: string, pluginId: string, schemeName: string, data: Record<string, string>): Promise<void> {
+    return window.api.workflow.savePluginScheme(workflowId, pluginId, schemeName, data)
+  }
+
   return {
     plugins,
     isLoading,
@@ -103,6 +123,11 @@ export const usePluginStore = defineStore('plugin', () => {
     getWorkflowNodes,
     listWorkflowPlugins,
     getPluginConfig,
-    savePluginConfig
+    savePluginConfig,
+    listPluginSchemes,
+    createPluginScheme,
+    deletePluginScheme,
+    readPluginScheme,
+    savePluginScheme
   }
 })
