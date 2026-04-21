@@ -1,0 +1,145 @@
+import type { BackendChannel } from './channel-contracts'
+
+export type ChannelPriority = 1 | 2 | 3
+
+export interface ChannelMetadata {
+  channel: BackendChannel
+  priority: ChannelPriority
+  ordered: boolean
+  idempotent: boolean
+  timeoutMs: number
+  streaming: boolean
+  description: string
+}
+
+export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
+export const EXECUTION_REQUEST_TIMEOUT_MS = 5 * 60_000
+
+export const backendChannelMetadata: Record<BackendChannel, ChannelMetadata> = {
+  'system:ping': {
+    channel: 'system:ping',
+    priority: 1,
+    ordered: false,
+    idempotent: true,
+    timeoutMs: 5_000,
+    streaming: false,
+    description: 'Backend health check over WebSocket',
+  },
+  'system:echo': {
+    channel: 'system:echo',
+    priority: 1,
+    ordered: false,
+    idempotent: true,
+    timeoutMs: 5_000,
+    streaming: false,
+    description: 'Development echo channel for bridge verification',
+  },
+
+  'workflow:list': crud('workflow:list', 'List workflows'),
+  'workflow:get': crud('workflow:get', 'Get one workflow'),
+  'workflow:create': mutation('workflow:create', 'Create workflow'),
+  'workflow:update': mutation('workflow:update', 'Update workflow'),
+  'workflow:delete': mutation('workflow:delete', 'Delete workflow'),
+  'workflow:list-plugin-schemes': crud('workflow:list-plugin-schemes', 'List workflow plugin config schemes'),
+  'workflow:read-plugin-scheme': crud('workflow:read-plugin-scheme', 'Read workflow plugin config scheme'),
+  'workflow:create-plugin-scheme': mutation('workflow:create-plugin-scheme', 'Create workflow plugin config scheme'),
+  'workflow:save-plugin-scheme': mutation('workflow:save-plugin-scheme', 'Save workflow plugin config scheme'),
+  'workflow:delete-plugin-scheme': mutation('workflow:delete-plugin-scheme', 'Delete workflow plugin config scheme'),
+
+  'workflowFolder:list': crud('workflowFolder:list', 'List workflow folders'),
+  'workflowFolder:create': mutation('workflowFolder:create', 'Create workflow folder'),
+  'workflowFolder:update': mutation('workflowFolder:update', 'Update workflow folder'),
+  'workflowFolder:delete': mutation('workflowFolder:delete', 'Delete workflow folder'),
+
+  'workflowVersion:list': crud('workflowVersion:list', 'List workflow versions'),
+  'workflowVersion:add': mutation('workflowVersion:add', 'Add workflow version snapshot'),
+  'workflowVersion:get': crud('workflowVersion:get', 'Get workflow version snapshot'),
+  'workflowVersion:delete': mutation('workflowVersion:delete', 'Delete workflow version snapshot'),
+  'workflowVersion:clear': mutation('workflowVersion:clear', 'Clear workflow versions'),
+  'workflowVersion:nextName': crud('workflowVersion:nextName', 'Get next workflow version name'),
+
+  'executionLog:list': crud('executionLog:list', 'List execution logs'),
+  'executionLog:save': mutation('executionLog:save', 'Save execution log'),
+  'executionLog:delete': mutation('executionLog:delete', 'Delete execution log'),
+  'executionLog:clear': mutation('executionLog:clear', 'Clear execution logs'),
+
+  'operationHistory:load': crud('operationHistory:load', 'Load operation history'),
+  'operationHistory:save': mutation('operationHistory:save', 'Save operation history'),
+  'operationHistory:clear': mutation('operationHistory:clear', 'Clear operation history'),
+
+  'workflow:execute': execution('workflow:execute', 'Start workflow execution'),
+  'workflow:pause': execution('workflow:pause', 'Pause workflow execution'),
+  'workflow:resume': execution('workflow:resume', 'Resume workflow execution'),
+  'workflow:stop': execution('workflow:stop', 'Stop workflow execution'),
+
+  'plugin:list': plugin('plugin:list', 'List plugins'),
+  'plugin:enable': pluginMutation('plugin:enable', 'Enable plugin'),
+  'plugin:disable': pluginMutation('plugin:disable', 'Disable plugin'),
+  'plugin:install': pluginMutation('plugin:install', 'Install plugin'),
+  'plugin:uninstall': pluginMutation('plugin:uninstall', 'Uninstall plugin'),
+  'plugin:get-workflow-nodes': plugin('plugin:get-workflow-nodes', 'Get plugin workflow nodes'),
+  'plugin:list-workflow-plugins': plugin('plugin:list-workflow-plugins', 'List workflow-capable plugins'),
+  'plugin:get-agent-tools': plugin('plugin:get-agent-tools', 'Get plugin agent tool definitions'),
+  'plugin:get-config': plugin('plugin:get-config', 'Get plugin config'),
+  'plugin:save-config': pluginMutation('plugin:save-config', 'Save plugin config'),
+}
+
+function crud(channel: BackendChannel, description: string): ChannelMetadata {
+  return {
+    channel,
+    priority: 1,
+    ordered: false,
+    idempotent: true,
+    timeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
+    streaming: false,
+    description,
+  }
+}
+
+function mutation(channel: BackendChannel, description: string): ChannelMetadata {
+  return {
+    channel,
+    priority: 1,
+    ordered: true,
+    idempotent: false,
+    timeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
+    streaming: false,
+    description,
+  }
+}
+
+function execution(channel: BackendChannel, description: string): ChannelMetadata {
+  return {
+    channel,
+    priority: 3,
+    ordered: true,
+    idempotent: false,
+    timeoutMs: EXECUTION_REQUEST_TIMEOUT_MS,
+    streaming: channel === 'workflow:execute',
+    description,
+  }
+}
+
+function plugin(channel: BackendChannel, description: string): ChannelMetadata {
+  return {
+    channel,
+    priority: 2,
+    ordered: false,
+    idempotent: true,
+    timeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
+    streaming: false,
+    description,
+  }
+}
+
+function pluginMutation(channel: BackendChannel, description: string): ChannelMetadata {
+  return {
+    channel,
+    priority: 2,
+    ordered: true,
+    idempotent: false,
+    timeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
+    streaming: false,
+    description,
+  }
+}
