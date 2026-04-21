@@ -452,6 +452,7 @@ function createExecutionActions(
       workflowName: currentWorkflow.value.name,
       workflowDescription: currentWorkflow.value.description,
       enabledPlugins: currentWorkflow.value.enabledPlugins || [],
+      pluginConfigSchemes: currentWorkflow.value.pluginConfigSchemes || {},
     })
 
     const log = await engine.value.start()
@@ -510,6 +511,7 @@ function createDebugActions(
       workflowName: currentWorkflow.value.name,
       workflowDescription: currentWorkflow.value.description,
       enabledPlugins: currentWorkflow.value.enabledPlugins || [],
+      pluginConfigSchemes: currentWorkflow.value.pluginConfigSchemes || {},
     })
     const result = await debugEngine.debugSingleNode(node, executionContext.value)
     debugEngine = null
