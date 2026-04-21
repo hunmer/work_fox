@@ -409,9 +409,9 @@ const segments = computed<ContentSegment[]>(() => {
         >
       </div>
 
-      <!-- 正在思考占位 -->
+      <!-- 正在思考占位：streaming 期间、无文本内容时始终显示 -->
       <div
-        v-if="isStreaming && !displayContent && !displayToolCalls?.length"
+        v-if="isStreaming && !displayContent"
         class="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm text-muted-foreground bg-muted"
       >
         <span class="thinking-dots">正在思考</span>

@@ -128,8 +128,5 @@ function handleAutoLayout() {
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
-    <span class="text-[10px] text-muted-foreground ml-0.5 select-none">
-      {{ store.canUndo ? `${store.undoStack.length} 步可撤销` : '' }}
-    </span>
   </div>
 </template>
