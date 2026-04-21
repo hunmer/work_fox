@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Settings } from 'lucide-vue-next'
+import { Settings, SlidersHorizontal } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
+import PluginConfigDialog from './PluginConfigDialog.vue'
 import type { PluginMeta, RemotePlugin } from '@/types/plugin'
 
 const props = defineProps<{
@@ -21,6 +22,7 @@ const emit = defineEmits<{
 }>()
 
 const iconDataUrl = ref<string | null>(null)
+const configDialogOpen = ref(false)
 
 const isRemote = (p: PluginMeta | RemotePlugin): p is RemotePlugin => 'downloadUrl' in p
 
@@ -95,10 +97,20 @@ onMounted(async () => {
             variant="ghost"
             size="icon"
             class="h-7 w-7"
-            title="设置"
+            title="视图"
             @click="emit('open-settings', plugin.id)"
           >
             <Settings class="w-4 h-4" />
+          </Button>
+          <Button
+            v-if="(plugin as PluginMeta).config?.length"
+            variant="ghost"
+            size="icon"
+            class="h-7 w-7"
+            title="配置"
+            @click="configDialogOpen = true"
+          >
+            <SlidersHorizontal class="w-4 h-4" />
           </Button>
         </template>
         <template v-else>
@@ -125,4 +137,11 @@ onMounted(async () => {
       </div>
     </div>
   </div>
+  <PluginConfigDialog
+    v-if="!storeMode && (plugin as PluginMeta).config?.length"
+    v-model:open="configDialogOpen"
+    :plugin-id="plugin.id"
+    :plugin-name="plugin.name"
+    :config="(plugin as PluginMeta).config!"
+  />
 </template>

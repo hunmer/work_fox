@@ -82,6 +82,16 @@ export class PluginConfigStorage {
     this.save()
   }
 
+  /** 同步读取（供 Proxy trap 使用） */
+  getSync(key: string): string | undefined {
+    return this.data[key]
+  }
+
+  /** 同步获取所有键（供 Proxy trap 使用） */
+  keysSync(): string[] {
+    return Object.keys(this.data)
+  }
+
   private save(): void {
     writeFileSync(this.filePath, JSON.stringify(this.data, null, 2), 'utf-8')
   }

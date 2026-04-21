@@ -1,6 +1,6 @@
 import { BrowserWindow } from 'electron'
 import { pluginEventBus } from './plugin-event-bus'
-import { PluginStorage } from './plugin-storage'
+import { PluginStorage, PluginConfigStorage } from './plugin-storage'
 import { workflowNodeRegistry } from './workflow-node-registry'
 import { createBuiltinFetchApi } from './plugin-fetch-api'
 import { createBuiltinFsApi } from './plugin-fs-api'
@@ -15,6 +15,7 @@ export function createPluginContext(
   eventBus: typeof pluginEventBus,
   getMainWindow: () => BrowserWindow | null,
   hasWorkflow = false,
+  configStorage?: PluginConfigStorage,
 ): { context: PluginContext; cleanupEvents: () => void } {
   const prefix = `plugin:${pluginInfo.id}:`
 
@@ -72,6 +73,30 @@ export function createPluginContext(
 
     fetch: fetchApi,
     fs: fsApi,
+
+    config: new Proxy({} as Record<string, string>, {
+      get(_, key: string) {
+        if (typeof key === 'symbol') return undefined
+        const userVal = configStorage?.getSync(key)
+        if (userVal !== undefined) return userVal
+        const field = pluginInfo.config?.find(f => f.key === key)
+        return field?.value
+      },
+      ownKeys() {
+        const keys = new Set<string>()
+        if (pluginInfo.config) {
+          for (const f of pluginInfo.config) keys.add(f.key)
+        }
+        if (configStorage) {
+          for (const k of configStorage.keysSync()) keys.add(k)
+        }
+        return [...keys]
+      },
+      has(_, key: string) {
+        return !!(pluginInfo.config?.find(f => f.key === key)) ||
+          !!(configStorage && configStorage.getSync(key) !== undefined)
+      }
+    }),
 
     ...(hasWorkflow
       ? {

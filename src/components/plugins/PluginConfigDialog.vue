@@ -48,12 +48,8 @@ const errorMessage = ref('')
 watch(() => props.open, async (isOpen) => {
   if (!isOpen || !props.pluginId) return
   errorMessage.value = ''
-  const userValues = await pluginStore.getPluginConfig(props.pluginId)
-  const merged: Record<string, string> = {}
-  for (const field of props.config) {
-    merged[field.key] = userValues[field.key] ?? field.value
-  }
-  formValues.value = merged
+  // IPC get-config 已返回合并后的值（默认值 + 用户值），直接使用
+  formValues.value = await pluginStore.getPluginConfig(props.pluginId)
 })
 
 /** Validate object type fields are valid JSON */
