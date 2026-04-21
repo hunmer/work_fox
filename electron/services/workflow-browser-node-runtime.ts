@@ -1,7 +1,13 @@
+import { isLocalBridgeWorkflowNode } from '../../shared/workflow-local-bridge'
+
 export async function executeWorkflowBrowserNode(
   name: string,
   args: Record<string, unknown>,
 ): Promise<unknown> {
+  if (!isLocalBridgeWorkflowNode(name)) {
+    throw new Error(`Tool not available: ${name}`)
+  }
+
   switch (name) {
     case 'delay': {
       const milliseconds = typeof args.milliseconds === 'number'
@@ -21,6 +27,6 @@ export async function executeWorkflowBrowserNode(
       }
     }
     default:
-      throw new Error(`Tool not available: ${name}`)
+      throw new Error(`Tool not implemented: ${name}`)
   }
 }

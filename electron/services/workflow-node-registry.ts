@@ -41,11 +41,11 @@ class WorkflowNodeRegistry {
   }
 
   /** 注册插件的工作流节点 */
-  register(pluginId: string, workflowModule: { nodes: PluginWorkflowNode[] }): void {
+  register(pluginId: string, workflowModule: { nodes: PluginWorkflowNode[] | Array<Record<string, unknown>> }): void {
     const nodes: PluginWorkflowNode[] = []
     const handlers = new Map<string, NodeHandler>()
 
-    for (const node of workflowModule.nodes) {
+    for (const node of workflowModule.nodes as PluginWorkflowNode[]) {
       if (node.handler) {
         handlers.set(node.type, node.handler)
       }

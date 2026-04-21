@@ -90,6 +90,34 @@ export interface ExecutionSnapshot {
   edges: WorkflowEdge[]
 }
 
+export interface ExecutionBacklogEvent {
+  sequence: number
+  channel: ExecutionEventChannel
+  payload: ExecutionEventMap[ExecutionEventChannel]
+}
+
+export interface ExecutionRecoveryRequest {
+  workflowId: string
+  executionId?: string | null
+}
+
+export interface ExecutionRecoveryState {
+  executionId: string
+  workflowId: string
+  status: EngineStatus
+  currentNodeId?: string
+  updatedAt: number
+  active: boolean
+  log: ExecutionLog
+  context: Record<string, unknown>
+  recentEvents: ExecutionBacklogEvent[]
+}
+
+export interface ExecutionRecoveryResponse {
+  found: boolean
+  execution?: ExecutionRecoveryState
+}
+
 export interface ExecutionEventMap {
   'workflow:started': WorkflowStartedEvent
   'workflow:paused': WorkflowPausedEvent

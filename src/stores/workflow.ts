@@ -10,7 +10,11 @@ import { useWorkflowBackend } from '@/lib/backend-api/runtime'
 import { wsBridge } from '@/lib/ws-bridge'
 import type { WorkflowToolExecuteRequest } from '../../preload'
 import { useAgentSettingsStore, createWorkflowAgentConfigFromGlobal } from './agent-settings'
-import type { ExecutionEventChannel, ExecutionEventMap } from '@shared/execution-events'
+import type {
+  ExecutionEventChannel,
+  ExecutionEventMap,
+  ExecutionRecoveryState,
+} from '@shared/execution-events'
 
 export interface WorkflowChanges {
   upsertNodes: any[]
@@ -454,6 +458,48 @@ function createExecutionActions(
   const backendReconnectAttempt = ref(0)
   const backendLastError = ref<string | null>(null)
 
+  function applyLogSnapshot(log: ExecutionLog | null | undefined): void {
+    if (!log?.snapshot || !currentWorkflow.value) return
+    currentWorkflow.value.nodes = JSON.parse(JSON.stringify(log.snapshot.nodes))
+    currentWorkflow.value.edges = JSON.parse(JSON.stringify(log.snapshot.edges))
+  }
+
+  async function recoverExecutionState(): Promise<void> {
+    const workflowId = currentWorkflow.value?.id
+    if (!workflowId) return
+    if (!currentExecutionId && executionStatus.value === 'idle') return
+
+    try {
+      const response = await createWorkflowDomainApi().workflow.getExecutionRecovery(workflowId, currentExecutionId)
+      if (!response.found || !response.execution) {
+        if (executionStatus.value === 'running' || executionStatus.value === 'paused') {
+          executionStatus.value = 'error'
+          backendLastError.value = '执行恢复失败：后端未找到对应 execution snapshot'
+        }
+        return
+      }
+
+      applyRecoveredExecution(response.execution)
+    } catch (error) {
+      backendLastError.value = error instanceof Error ? error.message : String(error)
+    }
+  }
+
+  function applyRecoveredExecution(recovery: ExecutionRecoveryState): void {
+    currentExecutionId = recovery.executionId
+    executionStatus.value = recovery.status
+    executionLog.value = recovery.log
+    executionContext.value = recovery.context as Record<string, any>
+    applyLogSnapshot(recovery.log)
+
+    if (!recovery.active && (recovery.status === 'completed' || recovery.status === 'error')) {
+      if (execLogMgr.selectedExecutionLogId.value !== recovery.log.id) {
+        execLogMgr.selectedExecutionLogId.value = recovery.log.id
+      }
+      void execLogMgr.loadExecutionLogs().catch(() => {})
+    }
+  }
+
   function handleExecutionEvent(channel: ExecutionEventChannel, payload: ExecutionEventMap[ExecutionEventChannel]) {
     const workflowId = currentWorkflow.value?.id
     if (workflowId && payload.workflowId && payload.workflowId !== workflowId) return
@@ -474,6 +520,7 @@ function createExecutionActions(
         break
       case 'execution:log':
         executionLog.value = (payload as ExecutionEventMap['execution:log']).log
+        applyLogSnapshot(executionLog.value)
         break
       case 'execution:context':
         executionContext.value = (payload as ExecutionEventMap['execution:context']).context as Record<string, any>
@@ -527,9 +574,12 @@ function createExecutionActions(
       backendConnectionState.value = 'connected'
       backendReconnectAttempt.value = 0
       backendLastError.value = null
+      void recoverExecutionState()
     })
     wsBridge.on('ws:reconnected', () => {
       backendConnectionState.value = 'connected'
+      backendLastError.value = null
+      void recoverExecutionState()
     })
     wsBridge.on('ws:reconnecting', (payload) => {
       const state = payload as { attempt?: number }

@@ -4,6 +4,11 @@ import type { Logger } from '../app/logger'
 import type { BackendConfig } from '../app/config'
 import type { PluginInfo, PluginMeta, AgentToolDefinition } from '../../shared/plugin-types'
 import type { NodeTypeDefinition } from '../../shared/workflow-types'
+import {
+  isMainProcessBridgePlugin,
+  loadPluginToolsModule,
+  loadPluginWorkflowModule,
+} from '../../shared/plugin-capability-loader'
 import { createBuiltinFetchApi } from './builtin-fetch-api'
 import { createBuiltinFsApi } from './builtin-fs-api'
 
@@ -138,7 +143,7 @@ export class BackendPluginRegistry {
   requiresMainProcessBridge(nodeType: string): boolean {
     const plugin = this.getPluginByNodeType(nodeType)
     if (!plugin) return false
-    return plugin.dir.includes('window-manager')
+    return isMainProcessBridgePlugin(plugin.info)
   }
 
   async executeWorkflowNode(
@@ -185,8 +190,8 @@ export class BackendPluginRegistry {
       throw new Error(`Invalid info.json in ${pluginDir}`)
     }
 
-    const { nodes: workflowNodes, handlers: workflowHandlers } = this.loadWorkflowNodes(pluginDir)
-    const agentTools = this.loadAgentTools(pluginDir)
+    const { nodes: workflowNodes, handlers: workflowHandlers } = this.loadWorkflowNodes(pluginDir, info)
+    const agentTools = this.loadAgentTools(pluginDir, info)
 
     this.plugins.set(info.id, {
       dir: pluginDir,
@@ -198,11 +203,9 @@ export class BackendPluginRegistry {
     })
   }
 
-  private loadWorkflowNodes(pluginDir: string): { nodes: NodeTypeDefinition[]; handlers: Map<string, WorkflowNodeHandler> } {
-    const workflowPath = join(pluginDir, 'workflow.js')
-    if (!existsSync(workflowPath)) return { nodes: [], handlers: new Map() }
-
-    const workflowModule = require(workflowPath) as { nodes?: Array<Record<string, unknown>> }
+  private loadWorkflowNodes(pluginDir: string, info: PluginInfo): { nodes: NodeTypeDefinition[]; handlers: Map<string, WorkflowNodeHandler> } {
+    const workflowModule = loadPluginWorkflowModule(pluginDir, info)
+    if (!workflowModule) return { nodes: [], handlers: new Map() }
     const handlers = new Map<string, WorkflowNodeHandler>()
     const nodes = (workflowModule.nodes || []).map((node) => {
       const { handler: _handler, ...serializable } = node
@@ -217,18 +220,9 @@ export class BackendPluginRegistry {
     return { nodes, handlers }
   }
 
-  private loadAgentTools(pluginDir: string): AgentToolDefinition[] {
-    const toolsPath = join(pluginDir, 'tools.js')
-    if (!existsSync(toolsPath)) return []
-
-    const toolsModule = require(toolsPath) as {
-      tools?: Array<{
-        name: string
-        description: string
-        input_schema?: Record<string, unknown>
-      }>
-    }
-
+  private loadAgentTools(pluginDir: string, info: PluginInfo): AgentToolDefinition[] {
+    const toolsModule = loadPluginToolsModule(pluginDir, info)
+    if (!toolsModule) return []
     return (toolsModule.tools || []).map((tool) => ({
       name: tool.name,
       description: tool.description,

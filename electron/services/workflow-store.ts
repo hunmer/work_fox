@@ -105,7 +105,7 @@ export function createPluginScheme(workflowId: string, pluginId: string, schemeN
 
   // Use require() to avoid circular dependency with plugin-manager
   const pluginManager = require('./plugin-manager').pluginManager
-  const plugin = pluginManager.getPlugin(pluginId)
+  const plugin = pluginManager.getManifest(pluginId) || pluginManager.getPlugin(pluginId)
   const defaults: Record<string, string> = {}
   if (plugin?.info?.config) {
     for (const field of plugin.info.config) {

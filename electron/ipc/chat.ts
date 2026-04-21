@@ -6,6 +6,7 @@ import { listAIProviders, getAIProvider, createAIProvider, updateAIProvider, del
 import { workflowNodeRegistry } from '../services/workflow-node-registry'
 import { executeWorkflowBrowserNode } from '../services/workflow-browser-node-runtime'
 import * as chatHistory from '../services/chat-history-store'
+import { isLocalBridgeWorkflowNode } from '../../shared/workflow-local-bridge'
 
 export function registerChatIpcHandlers(): void {
   ipcMain.handle('agent:execTool', async (_event, toolType: string, params: Record<string, any>) => {
@@ -18,6 +19,9 @@ export function registerChatIpcHandlers(): void {
     }
 
     if (!handler) {
+      if (!isLocalBridgeWorkflowNode(toolType)) {
+        return { success: false, message: `Tool not available: ${toolType}`, _logs: logs }
+      }
       try {
         const result = await executeWorkflowBrowserNode(toolType, params)
         return isPlainObject(result)

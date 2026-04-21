@@ -5,8 +5,13 @@
   "description": "FishAudio 语音合成与语音识别，支持 TTS 文字转语音、STT 语音转文字",
   "author": { "name": "workfox" },
   "tags": ["AI", "语音合成", "TTS", "语音识别", "STT", "FishAudio"],
+  "type": "server",
   "hasWorkflow": true,
   "hasView": false,
+  "entries": {
+    "server": "main.js",
+    "workflow": "workflow.js"
+  },
   "config": [
     {
       "key": "apiKey",

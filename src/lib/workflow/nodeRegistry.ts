@@ -1,8 +1,8 @@
 // src/lib/workflow/nodeRegistry.ts
 import { ref } from 'vue'
-import { BROWSER_TOOL_LIST } from '@/lib/agent/tools'
 import type { NodeTypeDefinition, NodeProperty } from './types'
 import { customNodeDefinitions } from './nodes'
+import { LOCAL_BRIDGE_WORKFLOW_NODES } from '@shared/workflow-local-bridge'
 
 /** 插件节点版本号，每次 register 递增，供 computed 响应式依赖 */
 export const pluginNodesVersion = ref(0)
@@ -105,17 +105,16 @@ function getToolIcon(name: string): string {
   return iconMap[name] || 'Circle'
 }
 
-/** 从 BROWSER_TOOL_LIST 构建节点定义 */
+/** 从 shared local bridge capability 构建节点定义 */
 function buildToolNodeDefinitions(): NodeTypeDefinition[] {
-  return BROWSER_TOOL_LIST.map((tool) => {
-    const schema = toolSchemas[tool.name] || { properties: {} }
+  return LOCAL_BRIDGE_WORKFLOW_NODES.map((tool) => {
+    const schema = toolSchemas[tool.type] || { properties: {} }
     return {
-      type: tool.name,
-      label: tool.description,
-      category: tool.category,
-      icon: getToolIcon(tool.name),
-      description: tool.description,
-      properties: schemaToProps(schema.properties, schema.required),
+      ...tool,
+      icon: getToolIcon(tool.type),
+      properties: tool.properties?.length
+        ? tool.properties as NodeProperty[]
+        : schemaToProps(schema.properties, schema.required),
     }
   })
 }

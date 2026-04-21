@@ -1,4 +1,6 @@
 import type {
+  ExecutionRecoveryRequest,
+  ExecutionRecoveryResponse,
   ExecutionControlRequest,
   WorkflowExecuteRequest,
   WorkflowExecuteResponse,
@@ -207,6 +209,7 @@ export interface BackendChannelMap {
   'operationHistory:clear': ChannelContract<OperationHistoryClearRequest, EmptyResponse>
 
   'workflow:execute': ChannelContract<WorkflowExecuteRequest, WorkflowExecuteResponse>
+  'workflow:get-execution-recovery': ChannelContract<ExecutionRecoveryRequest, ExecutionRecoveryResponse>
   'workflow:pause': ChannelContract<ExecutionControlRequest, WorkflowExecuteResponse>
   'workflow:resume': ChannelContract<ExecutionControlRequest, WorkflowExecuteResponse>
   'workflow:stop': ChannelContract<ExecutionControlRequest, WorkflowExecuteResponse>

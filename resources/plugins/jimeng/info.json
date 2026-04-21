@@ -5,6 +5,11 @@
   "description": "即梦AI图片/视频生成，支持文生图、图生图、文生视频",
   "author": { "name": "workfox" },
   "tags": ["AI", "图片生成", "视频生成", "即梦"],
+  "type": "server",
   "hasWorkflow": true,
-  "hasView": false
+  "hasView": false,
+  "entries": {
+    "server": "main.js",
+    "workflow": "workflow.js"
+  }
 }

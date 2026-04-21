@@ -35,6 +35,9 @@ export const workflowBackendApi = {
   execute(workflowId: string, input?: Record<string, unknown>) {
     return wsBridge.invoke('workflow:execute', { workflowId, input })
   },
+  getExecutionRecovery(workflowId: string, executionId?: string | null) {
+    return wsBridge.invoke('workflow:get-execution-recovery', { workflowId, executionId })
+  },
   pause(executionId: string) {
     return wsBridge.invoke('workflow:pause', { executionId })
   },

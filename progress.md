@@ -341,3 +341,107 @@
 ### Next Recommended Step
 
 - 如果继续快速推进，优先补 `execution event backlog / snapshot recovery`，否则短暂断线后前端仍可能缺少部分中间事件。
+
+### Session 13
+
+- 继续按既定主线推进，直接补 `execution snapshot/backlog recovery`，未扩展到其他迁移细节。
+- 修改 shared 协议：
+  - [shared/execution-events.ts](/Users/Zhuanz/Documents/work_fox/shared/execution-events.ts) 新增 `ExecutionRecoveryRequest/Response`、`ExecutionRecoveryState`、`ExecutionBacklogEvent`
+  - [shared/channel-contracts.ts](/Users/Zhuanz/Documents/work_fox/shared/channel-contracts.ts) 新增 `workflow:get-execution-recovery`
+  - [shared/channel-metadata.ts](/Users/Zhuanz/Documents/work_fox/shared/channel-metadata.ts) 为 recovery 通道登记 execution 级 metadata
+- 修改 backend execution：
+  - [backend/workflow/execution-manager.ts](/Users/Zhuanz/Documents/work_fox/backend/workflow/execution-manager.ts) 为 active session 维护 `lastUpdatedAt`、bounded recent backlog、finished recovery TTL cache
+  - backend 在 execution 完成/失败后保留短时 recovery，避免前端错过最终事件后一直停在 running/paused
+  - [backend/ws/execution-channels.ts](/Users/Zhuanz/Documents/work_fox/backend/ws/execution-channels.ts) 注册 `workflow:get-execution-recovery`
+- 修改前端接入：
+  - [src/lib/backend-api/workflow.ts](/Users/Zhuanz/Documents/work_fox/src/lib/backend-api/workflow.ts) 增加 `getExecutionRecovery(...)`
+  - [src/stores/workflow.ts](/Users/Zhuanz/Documents/work_fox/src/stores/workflow.ts) 在 `ws:connected/ws:reconnected` 后主动补拉 recovery，并用 `ExecutionLog.snapshot` 覆盖当前 workflow 图状态
+  - 若 recovery 命中最终态，前端会刷新 execution logs，避免漏掉完成/失败后的历史记录
+- 验证：
+  - `pnpm build:backend` 通过
+  - `pnpm exec tsc -p tsconfig.web.json --noEmit` 仍失败，但仅为仓库既有错误：
+    - `src/composables/useNotification.ts`
+    - `src/composables/workflow/useExecutionPanel.ts`
+    - `src/lib/agent/workflow-renderer-tools.ts`
+    - `src/lib/lucide-resolver.ts`
+    - `src/types/index.ts`
+  - 本轮未新增 execution recovery 相关类型错误
+
+### Next Recommended Step
+
+- 若继续推进，优先把 recovery 从“latest snapshot 覆盖”增强为“按 cursor 增量补齐 backlog”，否则当前虽然不会丢最终状态，但中间 `node:progress` 仍以 snapshot 为准而非逐条重放。
+
+### Session 14
+
+- 切入 `Phase 9`，优先处理长期边界问题，而不是继续在 execution 细节上打转。
+- 新增 shared source-of-truth：
+  - [shared/plugin-entry.ts](/Users/Zhuanz/Documents/work_fox/shared/plugin-entry.ts) 统一解析插件 `entries`
+  - [shared/workflow-local-bridge.ts](/Users/Zhuanz/Documents/work_fox/shared/workflow-local-bridge.ts) 统一声明本地 bridge workflow 节点 capability
+- 修改插件加载与注册：
+  - [electron/services/plugin-manager.ts](/Users/Zhuanz/Documents/work_fox/electron/services/plugin-manager.ts) 改为按 `entries.main/workflow/tools/api/view` 解析入口
+  - [backend/plugins/plugin-registry.ts](/Users/Zhuanz/Documents/work_fox/backend/plugins/plugin-registry.ts) 改为按 `entries.workflow/tools` 解析入口
+  - [electron/services/plugin-types.ts](/Users/Zhuanz/Documents/work_fox/electron/services/plugin-types.ts) 与 [shared/plugin-types.ts](/Users/Zhuanz/Documents/work_fox/shared/plugin-types.ts) 补充 `type` / `entries` 字段
+- 修改本地 bridge workflow 节点消费方：
+  - [src/lib/workflow/nodeRegistry.ts](/Users/Zhuanz/Documents/work_fox/src/lib/workflow/nodeRegistry.ts) 不再直接从 `BROWSER_TOOL_LIST` 生成 workflow 节点定义
+  - [backend/workflow/execution-manager.ts](/Users/Zhuanz/Documents/work_fox/backend/workflow/execution-manager.ts) 改为按 shared local capability 判定是否走 main-process bridge
+  - [electron/services/workflow-browser-node-runtime.ts](/Users/Zhuanz/Documents/work_fox/electron/services/workflow-browser-node-runtime.ts) 与 [electron/ipc/chat.ts](/Users/Zhuanz/Documents/work_fox/electron/ipc/chat.ts) 改为只接受 shared capability 中声明的本地 bridge 节点
+- 修改内置插件 metadata：
+  - `resources/plugins/*/info.json` 开始显式声明 `type` 与 `entries`
+  - `window-manager` 标记为 `both`
+  - `fetch` / `file-system` / `fish-audio` / `jimeng` 标记为 `server`
+- 验证：
+  - `pnpm build:backend` 通过
+  - `pnpm exec tsc -p tsconfig.web.json --noEmit` 仍失败，但仅为仓库既有错误
+  - `pnpm exec tsc -p tsconfig.node.json --noEmit` 仍失败，但失败项仍为仓库既有 include / hook typing / plugin-fs 类型问题
+  - 本轮未新增 plugin entry / local bridge capability 相关错误
+
+### Next Recommended Step
+
+- 若继续快速推进，优先把 `plugin manager` 真正拆成 backend/client 两套职责，并把 backend registry 上对 `window-manager` 的兼容 fallback 移除，改成完全依赖 metadata/runtime type 驱动。
+
+### Session 15
+
+- 继续 Phase 9，不停留在 metadata 层，直接把 Electron `plugin manager` 做成分层结构。
+- 新增 Electron 插件分层：
+  - [electron/services/plugin-catalog.ts](/Users/Zhuanz/Documents/work_fox/electron/services/plugin-catalog.ts) 负责 manifest 扫描、disabled state、view/icon 读取、ZIP 导入、URL 安装、卸载
+  - [electron/services/plugin-runtime-host.ts](/Users/Zhuanz/Documents/work_fox/electron/services/plugin-runtime-host.ts) 负责 module 激活/停用、workflow/api/tools 注册
+  - [electron/services/plugin-manager.ts](/Users/Zhuanz/Documents/work_fox/electron/services/plugin-manager.ts) 改为 orchestration 层，协调 catalog 与 runtime host
+- 修改上层消费：
+  - [electron/ipc/plugin.ts](/Users/Zhuanz/Documents/work_fox/electron/ipc/plugin.ts) 在 `plugin:get-config` 中优先读取 manifest config defaults，不再假设 runtime instance 必定存在
+  - [electron/services/workflow-store.ts](/Users/Zhuanz/Documents/work_fox/electron/services/workflow-store.ts) 创建 plugin scheme 默认值时，改为优先读取 manifest
+  - [src/types/plugin.ts](/Users/Zhuanz/Documents/work_fox/src/types/plugin.ts) 与 [electron/services/plugin-types.ts](/Users/Zhuanz/Documents/work_fox/electron/services/plugin-types.ts) 补齐 `type/hasWorkflow/entries` 相关字段，继续缩小 local/backend metadata 漂移
+- 验证：
+  - `pnpm build:backend` 通过
+  - `pnpm exec tsc -p tsconfig.node.json --noEmit` 仍失败，但本轮新增的 `plugin:get-config` 空值收窄错误已修掉；剩余失败项仍为仓库既有 include / hook typing / plugin-fs 类型问题
+  - `pnpm exec tsc -p tsconfig.web.json --noEmit` 仍失败，但失败项仍为仓库既有错误
+  - 本轮未新增 plugin catalog / runtime host / manager 分层相关错误
+
+### Next Recommended Step
+
+- 若继续推进，优先统一 backend plugin registry 和 Electron runtime host 的 workflow/tools loader contract，并移除 backend 对 `window-manager` 的 plugin-id 兼容 fallback。
+
+### Session 16
+
+- 继续 Phase 9，收掉 backend/Electron 两边重复的 plugin capability loader。
+- 新增 [shared/plugin-capability-loader.ts](/Users/Zhuanz/Documents/work_fox/shared/plugin-capability-loader.ts)，统一提供：
+  - `loadPluginWorkflowModule(...)`
+  - `loadPluginToolsModule(...)`
+  - `loadPluginApiModule(...)`
+  - `isMainProcessBridgePlugin(...)`
+- 修改 [backend/plugins/plugin-registry.ts](/Users/Zhuanz/Documents/work_fox/backend/plugins/plugin-registry.ts)：
+  - workflow/tools 加载改为走 shared capability loader
+  - `requiresMainProcessBridge(...)` 改为只按 runtime type 判定
+  - 移除对 `window-manager` 的 plugin-id 兼容 fallback
+- 修改 [electron/services/plugin-runtime-host.ts](/Users/Zhuanz/Documents/work_fox/electron/services/plugin-runtime-host.ts)：
+  - workflow/api/tools 注册改为走 shared capability loader
+  - 仅保留把 loaded capability 注入 Electron host/registry 的宿主 glue code
+- 修改 [electron/services/workflow-node-registry.ts](/Users/Zhuanz/Documents/work_fox/electron/services/workflow-node-registry.ts)：
+  - 放宽 `register(...)` 入参，允许直接接收 loader 解析后的 node 集合
+- 验证：
+  - `pnpm build:backend` 通过
+  - `pnpm exec tsc -p tsconfig.node.json --noEmit` 仍失败，但新增的 capability loader / runtime host 类型错误已清掉；剩余失败项仍为仓库既有 include / hook typing / plugin-fs 类型问题
+  - `pnpm exec tsc -p tsconfig.web.json --noEmit` 仍失败，但失败项仍为仓库既有错误
+
+### Next Recommended Step
+
+- 若继续推进，优先切入 `Phase 10`，收掉 workflow store 的本地执行兜底分支，让 execution path 真正只剩 backend-first，而不是继续在 plugin loader 细节上做边缘优化。

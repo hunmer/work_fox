@@ -38,6 +38,7 @@ export interface PluginInfo {
     workflow?: string
     tools?: string
     api?: string
+    view?: string
   }
 }
 

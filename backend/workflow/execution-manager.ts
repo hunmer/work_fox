@@ -9,9 +9,18 @@ import type {
   EngineStatus,
   ConditionItem,
 } from '../../shared/workflow-types'
-import type { ExecutionEventChannel, ExecutionEventMap, WorkflowExecuteRequest, WorkflowExecuteResponse } from '../../shared/execution-events'
+import type {
+  ExecutionBacklogEvent,
+  ExecutionEventChannel,
+  ExecutionEventMap,
+  ExecutionRecoveryRequest,
+  ExecutionRecoveryResponse,
+  WorkflowExecuteRequest,
+  WorkflowExecuteResponse,
+} from '../../shared/execution-events'
 import { createErrorShape } from '../../shared/errors'
 import type { AgentChatInteractionSchema, NodeExecutionInteractionSchema } from '../../shared/ws-protocol'
+import { isLocalBridgeWorkflowNode } from '../../shared/workflow-local-bridge'
 import type { BackendWorkflowStore } from '../storage/workflow-store'
 import type { BackendExecutionLogStore } from '../storage/execution-log-store'
 import type { BackendPluginRegistry } from '../plugins/plugin-registry'
@@ -45,10 +54,24 @@ interface ExecutionSession {
   activeBranches: Map<string, string>
   lastErrorMessage?: string
   persisted: boolean
+  lastUpdatedAt: number
+  eventSequence: number
+  recentEvents: ExecutionBacklogEvent[]
 }
+
+interface FinishedExecutionRecovery {
+  ownerClientId: string
+  workflowId: string
+  recovery: NonNullable<ExecutionRecoveryResponse['execution']>
+  expiresAt: number
+}
+
+const MAX_RECENT_EVENTS = 100
+const FINISHED_RECOVERY_TTL_MS = 2 * 60_000
 
 export class BackendWorkflowExecutionManager {
   private sessions = new Map<string, ExecutionSession>()
+  private finishedRecoveries = new Map<string, FinishedExecutionRecovery>()
 
   constructor(private deps: ExecutionManagerDeps) {}
 
@@ -78,11 +101,36 @@ export class BackendWorkflowExecutionManager {
       steps: [],
       activeBranches: new Map(),
       persisted: false,
+      lastUpdatedAt: Date.now(),
+      eventSequence: 0,
+      recentEvents: [],
     }
 
     this.sessions.set(executionId, session)
     void this.run(session)
     return { executionId, status: 'running' }
+  }
+
+  getExecutionRecovery(request: ExecutionRecoveryRequest, ownerClientId: string): ExecutionRecoveryResponse {
+    this.pruneFinishedRecoveries()
+
+    const activeSession = this.findSession(ownerClientId, request.workflowId, request.executionId)
+    if (activeSession) {
+      return {
+        found: true,
+        execution: this.createRecoveryState(activeSession, true),
+      }
+    }
+
+    const finishedRecovery = this.findFinishedRecovery(ownerClientId, request.workflowId, request.executionId)
+    if (finishedRecovery) {
+      return {
+        found: true,
+        execution: clone(finishedRecovery.recovery),
+      }
+    }
+
+    return { found: false }
   }
 
   pause(executionId: string): WorkflowExecuteResponse {
@@ -101,7 +149,7 @@ export class BackendWorkflowExecutionManager {
 
     session.pauseRequested = false
     session.status = 'running'
-    this.emit('workflow:resumed', {
+    this.emitEvent(session, 'workflow:resumed', {
       executionId: session.id,
       workflowId: session.workflow.id,
       timestamp: Date.now(),
@@ -152,7 +200,7 @@ export class BackendWorkflowExecutionManager {
 
       session.status = 'running'
       session.startedAt = Date.now()
-      this.emit('workflow:started', {
+      this.emitEvent(session, 'workflow:started', {
         executionId: session.id,
         workflowId: session.workflow.id,
         timestamp: session.startedAt,
@@ -188,7 +236,7 @@ export class BackendWorkflowExecutionManager {
         session.currentIndex = i
         session.status = 'paused'
         this.emitLog(session)
-        this.emit('workflow:paused', {
+        this.emitEvent(session, 'workflow:paused', {
           executionId: session.id,
           workflowId: session.workflow.id,
           timestamp: Date.now(),
@@ -242,7 +290,7 @@ export class BackendWorkflowExecutionManager {
     session.finishedAt = Date.now()
     this.emitLog(session)
     this.emitContext(session)
-    this.emit('workflow:completed', {
+    this.emitEvent(session, 'workflow:completed', {
       executionId: session.id,
       workflowId: session.workflow.id,
       timestamp: Date.now(),
@@ -270,7 +318,7 @@ export class BackendWorkflowExecutionManager {
     }
     session.steps.push(step)
 
-    this.emit('node:start', {
+    this.emitEvent(session, 'node:start', {
       executionId: session.id,
       workflowId: session.workflow.id,
       timestamp: Date.now(),
@@ -289,7 +337,7 @@ export class BackendWorkflowExecutionManager {
       }
       stepLogs.push(entry)
       step.logs = [...stepLogs]
-      this.emit('node:progress', {
+      this.emitEvent(session, 'node:progress', {
         executionId: session.id,
         workflowId: session.workflow.id,
         timestamp: entry.timestamp,
@@ -321,7 +369,7 @@ export class BackendWorkflowExecutionManager {
       }
 
       this.emitContext(session)
-      this.emit('node:complete', {
+      this.emitEvent(session, 'node:complete', {
         executionId: session.id,
         workflowId: session.workflow.id,
         timestamp: Date.now(),
@@ -335,7 +383,7 @@ export class BackendWorkflowExecutionManager {
       step.logs = stepLogs.length ? [...stepLogs] : undefined
       session.status = 'error'
       session.lastErrorMessage = step.error
-      this.emit('node:error', {
+      this.emitEvent(session, 'node:error', {
         executionId: session.id,
         workflowId: session.workflow.id,
         timestamp: Date.now(),
@@ -375,11 +423,12 @@ export class BackendWorkflowExecutionManager {
         }
       case 'switch':
         return this.executeSwitch(session, resolvedData.conditions || [])
-      case 'delay':
-        return this.executeMainProcessNode(session, node, resolvedData, appendNodeLog)
       case 'agent_run':
         return this.executeAgentRun(session, node, resolvedData, appendNodeLog)
       default:
+        if (isLocalBridgeWorkflowNode(node.type)) {
+          return this.executeMainProcessNode(session, node, resolvedData, appendNodeLog)
+        }
         if (this.deps.pluginRegistry.requiresMainProcessBridge(node.type)) {
           return this.executeMainProcessNode(session, node, resolvedData, appendNodeLog)
         }
@@ -697,8 +746,26 @@ export class BackendWorkflowExecutionManager {
     this.deps.emit(channel, payload)
   }
 
+  private emitEvent<Channel extends ExecutionEventChannel>(
+    session: ExecutionSession,
+    channel: Channel,
+    payload: ExecutionEventMap[Channel],
+  ): void {
+    session.lastUpdatedAt = Date.now()
+    session.eventSequence += 1
+    session.recentEvents.push({
+      sequence: session.eventSequence,
+      channel,
+      payload: clone(payload) as ExecutionEventMap[ExecutionEventChannel],
+    })
+    if (session.recentEvents.length > MAX_RECENT_EVENTS) {
+      session.recentEvents.splice(0, session.recentEvents.length - MAX_RECENT_EVENTS)
+    }
+    this.emit(channel, payload)
+  }
+
   private emitLog(session: ExecutionSession): void {
-    this.emit('execution:log', {
+    this.emitEvent(session, 'execution:log', {
       executionId: session.id,
       workflowId: session.workflow.id,
       timestamp: Date.now(),
@@ -707,7 +774,7 @@ export class BackendWorkflowExecutionManager {
   }
 
   private emitContext(session: ExecutionSession): void {
-    this.emit('execution:context', {
+    this.emitEvent(session, 'execution:context', {
       executionId: session.id,
       workflowId: session.workflow.id,
       timestamp: Date.now(),
@@ -716,7 +783,7 @@ export class BackendWorkflowExecutionManager {
   }
 
   private emitWorkflowError(session: ExecutionSession): void {
-    this.emit('workflow:error', {
+    this.emitEvent(session, 'workflow:error', {
       executionId: session.id,
       workflowId: session.workflow.id,
       timestamp: Date.now(),
@@ -731,7 +798,61 @@ export class BackendWorkflowExecutionManager {
       this.deps.executionLogStore.add(session.workflow.id, this.currentLog(session))
       session.persisted = true
     }
+    this.finishedRecoveries.set(session.id, {
+      ownerClientId: session.ownerClientId,
+      workflowId: session.workflow.id,
+      recovery: this.createRecoveryState(session, false),
+      expiresAt: Date.now() + FINISHED_RECOVERY_TTL_MS,
+    })
     this.sessions.delete(session.id)
+    this.pruneFinishedRecoveries()
+  }
+
+  private createRecoveryState(session: ExecutionSession, active: boolean): NonNullable<ExecutionRecoveryResponse['execution']> {
+    return {
+      executionId: session.id,
+      workflowId: session.workflow.id,
+      status: session.status,
+      currentNodeId: session.executionOrder[session.currentIndex]?.id,
+      updatedAt: session.lastUpdatedAt,
+      active,
+      log: this.currentLog(session),
+      context: this.currentContext(session),
+      recentEvents: clone(session.recentEvents),
+    }
+  }
+
+  private findSession(ownerClientId: string, workflowId: string, executionId?: string | null): ExecutionSession | undefined {
+    for (const session of this.sessions.values()) {
+      if (session.ownerClientId !== ownerClientId) continue
+      if (session.workflow.id !== workflowId) continue
+      if (executionId && session.id !== executionId) continue
+      return session
+    }
+    return undefined
+  }
+
+  private findFinishedRecovery(
+    ownerClientId: string,
+    workflowId: string,
+    executionId?: string | null,
+  ): FinishedExecutionRecovery | undefined {
+    for (const recovery of this.finishedRecoveries.values()) {
+      if (recovery.ownerClientId !== ownerClientId) continue
+      if (recovery.workflowId !== workflowId) continue
+      if (executionId && recovery.recovery.executionId !== executionId) continue
+      return recovery
+    }
+    return undefined
+  }
+
+  private pruneFinishedRecoveries(): void {
+    const now = Date.now()
+    for (const [executionId, recovery] of this.finishedRecoveries.entries()) {
+      if (recovery.expiresAt <= now) {
+        this.finishedRecoveries.delete(executionId)
+      }
+    }
   }
 }
 

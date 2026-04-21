@@ -29,9 +29,10 @@
 - `Phase 4` 已完成：后端服务骨架、health/version、WS router、system channels 已可运行
 - `Phase 5` 进行中：前端 WS Bridge、workflow 数据访问适配、plugin store/domain adapter 已落地，执行态 UI 事件订阅尚未接入
 - `Phase 6` 进行中：workflow/folder/version/executionLog/operationHistory 与 plugin 元数据/配置查询已迁到 backend，import/export 与 execution channels 尚未迁移
-- `Phase 7` 进行中：backend execution runner 已落地，Node 可闭环节点与部分需本地桥接节点已接入；仍需补浏览器工具节点覆盖和断线恢复细节
-- `Phase 8` 已完成：interaction session manager、renderer interaction handler、`agent_run` / `window-manager` / `delay` bridge、reconnect resend 与前端可观测状态已落地
-- `Phase 10` 进行中：`workflow store` 已改为消费 execution events，backend flag 下支持受限节点集的后端执行
+- `Phase 7` 进行中：backend execution runner 已落地，Node 可闭环节点与部分需本地桥接节点已接入；execution snapshot/backlog recovery 已补齐，仍需后续浏览器节点 capability 清单化
+- `Phase 8` 已完成：interaction session manager、renderer interaction handler、`agent_run` / `window-manager` / `delay` bridge、reconnect resend、execution recovery 与前端可观测状态已落地
+- `Phase 9` 进行中：插件 `entries`、workflow/tools/api loader contract 与 runtime type 已开始成为 shared source-of-truth，Electron `plugin manager` 已拆为 catalog/runtime host/orchestrator，local bridge workflow node capability 已从 renderer/Electron 硬编码中抽离
+- `Phase 10` 进行中：`workflow store` 已改为消费 execution events，并在 backend flag 下支持重连后的 execution snapshot recovery
 
 ## Implementation Phases
 
@@ -382,13 +383,14 @@ Status: `completed`
   - `window.api.agent.execTool`
 - WS bridge 已新增稳定 `clientId` 与自动重连；backend 会在短暂断线期间保留 pending interaction，并在同一 client 重连后重发
 - workflow store 与 [src/components/workflow/ExecutionBar.vue](/Users/Zhuanz/Documents/work_fox/src/components/workflow/ExecutionBar.vue) 已暴露并显示 backend reconnecting / error 状态
+- backend 已新增 `workflow:get-execution-recovery`，可按 stable `clientId + workflowId (+ executionId)` 返回 active session snapshot、recent backlog 以及短 TTL 的 finished recovery
+- [src/stores/workflow.ts](/Users/Zhuanz/Documents/work_fox/src/stores/workflow.ts) 会在 `ws:connected/ws:reconnected` 后补拉 execution snapshot，并用 `ExecutionLog.snapshot` 覆盖当前 workflow 图状态
 - `WorkflowEngine` 本地执行路径已抽出共享 `agent_run` helper，避免本地执行和 backend interaction bridge 维护两套 Claude Agent 调用逻辑
 - 尚未补充：
   - 浏览器工具节点扩容后的统一 registry / capability 声明
-  - execution event backlog / snapshot recovery
 
 ### Phase 9. 插件系统拆分与注册表迁移
-Status: `pending`
+Status: `in_progress`
 
 目标：
 - 把现有 `electron/services/plugin-manager.ts` 的混合职责拆开，支持 server/client/both 三类插件
@@ -425,6 +427,26 @@ Status: `pending`
 完成标准：
 - 节点定义来源从 renderer 本地注册改为 backend 主导
 - 插件 server/client 职责清晰，内置插件可逐个迁移
+
+当前进展：
+- 已新增 [shared/plugin-entry.ts](/Users/Zhuanz/Documents/work_fox/shared/plugin-entry.ts)，统一解析 `main/server/client/workflow/tools/api/view` 入口文件，Electron plugin manager 与 backend plugin registry 已共用这套解析逻辑
+- 已新增 [shared/workflow-local-bridge.ts](/Users/Zhuanz/Documents/work_fox/shared/workflow-local-bridge.ts)，把本地 bridge workflow 节点定义抽为 shared capability source-of-truth
+- [src/lib/workflow/nodeRegistry.ts](/Users/Zhuanz/Documents/work_fox/src/lib/workflow/nodeRegistry.ts)、[backend/workflow/execution-manager.ts](/Users/Zhuanz/Documents/work_fox/backend/workflow/execution-manager.ts)、[electron/services/workflow-browser-node-runtime.ts](/Users/Zhuanz/Documents/work_fox/electron/services/workflow-browser-node-runtime.ts)、[electron/ipc/chat.ts](/Users/Zhuanz/Documents/work_fox/electron/ipc/chat.ts) 已切到消费 shared local bridge capability，避免 `delay` 这类节点继续在 renderer/Electron/backend 三处散落维护
+- [electron/services/plugin-manager.ts](/Users/Zhuanz/Documents/work_fox/electron/services/plugin-manager.ts) 已从单文件“大一统实现”改为 orchestration 层，并新增：
+  - [plugin-catalog.ts](/Users/Zhuanz/Documents/work_fox/electron/services/plugin-catalog.ts) 负责扫描 manifest、disabled state、view/icon 读取、ZIP 导入、URL 安装、卸载
+  - [plugin-runtime-host.ts](/Users/Zhuanz/Documents/work_fox/electron/services/plugin-runtime-host.ts) 负责 plugin module 激活/停用、workflow/api/tools 注册
+- 已新增 [shared/plugin-capability-loader.ts](/Users/Zhuanz/Documents/work_fox/shared/plugin-capability-loader.ts)，统一：
+  - `workflow.js` 加载
+  - `tools.js` 加载
+  - `api.js` 加载
+  - `type -> requires main-process bridge` 判定
+- [backend/plugins/plugin-registry.ts](/Users/Zhuanz/Documents/work_fox/backend/plugins/plugin-registry.ts) 与 [electron/services/plugin-runtime-host.ts](/Users/Zhuanz/Documents/work_fox/electron/services/plugin-runtime-host.ts) 已共用这套 loader contract
+- [electron/ipc/plugin.ts](/Users/Zhuanz/Documents/work_fox/electron/ipc/plugin.ts) 与 [electron/services/workflow-store.ts](/Users/Zhuanz/Documents/work_fox/electron/services/workflow-store.ts) 已开始优先读取 manifest defaults，而不是强依赖已激活 runtime instance
+- 内置插件 `info.json` 已开始显式声明 `type` 与 `entries`：
+  - `workfox.fetch` / `workfox.file-system` / `workfox.fish-audio` / `workfox.jimeng` 标记为 `server`
+  - `workfox.window-manager` 标记为 `both`
+- backend plugin registry 已移除 `window-manager` 的 plugin-id 兼容 fallback，当前仅按 shared loader 中的 runtime type 判定是否需要 main-process bridge
+- Electron local mode 与 backend mode 的 `PluginMeta`/`PluginInfo` 口径已进一步对齐到 `type/hasWorkflow/entries`
 
 ### Phase 10. 前端 Store 与执行 UI 改造
 Status: `in_progress`

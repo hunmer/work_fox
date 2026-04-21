@@ -38,7 +38,17 @@ export interface PluginInfo {
   minAppVersion?: string
   hasView?: boolean
   hasWorkflow?: boolean
+  type?: 'server' | 'client' | 'both'
   config?: PluginConfigField[]
+  entries?: {
+    main?: string
+    server?: string
+    client?: string
+    workflow?: string
+    tools?: string
+    api?: string
+    view?: string
+  }
 }
 
 /** 插件运行时实例 */
@@ -64,6 +74,8 @@ export interface PluginMeta {
   author: PluginInfo['author']
   tags: string[]
   hasView: boolean
+  hasWorkflow?: boolean
+  type?: PluginInfo['type']
   enabled: boolean
   config?: PluginConfigField[]
   iconPath: string
