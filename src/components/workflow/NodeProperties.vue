@@ -294,7 +294,7 @@ function confirmImport() {
         </div>
       </div>
 
-      <ScrollArea class="flex-1">
+      <ScrollArea class="flex-1 min-h-0">
         <div class="p-3 space-y-3">
           <!-- 通用基础属性：延迟执行 -->
           <div
@@ -531,48 +531,51 @@ function confirmImport() {
 
           <!-- 条件编辑器（switch 节点） -->
           <ConditionEditor v-if="definition.type === 'switch'" />
-
-          <!-- 输出字段编辑区 -->
-          <div class="border-t border-border pt-3">
-            <div class="flex items-center gap-1.5 mb-2">
-              <button
-                class="flex items-center gap-1.5 text-left flex-1"
-                @click="outputsExpanded = !outputsExpanded"
-              >
-                <component
-                  :is="outputsExpanded ? ChevronDown : ChevronRight"
-                  class="w-3 h-3 text-muted-foreground shrink-0"
-                />
-                <span class="text-xs font-medium">输出字段</span>
-              </button>
-              <div class="flex items-center gap-0.5">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  class="h-5 px-1.5 text-[10px] gap-0.5 text-muted-foreground hover:text-foreground"
-                  @click="openImportDialog"
-                >
-                  <Import class="w-3 h-3" />
-                  导入
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  class="h-5 px-1.5 text-[10px] gap-0.5 text-muted-foreground hover:text-foreground"
-                  :disabled="!store.debugNodeResult?.output"
-                  @click="applyDebugOutput"
-                >
-                  <FileDown class="w-3 h-3" />
-                  应用输出
-                </Button>
-              </div>
-            </div>
-            <div v-if="outputsExpanded">
-              <OutputFieldEditor v-model="nodeOutputs" />
-            </div>
-          </div>
         </div>
       </ScrollArea>
+
+      <!-- 输出字段编辑区（固定底部） -->
+      <div class="border-t border-border shrink-0">
+        <div class="flex items-center gap-1.5 px-3 py-2">
+          <button
+            class="flex items-center gap-1.5 text-left flex-1"
+            @click="outputsExpanded = !outputsExpanded"
+          >
+            <component
+              :is="outputsExpanded ? ChevronDown : ChevronRight"
+              class="w-3 h-3 text-muted-foreground shrink-0"
+            />
+            <span class="text-xs font-medium">输出字段</span>
+          </button>
+          <div class="flex items-center gap-0.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              class="h-5 px-1.5 text-[10px] gap-0.5 text-muted-foreground hover:text-foreground"
+              @click="openImportDialog"
+            >
+              <Import class="w-3 h-3" />
+              导入
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              class="h-5 px-1.5 text-[10px] gap-0.5 text-muted-foreground hover:text-foreground"
+              :disabled="!store.debugNodeResult?.output"
+              @click="applyDebugOutput"
+            >
+              <FileDown class="w-3 h-3" />
+              应用输出
+            </Button>
+          </div>
+        </div>
+        <div
+          v-if="outputsExpanded"
+          class="px-3 pb-3 max-h-[40vh] overflow-y-auto"
+        >
+          <OutputFieldEditor v-model="nodeOutputs" />
+        </div>
+      </div>
     </template>
 
     <!-- 导入 JSON 对话框 -->
