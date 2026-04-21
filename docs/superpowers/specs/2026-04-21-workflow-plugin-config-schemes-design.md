@@ -36,18 +36,37 @@ Currently, plugin configs are global — stored in `{userDataPath}/plugin-data/{
 }
 ```
 
+For `object`-type config fields, the value is stored as a JSON string: `"apiEndpoints": "{\"prod\":\"https://api.example.com\"}"`.
+
 ### Workflow Type Extension
 
+**Both** renderer and main process type definitions must be updated in sync:
+
 ```typescript
-// In src/lib/workflow/types.ts
+// In src/lib/workflow/types.ts (renderer process)
 interface Workflow {
   // ...existing fields
   pluginConfigSchemes?: Record<string, string>  // pluginId -> selected scheme name
                                                     // empty string or absent = default
 }
+
+// In electron/services/store.ts (main process)
+// Same field added to the mirror Workflow type definition
 ```
 
 The `pluginConfigSchemes` field tracks which scheme is selected for each plugin. Empty string or absent entry means "default config".
+
+### Engine RuntimeConfig Extension
+
+```typescript
+// In src/lib/workflow/engine.ts
+interface RuntimeConfig {
+  // ...existing fields
+  pluginConfigSchemes?: Record<string, string>  // passed from workflow store
+}
+```
+
+**Passing chain**: `stores/workflow.ts` `createExecutionActions()` must pass `workflow.pluginConfigSchemes` when constructing the engine's `runtimeConfig`. Similarly, `debugSingleNode` must pass scheme info to its temporary engine instance.
 
 ## UI Changes
 
@@ -63,27 +82,29 @@ The `pluginConfigSchemes` field tracks which scheme is selected for each plugin.
 [Category Name]    [Combobox]      [⚙ Settings]
 ```
 
+**State management**: NodeSidebar accesses the current workflow via `workflowStore` (Pinia). On scheme selection change, it calls `workflowStore.updateWorkflow()` to persist the updated `pluginConfigSchemes`. On component mount, it calls the new `workflow:list-plugin-schemes` IPC to populate the Combobox for each plugin category.
+
 **Combobox behavior:**
 - Default display: "默认配置" (Default Config)
 - Dropdown list items:
   1. "默认配置" — always first, not deletable
-  2. User-created scheme names
+  2. User-created scheme names (loaded via `workflow:list-plugin-schemes` IPC)
   3. "[+ 新增方案]" action button — always at bottom
   4. "[✕ 删除当前方案]" action button — only shown when a non-default scheme is selected
-- On scheme selection: update `workflow.pluginConfigSchemes[pluginId]` and persist
+- On scheme selection: update `workflow.pluginConfigSchemes[pluginId]` via `workflowStore.updateWorkflow()`
 
 **Add scheme flow:**
 1. User clicks "[+ 新增方案]"
-2. Dialog prompts for scheme name
-3. System reads default config values from `info.json`
-4. Writes `{schemeName}.json` to `{workflowId}/plugin_configs/{pluginId}/`
-5. Auto-selects the new scheme
+2. Dialog prompts for scheme name (validated: no `/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|` characters; no duplicate names)
+3. System calls `workflow:create-plugin-scheme` IPC (server-side reads info.json defaults, creates file)
+4. Auto-selects the new scheme
 
 **Edit button (⚙) behavior:**
 - Opens `PluginConfigDialog` with the plugin's config fields
-- On save:
-  - If "default" scheme selected: calls global `plugin:save-config` IPC (updates global config)
-  - If custom scheme selected: writes to `{pluginId}/{schemeName}.json`
+- `PluginConfigDialog` receives new optional props: `schemeName?: string` and `workflowId?: string`
+  - If `schemeName` is provided (custom scheme): on save calls `workflow:save-plugin-scheme` IPC
+  - If `schemeName` is absent (default scheme): on save calls existing `plugin:save-config` IPC (updates global config)
+- Current scheme and workflow ID are derived from the workflow store context
 
 **Visibility:** The Combobox and edit button only appear for plugin categories that have `config` fields defined (same condition as the current settings button).
 
@@ -108,23 +129,23 @@ The `pluginConfigSchemes` field tracks which scheme is selected for each plugin.
 
 **Config properties menu items** are built by:
 1. Reading `workflow.enabledPlugins`
-2. For each enabled plugin with config fields: fetch field definitions
-3. Render each field as a clickable menu item
+2. For each enabled plugin with config fields: fetch field definitions from `pluginStore`
+3. Render each field as a clickable menu item, grouped by plugin name
 
 **Variable format:**
 - Node properties (unchanged): `{{ __data__["nodeId"].fieldPath }}`
 - Config properties (new): `{{ __config__["pluginId"]["key"] }}`
 
-Nested access for `object`-type config fields: `{{ __config__["pluginId"]["key"]["nestedKey"] }}`
+Nested access for `object`-type config fields uses dot-notation after the key: `{{ __config__["pluginId"]["key"].nestedKey }}`. The engine parses the JSON string and applies dot-notation traversal for nested values.
 
 ## Engine Changes
 
 ### Config Loading at Execution Start
 
-In `WorkflowEngine.execute()`, add a new initialization step:
+In `WorkflowEngine.start()`, add a new initialization step:
 
 ```typescript
-async execute() {
+async start() {
   // ...existing setup (topological sort, etc.)
 
   // NEW: Initialize __config__
@@ -134,52 +155,83 @@ async execute() {
 }
 ```
 
-**`loadPluginConfigs()` logic:**
+**For `debugSingleNode`**: The temporary engine instance must also call `loadPluginConfigs()`. Since debug mode operates on a subset of context, it reuses the parent workflow's `pluginConfigSchemes` from `runtimeConfig`.
 
-1. Read `workflow.enabledPlugins`
+**`loadPluginConfigs()` logic (all reads via IPC, since engine runs in renderer process):**
+
+1. Read `runtimeConfig.enabledPlugins` and `runtimeConfig.pluginConfigSchemes`
 2. For each enabled plugin:
-   a. Read `workflow.pluginConfigSchemes[pluginId]` to get selected scheme name
-   b. If default/empty: call existing `plugin:get-config` IPC (merges info.json defaults + global user overrides)
-   c. If custom scheme: read `{workflowId}/plugin_configs/{pluginId}/{schemeName}.json`
+   a. Read selected scheme name from `pluginConfigSchemes[pluginId]`
+   b. If default/empty: call `plugin:get-config` IPC (returns merged info.json defaults + global user overrides)
+   c. If custom scheme: call `workflow:read-plugin-scheme` IPC with `(workflowId, pluginId, schemeName)`
+   d. On error (scheme file missing/corrupted): fall back to default config and log a warning
 3. Assemble result as `Record<pluginId, Record<key, value>>`
+4. Cache the result to avoid repeated IPC calls during execution
 
 ### Variable Resolution Extension
 
-Extend `resolveStringValue()` to handle `__config__` references:
+Extend `resolveStringValue()` to handle `__config__` references with a new regex branch:
 
-```
-{{ __config__["pluginId"]["key"] }}  → this.context.__config__[pluginId][key]
+```typescript
+// New regex for __config__ variables (bracket-indexed pluginId, then key access)
+const configPureRegex = /^\s*\{\{\s*__config__\["([^"]+)"\]\["([^"]+)"\](?:\.(\w+(?:\.\w+)*))?\s*\}\}\s*$/
+const configMixedRegex = /__config__\["([^"]+)"\]\["([^"]+)"\](?:\.(\w+(?:\.\w+)*))?/g
 ```
 
-This follows the same pattern as existing `__data__` resolution:
-- Pure variable reference → preserve original type
-- Mixed with text → string interpolation
-- Dot-notation for nested access
+**Resolution strategy**:
+- Pure reference (entire string is `{{ __config__["pluginId"]["key"] }}`): preserve original type (string, number, boolean)
+- Mixed with text: string interpolation
+- Dot-notation after `["key"]`: parse the JSON value for `object`-type fields, then traverse dot path
+- Missing key: return empty string (consistent with `__data__` behavior)
+
+This parallels the existing `__data__` resolution pattern in `engine.ts` lines 494-526.
 
 ## IPC Changes
 
 New IPC channels registered in `electron/ipc/workflow.ts`:
 
-| Channel | Direction | Purpose |
-|---------|-----------|---------|
-| `workflow:list-plugin-schemes` | R→M | List scheme files for a plugin in a workflow |
-| `workflow:read-plugin-scheme` | R→M | Read a specific scheme file |
-| `workflow:create-plugin-scheme` | R→M | Create a new scheme file (copy defaults) |
-| `workflow:save-plugin-scheme` | R→M | Save edits to a scheme file |
-| `workflow:delete-plugin-scheme` | R→M | Delete a scheme file |
+| Channel | Input | Return | Purpose |
+|---------|-------|--------|---------|
+| `workflow:list-plugin-schemes` | `{ workflowId: string, pluginId: string }` | `Promise<string[]>` | List scheme file names (without .json extension) for a plugin |
+| `workflow:read-plugin-scheme` | `{ workflowId: string, pluginId: string, schemeName: string }` | `Promise<Record<string, string>>` | Read a specific scheme file |
+| `workflow:create-plugin-scheme` | `{ workflowId: string, pluginId: string, schemeName: string }` | `Promise<void>` | Create scheme file with defaults from info.json |
+| `workflow:save-plugin-scheme` | `{ workflowId: string, pluginId: string, schemeName: string, data: Record<string, string> }` | `Promise<void>` | Save edits to a scheme file |
+| `workflow:delete-plugin-scheme` | `{ workflowId: string, pluginId: string, schemeName: string }` | `Promise<void>` | Delete a scheme file |
+
+**Preload exposure** in `preload/index.ts`:
+```typescript
+listPluginSchemes: (workflowId: string, pluginId: string) => ipcRenderer.invoke('workflow:list-plugin-schemes', { workflowId, pluginId }),
+readPluginScheme: (workflowId: string, pluginId: string, schemeName: string) => ipcRenderer.invoke('workflow:read-plugin-scheme', { workflowId, pluginId, schemeName }),
+createPluginScheme: (workflowId: string, pluginId: string, schemeName: string) => ipcRenderer.invoke('workflow:create-plugin-scheme', { workflowId, pluginId, schemeName }),
+savePluginScheme: (workflowId: string, pluginId: string, schemeName: string, data: Record<string, string>) => ipcRenderer.invoke('workflow:save-plugin-scheme', { workflowId, pluginId, schemeName, data }),
+deletePluginScheme: (workflowId: string, pluginId: string, schemeName: string) => ipcRenderer.invoke('workflow:delete-plugin-scheme', { workflowId, pluginId, schemeName }),
+```
+
+## Error Handling
+
+| Scenario | Behavior |
+|----------|----------|
+| Custom scheme file missing at execution time | Fall back to default config, log warning to execution log |
+| Scheme file contains invalid JSON | Fall back to default config, log warning with parse error |
+| Scheme name with illegal characters | Validation in "add scheme" dialog prevents creation |
+| Concurrent scheme file writes | IPC handlers are sequential (Electron main process single-threaded), no race condition |
+| Workflow deletion | `workflow-store.ts` `deleteWorkflow()` must recursively clean `{workflowId}/plugin_configs/` directory |
 
 ## Change Summary
 
 | Layer | File | Change |
 |-------|------|--------|
 | Types | `src/lib/workflow/types.ts` | Add `pluginConfigSchemes` to `Workflow` |
-| Store | `electron/services/workflow-store.ts` | Add scheme file CRUD methods |
-| IPC | `electron/ipc/workflow.ts` | Register 5 new scheme management channels |
-| Preload | `preload/index.ts` | Expose new IPC channels to renderer |
+| Types | `electron/services/store.ts` | Add `pluginConfigSchemes` to mirror `Workflow` type (keep in sync) |
+| Types | `src/lib/workflow/engine.ts` | Add `pluginConfigSchemes` to `RuntimeConfig` interface |
+| Store | `electron/services/workflow-store.ts` | Add scheme file CRUD methods; update `deleteWorkflow()` to clean `plugin_configs/` |
+| IPC | `electron/ipc/workflow.ts` | Register 5 new scheme management channels with full parameter signatures |
+| Preload | `preload/index.ts` | Expose 5 new IPC channels to renderer |
 | UI | `src/components/workflow/NodeSidebar.vue` | Add Combobox + scheme management per plugin row |
+| UI | `src/components/plugins/PluginConfigDialog.vue` | Accept optional `schemeName`/`workflowId` props for custom scheme saves |
 | UI | `src/components/workflow/VariablePicker.vue` | Add "配置属性" sub-menu |
-| Engine | `src/lib/workflow/engine.ts` | Add `__config__` loading and resolution |
-| Store | `src/stores/workflow.ts` | Track selected schemes, provide IPC wrappers |
+| Engine | `src/lib/workflow/engine.ts` | Add `__config__` loading in `start()`, resolution regex in `resolveStringValue()` |
+| Store | `src/stores/workflow.ts` | Pass `pluginConfigSchemes` in `createExecutionActions()` and `debugSingleNode()` |
 
 ## Out of Scope
 
