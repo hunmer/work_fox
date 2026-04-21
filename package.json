@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "dev-win": "chcp 65001 && electron-vite dev",
+    "dev:backend": "node scripts/backend-dev.mjs",
     "build:backend": "tsc -p tsconfig.backend.json",
     "smoke:backend": "node scripts/backend-smoke-test.mjs",
     "build": "pnpm build:backend && electron-vite build",
