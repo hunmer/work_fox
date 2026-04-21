@@ -85,13 +85,20 @@ export function useWorkflowFileActions(
   }
 
   async function onListSelect(workflow: any) {
-    if (workflow) {
-      await store.loadData()
-      const loaded = store.workflows.find((w) => w.id === workflow.id) || workflow
-      store.currentWorkflow = JSON.parse(JSON.stringify(loaded))
-      store.selectedNodeIds = []
-      tabStore.updateTabWorkflow(tabStore.activeTabId!, loaded.id, loaded.name)
+    if (!workflow) return
+
+    // 如果其他 tab 已打开同一工作流，直接切换过去
+    const existing = tabStore.tabs.find(t => t.workflowId === workflow.id)
+    if (existing && existing.id !== tabStore.activeTabId) {
+      tabStore.switchTab(existing.id)
+      return
     }
+
+    await store.loadData()
+    const loaded = store.workflows.find((w) => w.id === workflow.id) || workflow
+    store.currentWorkflow = JSON.parse(JSON.stringify(loaded))
+    store.selectedNodeIds = []
+    tabStore.updateTabWorkflow(tabStore.activeTabId!, loaded.id, loaded.name)
   }
 
   return {
