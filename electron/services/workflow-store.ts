@@ -1,7 +1,7 @@
 import { join } from 'path'
 import { app } from 'electron'
 import { randomUUID } from 'crypto'
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync, rmSync } from 'node:fs'
 import { JsonStore } from '../utils/json-store'
 import type { Workflow, WorkflowFolder, WorkflowAgentConfig } from './store'
 
@@ -67,9 +67,71 @@ function writeWorkflowFile(workflow: Workflow): void {
   writeFileSync(workflowPath(workflow.id), JSON.stringify(workflow, null, 2), 'utf-8')
 }
 
+// ====== 插件配置方案 ======
+
+function pluginConfigsDir(workflowId: string): string {
+  return join(agentWorkflowsDir, workflowId, 'plugin_configs')
+}
+
+function pluginSchemePath(workflowId: string, pluginId: string, schemeName: string): string {
+  const dir = join(pluginConfigsDir(workflowId), pluginId)
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+  return join(dir, `${schemeName}.json`)
+}
+
+export function listPluginSchemes(workflowId: string, pluginId: string): string[] {
+  const dir = join(pluginConfigsDir(workflowId), pluginId)
+  if (!existsSync(dir)) return []
+  return readdirSync(dir)
+    .filter(f => f.endsWith('.json'))
+    .map(f => f.replace(/\.json$/, ''))
+    .sort()
+}
+
+export function readPluginScheme(workflowId: string, pluginId: string, schemeName: string): Record<string, string> {
+  const path = pluginSchemePath(workflowId, pluginId, schemeName)
+  if (!existsSync(path)) throw new Error(`配置方案 ${schemeName} 不存在`)
+  return JSON.parse(readFileSync(path, 'utf-8'))
+}
+
+export function createPluginScheme(workflowId: string, pluginId: string, schemeName: string): void {
+  if (/[\/\\:*?"<>|]/.test(schemeName)) {
+    throw new Error('方案名称包含非法字符')
+  }
+  const dir = join(pluginConfigsDir(workflowId), pluginId)
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+  const path = join(dir, `${schemeName}.json`)
+  if (existsSync(path)) throw new Error(`方案 ${schemeName} 已存在`)
+
+  // Use require() to avoid circular dependency with plugin-manager
+  const pluginManager = require('./plugin-manager').pluginManager
+  const plugin = pluginManager.getPlugin(pluginId)
+  const defaults: Record<string, string> = {}
+  if (plugin?.info?.config) {
+    for (const field of plugin.info.config) {
+      defaults[field.key] = field.value ?? ''
+    }
+  }
+  writeFileSync(path, JSON.stringify(defaults, null, 2), 'utf-8')
+}
+
+export function savePluginScheme(workflowId: string, pluginId: string, schemeName: string, data: Record<string, string>): void {
+  const path = pluginSchemePath(workflowId, pluginId, schemeName)
+  writeFileSync(path, JSON.stringify(data, null, 2), 'utf-8')
+}
+
+export function deletePluginScheme(workflowId: string, pluginId: string, schemeName: string): void {
+  const path = pluginSchemePath(workflowId, pluginId, schemeName)
+  if (existsSync(path)) unlinkSync(path)
+}
+
 function deleteWorkflowFile(id: string): void {
   const path = workflowPath(id)
   if (existsSync(path)) unlinkSync(path)
+  const configsDir = pluginConfigsDir(id)
+  if (existsSync(configsDir)) {
+    rmSync(configsDir, { recursive: true, force: true })
+  }
 }
 
 function readAllWorkflowFiles(): Workflow[] {
