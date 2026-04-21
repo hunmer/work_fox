@@ -10,6 +10,19 @@ export interface TrackItem {
   duration?: number
 }
 
+/** 将本地文件路径或 file:// URL 转换为 local:// 自定义协议 URL，允许 Electron 加载 */
+function toLocalUrl(src: string): string {
+  if (!src) return src
+  // 已经是网络地址，直接返回
+  if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('local://')) return src
+  // file:// 协议 -> local://
+  if (src.startsWith('file:///')) return 'local:///' + src.slice('file:///'.length)
+  if (src.startsWith('file://')) return 'local://' + src.slice('file://'.length)
+  // Windows 本地路径 (C:/...) 或 Unix 路径 (/...)
+  if (/^[A-Za-z]:/.test(src) || src.startsWith('/')) return 'local:///' + src.replace(/\\/g, '/')
+  return src
+}
+
 const props = withDefaults(defineProps<{
   tracks: TrackItem[]
   volume?: number
@@ -71,7 +84,7 @@ function loadTrack(index: number) {
   if (!track?.src) return
 
   isLoading.value = true
-  audioRef.value.src = track.src
+  audioRef.value.src = toLocalUrl(track.src)
   audioRef.value.volume = localVolume.value / 100
   audioRef.value.loop = false // 单曲循环通过 ended 事件处理
   currentIndex.value = index
@@ -245,126 +258,134 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="music-player">
-    <!-- 播放列表 -->
-    <div class="music-track-list">
-      <div
-        v-for="(track, idx) in tracks"
-        :key="track.id || idx"
-        class="music-track-item"
-        :class="{
-          'music-track-active': idx === currentIndex && isPlaying,
-          'music-track-selected': idx === currentIndex,
-        }"
-      >
-        <!-- 封面 -->
-        <div class="music-track-cover" @click="playTrack(idx)">
-          <img
-            v-if="track.cover"
-            :src="track.cover"
-            :alt="track.title || ''"
-            class="music-cover-img"
-          />
-          <Music v-else class="music-cover-icon" />
-          <div class="music-cover-overlay">
-            <Play v-if="idx !== currentIndex || !isPlaying" class="music-play-icon" />
-            <Pause v-else class="music-play-icon" />
-          </div>
-        </div>
-
-        <!-- 信息 + 进度 -->
-        <div class="music-track-info">
-          <div class="music-track-title">
-            {{ track.title || `曲目 ${idx + 1}` }}
-          </div>
-          <!-- 单曲进度条 -->
-          <div
-            v-if="idx === currentIndex"
-            class="music-progress-wrapper"
-            @click="seekTo($event)"
-          >
-            <div class="music-progress-bar">
-              <div
-                class="music-progress-fill"
-                :style="{ width: progressPercent + '%' }"
-              />
-            </div>
-            <div class="music-progress-time">
-              <span>{{ displayTime }}</span>
-              <span>{{ displayDuration }}</span>
-            </div>
-          </div>
-          <div v-else class="music-progress-wrapper">
-            <div class="music-progress-bar">
-              <div
-                class="music-progress-fill"
-                :style="{ width: '0%' }"
-              />
-            </div>
-            <div class="music-progress-time">
-              <span>{{ track.duration ? formatTime(track.duration) : '--:--' }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 空状态 -->
-      <div v-if="!hasTracks" class="music-empty">
-        <Music class="music-empty-icon" />
-        <span>暂无播放内容</span>
-      </div>
-    </div>
-
-    <!-- 底部控制栏 -->
-    <div v-if="hasTracks" class="music-controls">
-      <!-- 播放控制 -->
-      <div class="music-controls-playback">
-        <button class="music-btn" title="上一首" @click="playPrev">
-          <SkipBack class="music-btn-icon" />
-        </button>
-        <button class="music-btn music-btn-play" :title="isPlaying ? '暂停' : '播放'" @click="togglePlay">
-          <Loader v-if="isLoading" class="music-btn-icon animate-spin" />
-          <Pause v-else-if="isPlaying" class="music-btn-icon" />
-          <Play v-else class="music-btn-icon" />
-        </button>
-        <button class="music-btn" title="下一首" @click="playNext">
-          <SkipForward class="music-btn-icon" />
-        </button>
-      </div>
-
-      <!-- 音量 + 循环 -->
-      <div class="music-controls-extra">
-        <button class="music-btn-sm" :title="isMuted ? '取消静音' : '静音'" @click="toggleMute">
-          <VolumeX v-if="isMuted" class="music-btn-icon-sm" />
-          <Volume2 v-else class="music-btn-icon-sm" />
-        </button>
-        <div class="music-volume-bar" @click="setVolume">
-          <div class="music-volume-fill" :style="{ width: localVolume + '%' }" />
-        </div>
-        <button
-          class="music-btn-sm"
-          :class="{ 'music-btn-active': localLoop }"
-          :title="localLoop ? '关闭循环' : '开启循环'"
-          @click="toggleLoop"
+  <div class="music-player-card">
+    <div class="music-player">
+      <!-- 播放列表 -->
+      <div class="music-track-list">
+        <div
+          v-for="(track, idx) in tracks"
+          :key="track.id || idx"
+          class="music-track-item"
+          :class="{
+            'music-track-active': idx === currentIndex && isPlaying,
+            'music-track-selected': idx === currentIndex,
+          }"
         >
-          <Repeat v-if="!localLoop" class="music-btn-icon-sm" />
-          <Repeat1 v-else class="music-btn-icon-sm" />
-        </button>
+          <!-- 封面 -->
+          <div class="music-track-cover" @click="playTrack(idx)">
+            <img
+              v-if="track.cover"
+              :src="toLocalUrl(track.cover)"
+              :alt="track.title || ''"
+              class="music-cover-img"
+            />
+            <Music v-else class="music-cover-icon" />
+            <div class="music-cover-overlay">
+              <Play v-if="idx !== currentIndex || !isPlaying" class="music-play-icon" />
+              <Pause v-else class="music-play-icon" />
+            </div>
+          </div>
+
+          <!-- 信息 + 进度 -->
+          <div class="music-track-info">
+            <div class="music-track-title">
+              {{ track.title || `曲目 ${idx + 1}` }}
+            </div>
+            <!-- 单曲进度条 -->
+            <div
+              v-if="idx === currentIndex"
+              class="music-progress-wrapper"
+              @click="seekTo($event)"
+            >
+              <div class="music-progress-bar">
+                <div
+                  class="music-progress-fill"
+                  :style="{ width: progressPercent + '%' }"
+                />
+              </div>
+              <div class="music-progress-time">
+                <span>{{ displayTime }}</span>
+                <span>{{ displayDuration }}</span>
+              </div>
+            </div>
+            <div v-else class="music-progress-wrapper">
+              <div class="music-progress-bar">
+                <div
+                  class="music-progress-fill music-progress-idle"
+                  :style="{ width: '0%' }"
+                />
+              </div>
+              <div class="music-progress-time">
+                <span>{{ track.duration ? formatTime(track.duration) : '--:--' }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 空状态 -->
+        <div v-if="!hasTracks" class="music-empty">
+          <Music class="music-empty-icon" />
+          <span>暂无播放内容</span>
+        </div>
+      </div>
+
+      <!-- 底部控制栏 -->
+      <div v-if="hasTracks" class="music-controls">
+        <!-- 播放控制 -->
+        <div class="music-controls-playback">
+          <button class="music-btn" title="上一首" @click="playPrev">
+            <SkipBack class="music-btn-icon" />
+          </button>
+          <button class="music-btn music-btn-play" :title="isPlaying ? '暂停' : '播放'" @click="togglePlay">
+            <Loader v-if="isLoading" class="music-btn-icon animate-spin" />
+            <Pause v-else-if="isPlaying" class="music-btn-icon" />
+            <Play v-else class="music-btn-icon" />
+          </button>
+          <button class="music-btn" title="下一首" @click="playNext">
+            <SkipForward class="music-btn-icon" />
+          </button>
+        </div>
+
+        <!-- 音量 + 循环 -->
+        <div class="music-controls-extra">
+          <button class="music-btn-sm" :title="isMuted ? '取消静音' : '静音'" @click="toggleMute">
+            <VolumeX v-if="isMuted" class="music-btn-icon-sm" />
+            <Volume2 v-else class="music-btn-icon-sm" />
+          </button>
+          <div class="music-volume-bar" @click="setVolume">
+            <div class="music-volume-fill" :style="{ width: localVolume + '%' }" />
+          </div>
+          <button
+            class="music-btn-sm"
+            :class="{ 'music-btn-active': localLoop }"
+            :title="localLoop ? '关闭循环' : '开启循环'"
+            @click="toggleLoop"
+          >
+            <Repeat v-if="!localLoop" class="music-btn-icon-sm" />
+            <Repeat1 v-else class="music-btn-icon-sm" />
+          </button>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+/* ── 卡片容器 ── */
+.music-player-card {
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
 .music-player {
   display: flex;
   flex-direction: column;
   width: 100%;
-  background: hsl(var(--card));
-  border-radius: 6px;
-  overflow: hidden;
   font-size: 11px;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
 }
 
 /* ── 播放列表 ── */
@@ -381,7 +402,7 @@ onBeforeUnmount(() => {
   padding: 6px 8px;
   cursor: pointer;
   transition: background 0.15s;
-  border-bottom: 1px solid hsl(var(--border) / 0.4);
+  border-bottom: 1px solid var(--border);
 }
 
 .music-track-item:last-child {
@@ -389,16 +410,16 @@ onBeforeUnmount(() => {
 }
 
 .music-track-item:hover {
-  background: hsl(var(--muted) / 0.5);
+  background: var(--muted);
 }
 
 .music-track-selected {
-  background: hsl(var(--accent) / 0.3);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .music-track-active .music-track-title {
-  color: hsl(var(--primary));
-  font-weight: 500;
+  color: var(--primary);
+  font-weight: 600;
 }
 
 /* ── 封面 ── */
@@ -409,7 +430,7 @@ onBeforeUnmount(() => {
   border-radius: 4px;
   overflow: hidden;
   flex-shrink: 0;
-  background: hsl(var(--muted));
+  background: var(--muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -424,7 +445,7 @@ onBeforeUnmount(() => {
 .music-cover-icon {
   width: 14px;
   height: 14px;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
 }
 
 .music-cover-overlay {
@@ -469,25 +490,30 @@ onBeforeUnmount(() => {
 }
 
 .music-progress-bar {
-  height: 3px;
-  border-radius: 1.5px;
-  background: hsl(var(--muted));
+  height: 4px;
+  border-radius: 2px;
+  background: var(--muted);
   overflow: hidden;
+  position: relative;
 }
 
 .music-progress-fill {
   height: 100%;
-  border-radius: 1.5px;
-  background: hsl(var(--primary));
+  border-radius: 2px;
+  background: var(--primary);
   transition: width 0.2s linear;
+}
+
+.music-progress-idle {
+  background: var(--border);
 }
 
 .music-progress-time {
   display: flex;
   justify-content: space-between;
   font-size: 9px;
-  color: hsl(var(--muted-foreground));
-  margin-top: 1px;
+  color: var(--muted-foreground);
+  margin-top: 2px;
   line-height: 1;
 }
 
@@ -497,8 +523,8 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   padding: 6px 8px;
-  border-top: 1px solid hsl(var(--border) / 0.5);
-  background: hsl(var(--card));
+  border-top: 1px solid var(--border);
+  background: var(--muted);
   flex-shrink: 0;
 }
 
@@ -524,24 +550,26 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   border: none;
   background: transparent;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 
 .music-btn:hover {
-  background: hsl(var(--muted));
+  background: var(--accent);
+  color: var(--accent-foreground);
 }
 
 .music-btn-play {
   width: 28px;
   height: 28px;
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 
 .music-btn-play:hover {
-  background: hsl(var(--primary) / 0.85);
+  background: var(--primary);
+  opacity: 0.85;
 }
 
 .music-btn-icon {
@@ -558,18 +586,18 @@ onBeforeUnmount(() => {
   border-radius: 4px;
   border: none;
   background: transparent;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 
 .music-btn-sm:hover {
-  background: hsl(var(--muted));
-  color: hsl(var(--foreground));
+  background: var(--accent);
+  color: var(--accent-foreground);
 }
 
 .music-btn-active {
-  color: hsl(var(--primary));
+  color: var(--primary);
 }
 
 .music-btn-icon-sm {
@@ -580,17 +608,17 @@ onBeforeUnmount(() => {
 /* ── 音量条 ── */
 .music-volume-bar {
   width: 60px;
-  height: 3px;
-  border-radius: 1.5px;
-  background: hsl(var(--muted));
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
   cursor: pointer;
   overflow: hidden;
 }
 
 .music-volume-fill {
   height: 100%;
-  border-radius: 1.5px;
-  background: hsl(var(--primary));
+  border-radius: 2px;
+  background: var(--primary);
   transition: width 0.1s;
 }
 
@@ -601,7 +629,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: 16px 8px;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
   gap: 4px;
 }
 

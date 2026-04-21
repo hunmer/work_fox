@@ -179,11 +179,15 @@ const customViewProps = computed(() => {
     const tracks = props.data?.tracks
     const volume = props.data?.volume ?? 80
     const loop = props.data?.loop ?? false
-    // tracks 是直接数组
+    // 静态数组：执行完成后才显示，与 gallery_preview 行为一致
     if (Array.isArray(tracks)) {
-      return { tracks, volume, loop }
+      return {
+        tracks: nodeStatus.value === 'completed' ? tracks : [],
+        volume,
+        loop,
+      }
     }
-    // 从执行结果取解析后的数据
+    // 变量表达式：从执行结果取解析后的数据
     const output = executionStep.value?.output
     if (output) {
       return {
