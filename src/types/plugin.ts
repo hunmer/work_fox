@@ -1,3 +1,23 @@
+/** 插件配置字段定义 */
+export interface PluginConfigField {
+  /** 配置键名，唯一标识 */
+  key: string
+  /** 表单标签 */
+  label: string
+  /** 描述/提示文本 */
+  desc?: string
+  /** 字段类型 */
+  type: 'string' | 'number' | 'boolean' | 'select' | 'object'
+  /** 默认值（统一为字符串存储） */
+  value: string
+  /** select 类型的选项列表 */
+  options?: Array<{ label: string; value: string }>
+  /** 输入占位文本 */
+  placeholder?: string
+  /** 是否必填 */
+  required?: boolean
+}
+
 /** 插件元信息（info.json 内容） */
 export interface PluginInfo {
   id: string
@@ -13,6 +33,7 @@ export interface PluginInfo {
   minAppVersion?: string
   hasView?: boolean
   hasWorkflow?: boolean
+  config?: PluginConfigField[]
 }
 
 /** 插件展示信息（传递给渲染进程） */
@@ -25,6 +46,7 @@ export interface PluginMeta {
   tags: string[]
   hasView: boolean
   enabled: boolean
+  config?: PluginConfigField[]
   iconPath: string
 }
 
@@ -73,6 +95,7 @@ export interface PluginContext {
     warn(msg: string, ...args: any[]): void
     error(msg: string, ...args: any[]): void
   }
+  config: Record<string, string>
 }
 
 /** 插件工作流节点定义（渲染进程使用，不含 handler） */
