@@ -18,7 +18,8 @@ function handleInputGroupAddonClick(e: MouseEvent) {
     return
   }
   if (currentTarget && currentTarget?.parentElement) {
-    currentTarget.parentElement?.querySelector("input")?.focus()
+    const control = currentTarget.parentElement?.querySelector('input, [data-slot="input-group-control"]')
+    control?.focus()
   }
 }
 </script>

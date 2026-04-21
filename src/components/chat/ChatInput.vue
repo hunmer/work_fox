@@ -4,7 +4,6 @@ import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
-  InputGroupTextarea,
   InputGroupText,
 } from '@/components/ui/input-group'
 import {
@@ -27,6 +26,7 @@ import { useAgentSettingsStore } from '@/stores/agent-settings'
 import { useChatUIStore } from '@/stores/chat-ui'
 import { useTabStore } from '@/stores/tab'
 import ModelSelector from './ModelSelector.vue'
+import { ChatInputEditor, SuggestionPopup } from './tiptap'
 
 const props = defineProps<{
   isStreaming: boolean
@@ -47,8 +47,8 @@ const emit = defineEmits<{
   openAgentSettings: [scope: 'global' | 'workflow']
 }>()
 
-const inputText = ref('')
 const images = ref<string[]>([])
+const editorRef = ref<InstanceType<typeof ChatInputEditor> | null>(null)
 
 const toolList = computed(() => props.tools ?? [])
 const agentSettingsStore = useAgentSettingsStore()
@@ -77,24 +77,27 @@ const workflowSkillCount = computed(() => currentWorkflowAgent.value?.skills.fil
 const globalMcpCount = computed(() => agentSettingsStore.globalSettings.mcps.filter((item) => item.enabled).length)
 const workflowMcpCount = computed(() => currentWorkflowAgent.value?.mcps.filter((item) => item.enabled).length ?? 0)
 
+/** 字符计数 */
+const charCount = computed(() => {
+  return editorRef.value?.editor?.getText().length ?? 0
+})
+
 onMounted(() => {
   agentSettingsStore.init()
 })
 
-function handleKeydown(e: KeyboardEvent) {
-  if (e.isComposing || e.key === 'Process') return
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault()
-    handleSend()
-  }
+function handleEditorSend() {
+  const editor = editorRef.value?.editor
+  if (!editor || props.isStreaming) return
+  const text = editor.getText().trim()
+  if (!text) return
+  emit('send', text, images.value)
+  editor.commands.clearContent()
+  images.value = []
 }
 
-function handleSend() {
-  const text = inputText.value.trim()
-  if (!text || props.isStreaming) return
-  emit('send', text, images.value)
-  inputText.value = ''
-  images.value = []
+function handleSuggestionSelect(index: number) {
+  editorRef.value?.selectItem(index)
 }
 
 function handleImageUpload() {
@@ -172,13 +175,17 @@ function removeImage(index: number) {
         </Badge>
       </InputGroupAddon>
 
-      <!-- 输入框 -->
-      <InputGroupTextarea
-        v-model="inputText"
+      <!-- Tiptap 编辑器 -->
+      <ChatInputEditor
+        ref="editorRef"
         :disabled="disabled"
-        placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
-        class="max-h-[200px] min-h-[36px] py-2"
-        @keydown="handleKeydown"
+        @send="handleEditorSend"
+      />
+
+      <!-- Suggestion Popup -->
+      <SuggestionPopup
+        :state="editorRef?.suggestionState ?? { active: false, type: null, items: [], selectedIndex: 0, query: '', clientRect: null, command: null }"
+        @select="handleSuggestionSelect"
       />
 
       <!-- 底部工具栏 -->
@@ -374,7 +381,7 @@ function removeImage(index: number) {
         </DropdownMenu>
 
         <InputGroupText class="ml-auto">
-          {{ inputText.length }}
+          {{ charCount }}
         </InputGroupText>
 
         <Separator
@@ -399,8 +406,8 @@ function removeImage(index: number) {
           variant="default"
           size="icon-xs"
           class="rounded-full"
-          :disabled="!inputText.trim() || disabled"
-          @click="handleSend"
+          :disabled="charCount === 0 || disabled"
+          @click="handleEditorSend"
         >
           <Send class="size-4" />
         </InputGroupButton>
