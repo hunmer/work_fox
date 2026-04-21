@@ -76,6 +76,14 @@ export const usePluginStore = defineStore('plugin', () => {
     return window.api.plugin.listWorkflowPlugins()
   }
 
+  async function getPluginConfig(pluginId: string): Promise<Record<string, string>> {
+    return window.api.plugin.getConfig(pluginId)
+  }
+
+  async function savePluginConfig(pluginId: string, data: Record<string, string>): Promise<{ success: boolean; error?: string }> {
+    return window.api.plugin.saveConfig(pluginId, data)
+  }
+
   return {
     plugins,
     isLoading,
@@ -93,6 +101,8 @@ export const usePluginStore = defineStore('plugin', () => {
     importPlugin,
     openPluginsFolder,
     getWorkflowNodes,
-    listWorkflowPlugins
+    listWorkflowPlugins,
+    getPluginConfig,
+    savePluginConfig
   }
 })
