@@ -22,7 +22,12 @@ const editor = useEditor({
   content: '',
   extensions: [
     StarterKit.configure({
-      hardBreak: false,
+      heading: false,
+      codeBlock: false,
+      blockquote: false,
+      bulletList: false,
+      orderedList: false,
+      horizontalRule: false,
     }),
     // @ 工作区文件
     Mention.extend({
@@ -130,5 +135,7 @@ defineExpose({
 </script>
 
 <template>
-  <EditorContent :editor="editor" />
+  <div class="w-full">
+    <EditorContent :editor="editor" />
+  </div>
 </template>
