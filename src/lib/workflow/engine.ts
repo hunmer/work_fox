@@ -26,6 +26,7 @@ export class WorkflowEngine {
     workflowName?: string
     workflowDescription?: string
     enabledPlugins?: string[]
+    pluginConfigSchemes?: Record<string, string>
   }
 
   constructor(
@@ -40,6 +41,7 @@ export class WorkflowEngine {
       workflowName?: string
       workflowDescription?: string
       enabledPlugins?: string[]
+      pluginConfigSchemes?: Record<string, string>
     },
   ) {
     this.nodes = nodes
@@ -77,6 +79,7 @@ export class WorkflowEngine {
 
   async start(): Promise<ExecutionLog> {
     this.reset()
+    this.context.__config__ = await this.loadPluginConfigs()
     this.executionOrder = this.buildExecutionOrder()
     if (this.executionOrder.length === 0) {
       this._status = 'error'
@@ -126,7 +129,7 @@ export class WorkflowEngine {
   }
 
   private reset(): void {
-    this.context = { __data__: {} }
+    this.context = { __data__: {}, __config__: {} }
     this.steps = []
     this.currentIndex = 0
     this.pauseRequested = false
@@ -134,6 +137,35 @@ export class WorkflowEngine {
     this._status = 'idle'
     this.startTime = 0
     this.activeBranches.clear()
+  }
+
+  /** 加载已启用插件的配置到 __config__ */
+  private async loadPluginConfigs(): Promise<Record<string, Record<string, string>>> {
+    const plugins = this.runtimeConfig?.enabledPlugins
+    const schemes = this.runtimeConfig?.pluginConfigSchemes
+    if (!plugins?.length) return {}
+
+    const config: Record<string, Record<string, string>> = {}
+    for (const pluginId of plugins) {
+      try {
+        const schemeName = schemes?.[pluginId]
+        if (schemeName) {
+          config[pluginId] = await (window as any).api.workflow.readPluginScheme(
+            this.runtimeConfig!.workflowId!, pluginId, schemeName,
+          )
+        } else {
+          config[pluginId] = await (window as any).api.plugin.getConfig(pluginId)
+        }
+      } catch (e) {
+        console.warn(`[Engine] 加载插件 ${pluginId} 配置失败，使用默认值:`, e)
+        try {
+          config[pluginId] = await (window as any).api.plugin.getConfig(pluginId)
+        } catch {
+          config[pluginId] = {}
+        }
+      }
+    }
+    return config
   }
 
   private async runFromIndex(startIndex: number): Promise<void> {
@@ -503,6 +535,21 @@ export class WorkflowEngine {
       return ''
     }
 
+    // Pure __config__ variable → preserve original type
+    const configMatch = value.match(/^\s*\{\{\s*__config__\["([^"]+)"\]\["([^"]+)"\](?:\.(\w+(?:\.\w+)*))?\s*\}\}\s*$/)
+    if (configMatch) {
+      const pluginConfig = this.context.__config__?.[configMatch[1]]
+      if (pluginConfig != null) {
+        let raw: any = pluginConfig[configMatch[2]]
+        if (configMatch[3] && typeof raw === 'string') {
+          try { raw = JSON.parse(raw) } catch { /* not JSON, use as-is */ }
+        }
+        const result = configMatch[3] ? this.getNestedValue(raw, configMatch[3]) : raw
+        if (result !== undefined) return result
+      }
+      return ''
+    }
+
     // 纯 context 变量 → 保留原始类型
     const ctxMatch = value.match(/^\s*\{\{\s*context\.([^}]+?)\s*\}\}\s*$/)
     if (ctxMatch) {
@@ -517,6 +564,18 @@ export class WorkflowEngine {
         const data = this.context.__data__?.[nodeId]
         if (data == null) return ''
         return String(this.getNestedValue(data, fieldPath) ?? '')
+      },
+    )
+    str = str.replace(
+      /__config__\["([^"]+)"\]\["([^"]+)"\](?:\.(\w+(?:\.\w+)*))?/g,
+      (_, pluginId, key, dotPath) => {
+        const pluginConfig = this.context.__config__?.[pluginId]
+        if (pluginConfig == null) return ''
+        let raw: any = pluginConfig[key]
+        if (dotPath && typeof raw === 'string') {
+          try { raw = JSON.parse(raw) } catch { /* not JSON */ }
+        }
+        return String((dotPath ? this.getNestedValue(raw, dotPath) : raw) ?? '')
       },
     )
     str = str.replace(/\{\{\s*context\.([^}]+?)\s*\}\}/g, (_, path) => {
