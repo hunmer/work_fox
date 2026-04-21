@@ -9,11 +9,11 @@ import { WORKFLOW_TOOL_DEFINITIONS } from '@/lib/agent/workflow-tools'
 import type { ToolDisplayItem } from '@/types'
 import ChatMessageList from './ChatMessageList.vue'
 import ChatInput from './ChatInput.vue'
-import ModelSelector from './ModelSelector.vue'
-import SessionManager from './SessionManager.vue'
+import WorkspaceFileTree from './WorkspaceFileTree.vue'
 import WorkflowWorkspaceDialog from './WorkflowWorkspaceDialog.vue'
 import { Button } from '@/components/ui/button'
-import { Settings, X } from 'lucide-vue-next'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Settings, X, MessageSquare, History, FolderTree } from 'lucide-vue-next'
 import SettingsDialog from '@/components/settings/SettingsDialog.vue'
 
 const props = defineProps<{
@@ -27,6 +27,7 @@ const tabStore = useTabStore()
 const showSettings = ref(false)
 const showWorkflowWorkspaceDialog = ref(false)
 const pluginTools = ref<ToolDisplayItem[]>([])
+const activeTab = ref<string>('messages')
 
 async function loadPluginTools(pluginIds: string[]) {
   if (!pluginIds?.length) {
@@ -83,6 +84,8 @@ const selectedNodes = computed(() => {
   return nodes.map((n) => ({ id: n.id, type: n.type, label: n.label }))
 })
 
+const recentSessions = computed(() => props.chat.sessions.slice(0, 50))
+
 function handleToggleWorkflowEdit(enabled: boolean) {
   uiStore.setWorkflowEditMode(enabled)
 }
@@ -120,14 +123,57 @@ function handleOpenSettings() {
 function handleEdit(messageId: string, newContent: string) {
   props.chat.editMessage(messageId, newContent)
 }
+
+function formatTime(timestamp: number): string {
+  const date = new Date(timestamp)
+  const now = new Date()
+  const diff = now.getTime() - date.getTime()
+  if (diff < 60000) return '刚刚'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`
+  return date.toLocaleDateString()
+}
 </script>
 
 <template>
   <div class="flex flex-col h-full bg-background border-l border-border">
-    <!-- 头部工具栏 -->
-    <div class="flex items-center gap-1.5 px-3 py-2 border-b shrink-0">
-      <ModelSelector />
-      <SessionManager :chat="chat" />
+    <!-- 头部：Tab 栏 + 操作按钮 -->
+    <div class="flex items-center gap-2 px-2 py-1.5 border-b shrink-0">
+      <div class="flex items-center gap-0.5 bg-muted rounded-md p-0.5">
+        <button
+          class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-sm transition-colors"
+          :class="activeTab === 'history'
+            ? 'bg-background shadow-sm text-foreground'
+            : 'text-muted-foreground hover:text-foreground'"
+          @click="activeTab = 'history'"
+        >
+          <History class="size-3" />
+          历史会话
+        </button>
+        <button
+          class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-sm transition-colors"
+          :class="activeTab === 'messages'
+            ? 'bg-background shadow-sm text-foreground'
+            : 'text-muted-foreground hover:text-foreground'"
+          @click="activeTab = 'messages'"
+        >
+          <MessageSquare class="size-3" />
+          消息
+        </button>
+        <button
+          class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-sm transition-colors"
+          :class="activeTab === 'files'
+            ? 'bg-background shadow-sm text-foreground'
+            : 'text-muted-foreground hover:text-foreground'"
+          @click="activeTab = 'files'"
+        >
+          <FolderTree class="size-3" />
+          工作区
+        </button>
+      </div>
+
+      <div class="flex-1" />
+
       <Button
         variant="ghost"
         size="icon"
@@ -136,7 +182,6 @@ function handleEdit(messageId: string, newContent: string) {
       >
         <Settings class="h-4 w-4" />
       </Button>
-      <div class="flex-1" />
       <Button
         variant="ghost"
         size="icon"
@@ -147,21 +192,74 @@ function handleEdit(messageId: string, newContent: string) {
       </Button>
     </div>
 
-    <!-- 消息列表 -->
-    <ChatMessageList
-      :chat="chat"
-      :messages="chat.messages"
-      :is-streaming="chat.isStreaming"
-      :streaming-token="chat.streamingToken"
-      :streaming-tool-calls="chat.streamingToolCalls"
-      :streaming-thinking-blocks="chat.streamingThinkingBlocks"
-      :streaming-usage="chat.streamingUsage"
-      @retry="chat.retryMessage($event)"
-      @delete="chat.deleteMessageAndAfter($event)"
-      @edit="handleEdit"
-    />
+    <!-- 内容区域：根据活跃 Tab 显示 -->
+    <div class="flex-1 overflow-hidden">
+      <!-- 历史会话 -->
+      <ScrollArea
+        v-if="activeTab === 'history'"
+        class="h-full"
+      >
+        <div class="p-2 space-y-0.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            class="w-full justify-start text-xs h-7"
+            @click="chat.createSession()"
+          >
+            + 新建对话
+          </Button>
+          <div
+            v-for="session in recentSessions"
+            :key="session.id"
+            class="group flex items-center gap-2 px-2 py-1.5 text-xs rounded cursor-pointer hover:bg-muted/50"
+            :class="session.id === chat.currentSessionId ? 'bg-muted' : ''"
+            @click="chat.switchSession(session.id)"
+          >
+            <MessageSquare class="size-3.5 shrink-0 text-muted-foreground" />
+            <div class="flex-1 min-w-0">
+              <div class="truncate">{{ session.title || '未命名对话' }}</div>
+              <div class="text-[10px] text-muted-foreground">{{ formatTime(session.updatedAt) }}</div>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              class="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100"
+              @click.stop="chat.deleteSessionById(session.id)"
+            >
+              <X class="h-3 w-3" />
+            </Button>
+          </div>
+          <div
+            v-if="recentSessions.length === 0"
+            class="text-xs text-muted-foreground text-center py-4"
+          >
+            暂无历史会话
+          </div>
+        </div>
+      </ScrollArea>
 
-    <!-- 输入区域 -->
+      <!-- 消息列表（默认） -->
+      <ChatMessageList
+        v-if="activeTab === 'messages'"
+        :chat="chat"
+        :messages="chat.messages"
+        :is-streaming="chat.isStreaming"
+        :streaming-token="chat.streamingToken"
+        :streaming-tool-calls="chat.streamingToolCalls"
+        :streaming-thinking-blocks="chat.streamingThinkingBlocks"
+        :streaming-usage="chat.streamingUsage"
+        @retry="chat.retryMessage($event)"
+        @delete="chat.deleteMessageAndAfter($event)"
+        @edit="handleEdit"
+      />
+
+      <!-- 工作区文件 -->
+      <WorkspaceFileTree
+        v-if="activeTab === 'files'"
+      />
+    </div>
+
+    <!-- 输入区域（始终在底部） -->
     <ChatInput
       :is-streaming="chat.isStreaming"
       :disabled="!providerStore.currentModel"

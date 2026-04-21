@@ -10,6 +10,7 @@ import { registerShortcutIpcHandlers, registerGlobalShortcuts, unregisterGlobalS
 import { registerPluginIpcHandlers } from './ipc/plugin'
 import { registerTabsIpcHandlers } from './ipc/tabs'
 import { registerAgentSettingsIpcHandlers } from './ipc/agent-settings'
+import { registerFsIpcHandlers } from './ipc/fs'
 import { pluginManager } from './services/plugin-manager'
 import { workflowNodeRegistry } from './services/workflow-node-registry'
 import { getWindowMaximized, setWindowMaximized } from './services/store'
@@ -63,6 +64,7 @@ app.whenReady().then(() => {
   registerPluginIpcHandlers()
   registerTabsIpcHandlers()
   registerAgentSettingsIpcHandlers()
+  registerFsIpcHandlers()
   workflowNodeRegistry.registerBuiltinNodes(builtinNodeDefinitions)
   pluginManager.loadAll()
 

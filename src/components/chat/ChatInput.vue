@@ -26,6 +26,7 @@ import type { ToolDisplayItem } from '@/types'
 import { useAgentSettingsStore } from '@/stores/agent-settings'
 import { useChatUIStore } from '@/stores/chat-ui'
 import { useTabStore } from '@/stores/tab'
+import ModelSelector from './ModelSelector.vue'
 
 const props = defineProps<{
   isStreaming: boolean
@@ -380,6 +381,8 @@ function removeImage(index: number) {
           orientation="vertical"
           class="!h-4"
         />
+
+        <ModelSelector />
 
         <!-- 发送/停止 -->
         <InputGroupButton

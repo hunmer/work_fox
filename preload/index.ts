@@ -168,6 +168,11 @@ const api = {
     save: (data: { tabs: any[]; activeTabId: string | null }): Promise<void> => ipcRenderer.invoke('tabs:save', data),
   },
 
+  fs: {
+    listDir: (dirPath: string): Promise<Array<{ name: string; path: string; type: 'file' | 'directory' }>> =>
+      ipcRenderer.invoke('fs:listDir', dirPath),
+  },
+
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
 
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion'),
