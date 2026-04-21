@@ -18,16 +18,19 @@ export function useEditorShortcuts(
   function handleKeyDown(e: KeyboardEvent) {
     if (!store.currentWorkflow) return
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      if (isInputElement(e.target as HTMLElement)) return
       e.preventDefault()
       deps.saveWorkflow()
       return
     }
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
+      if (isInputElement(e.target as HTMLElement)) return
       e.preventDefault()
       store.redo()
       return
     }
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+      if (isInputElement(e.target as HTMLElement)) return
       e.preventDefault()
       store.undo()
       return
@@ -60,7 +63,10 @@ export function useEditorShortcuts(
   }
 
   function isInputElement(el: HTMLElement | null): boolean {
-    return el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA'
+    if (!el) return false
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return true
+    if (el.isContentEditable) return true
+    return false
   }
 
   function onWorkflowZoomIn(e: Event) {

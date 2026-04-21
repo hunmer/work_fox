@@ -11,7 +11,7 @@ export interface SuggestionState {
   selectedIndex: number
   query: string
   clientRect: (() => DOMRect | undefined) | null
-  command: ((props: { attrs: Record<string, string> }) => void) | null
+  command: ((props: Record<string, string>) => void) | null
 }
 
 /** Mention 节点在文档中的类型名称 */

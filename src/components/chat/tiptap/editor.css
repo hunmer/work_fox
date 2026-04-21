@@ -1,3 +1,11 @@
+/* EditorContent wrapper div */
+.tiptap {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  display: flex;
+}
+
 /* Tiptap editor content — replaces textarea */
 .tiptap-editor-content {
   padding: 0.5rem 0.75rem;
@@ -11,6 +19,7 @@
   flex: 1;
   resize: none;
   background: transparent;
+  text-align: left;
 }
 
 .tiptap-editor-content > p {

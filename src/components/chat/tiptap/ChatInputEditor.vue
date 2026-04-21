@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { watch, onBeforeUnmount } from 'vue'
-import { useEditor, EditorContent } from '@tiptap/vue-3'
+import { useEditor, EditorContent, VueNodeViewRenderer } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Mention from '@tiptap/extension-mention'
 import { PluginKey } from '@tiptap/pm/state'
-import { mergeAttributes } from '@tiptap/core'
 import { useMentionConfig } from './useMentionConfig'
+import MentionBadge from './MentionBadge.vue'
 import './editor.css'
 
 const props = defineProps<{
@@ -27,15 +27,11 @@ const editor = useEditor({
     // @ 工作区文件
     Mention.extend({
       name: 'fileMention',
-      renderHTML({ node, HTMLAttributes }) {
-        return [
-          'span',
-          mergeAttributes(HTMLAttributes),
-          `@${node.attrs.label || node.attrs.id}`,
-        ]
-      },
       renderText({ node }) {
         return `@${node.attrs.label || node.attrs.id}`
+      },
+      addNodeView() {
+        return VueNodeViewRenderer(MentionBadge)
       },
     }).configure({
       suggestion: {
@@ -51,15 +47,11 @@ const editor = useEditor({
     // / Skills
     Mention.extend({
       name: 'skillMention',
-      renderHTML({ node, HTMLAttributes }) {
-        return [
-          'span',
-          mergeAttributes(HTMLAttributes),
-          `/${node.attrs.label || node.attrs.id}`,
-        ]
-      },
       renderText({ node }) {
         return `/${node.attrs.label || node.attrs.id}`
+      },
+      addNodeView() {
+        return VueNodeViewRenderer(MentionBadge)
       },
     }).configure({
       suggestion: {
@@ -75,15 +67,11 @@ const editor = useEditor({
     // # MCP
     Mention.extend({
       name: 'mcpMention',
-      renderHTML({ node, HTMLAttributes }) {
-        return [
-          'span',
-          mergeAttributes(HTMLAttributes),
-          `#${node.attrs.label || node.attrs.id}`,
-        ]
-      },
       renderText({ node }) {
         return `#${node.attrs.label || node.attrs.id}`
+      },
+      addNodeView() {
+        return VueNodeViewRenderer(MentionBadge)
       },
     }).configure({
       suggestion: {
@@ -104,10 +92,12 @@ const editor = useEditor({
       class: 'tiptap-editor-content',
     },
     handleKeyDown(view, event) {
-      // Enter 发送（非 IME 组合中、非 suggestion 活跃时）
+      // Enter 发送（无修饰键、非 IME 组合中、非 suggestion 活跃时）
       if (
         event.key === 'Enter' &&
         !event.shiftKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
         !event.isComposing &&
         !suggestionState.active
       ) {

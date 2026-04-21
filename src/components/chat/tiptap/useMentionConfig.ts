@@ -28,7 +28,7 @@ export function useMentionConfig() {
   function selectItem(index: number) {
     const item = state.items[index]
     if (item && state.command) {
-      state.command({ attrs: { id: item.id, label: item.label } })
+      state.command({ id: item.id, label: item.label })
     }
     dismiss()
   }
@@ -47,7 +47,7 @@ export function useMentionConfig() {
         items: SuggestionItem[]
         query: string
         clientRect: (() => DOMRect | undefined) | null
-        command: (props: { attrs: Record<string, string> }) => void
+        command: (props: Record<string, string>) => void
       }) {
         state.active = true
         state.type = type
