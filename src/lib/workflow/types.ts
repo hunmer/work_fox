@@ -51,6 +51,7 @@ export interface Workflow {
   updatedAt: number
   enabledPlugins?: string[]
   agentConfig?: WorkflowAgentConfig
+  pluginConfigSchemes?: Record<string, string>
 }
 
 export interface AgentResourceItem {
