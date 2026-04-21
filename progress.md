@@ -169,3 +169,98 @@
   - 先拆 `src/lib/workflow/engine.ts` 的 renderer 依赖
   - 再落地 `workflow:execute/pause/resume/stop`
   - 最后把 `src/stores/workflow.ts` 改成 execution event-driven
+
+### Session 7
+
+- 继续推进 execution 链路，优先做“事件驱动状态机收口”，避免 backend 执行通道落地前后各维护一套 UI 状态逻辑。
+- 修改 [src/lib/workflow/engine.ts](/Users/Zhuanz/Documents/work_fox/src/lib/workflow/engine.ts)：
+  - `EngineStatus` 扩展为包含 `completed`
+  - 增加统一 execution event 回调
+  - 本地执行时发出 `workflow:*`、`node:*`、`execution:log`、`execution:context`
+- 修改 [src/stores/workflow.ts](/Users/Zhuanz/Documents/work_fox/src/stores/workflow.ts)：
+  - 增加 `handleExecutionEvent(...)`
+  - execution state 改为通过 execution events 更新
+  - 预埋 backend WS event 订阅入口
+  - 为未来 backend 通道预留 `pause/resume/stop` adapter 分支
+- 修改 [src/lib/backend-api/workflow.ts](/Users/Zhuanz/Documents/work_fox/src/lib/backend-api/workflow.ts)：
+  - 增加 `pause/resume/stop`
+- 修改 [src/lib/ws-bridge.ts](/Users/Zhuanz/Documents/work_fox/src/lib/ws-bridge.ts)：
+  - 放宽 pending request resolve 类型，消除本轮新增的泛型赋值错误
+- 验证：
+  - `pnpm build:backend` 通过
+  - `pnpm exec tsc -p tsconfig.web.json --noEmit` 仍失败，但本轮新增的 execution event/store 类型错误已清掉
+  - 剩余失败项仍主要是仓库既有类型问题，以及 `engine.ts` 里原有 `permissionMode` 类型不匹配
+
+### Next Recommended Step
+
+- 继续 Phase 7：
+  - 抽离 `WorkflowEngine` 的 context resolver / execution runner
+  - 去除 `window.api` 与 `useAIProviderStore` 的硬依赖
+  - 再在 backend 落地真正的 `workflow:execute/pause/resume/stop`
+
+### Session 8
+
+- 开始真正落地 backend execution，而不是继续停留在前端过渡层。
+- 新增 backend 插件执行基础设施：
+  - `backend/plugins/builtin-fetch-api.ts`
+  - `backend/plugins/builtin-fs-api.ts`
+- 扩展 [plugin-registry.ts](/Users/Zhuanz/Documents/work_fox/backend/plugins/plugin-registry.ts)：
+  - 读取并保留 `workflow.js` handler
+  - 暴露 `canExecuteNode(...)`
+  - 暴露 `executeWorkflowNode(...)`
+  - 为 backend execution 注入 Node 侧 `fetch/fs` API
+- 新增 backend execution 核心：
+  - `backend/workflow/execution-manager.ts`
+  - `backend/ws/execution-channels.ts`
+- 修改 [main.ts](/Users/Zhuanz/Documents/work_fox/backend/main.ts)：
+  - 注册 `workflow:execute/pause/resume/stop`
+  - 将 execution events 通过 WS 连接广播给前端
+- backend execution 首版支持：
+  - built-in `start/end/run_code/toast/switch/gallery_preview/music_player`
+  - Node 可闭环插件节点，如 `write_file/read_file`
+- backend execution 首版仍不支持：
+  - `agent_run`
+  - 浏览器工具节点
+  - Electron 本地窗口类插件节点
+- 验证：
+  - `pnpm build:backend` 通过
+  - smoke test 跑通 `workflow:create -> workflow:execute -> workflow:completed`
+  - smoke test 跑通 plugin `write_file/read_file`
+  - smoke test 跑通 `pause/resume`
+  - 修复 pause/resume 在 `_delay` 期间会跳过节点的问题
+
+### Next Recommended Step
+
+- 继续 Phase 7/8/9：
+  - 为 `agent_run` 增加 interaction bridge
+  - 为 Electron 本地窗口/浏览器能力增加 interaction 或 main-process bridge
+  - 逐步把 plugin server/client 边界做清晰拆分
+
+### Session 9
+
+- 进入 `Phase 8`，开始把 backend execution 和 Electron 本地能力真正桥起来，而不是继续报“不支持”。
+- 新增 backend interaction 基础设施：
+  - `backend/workflow/interaction-manager.ts`
+  - `backend/ws/connection-manager.ts` 支持定向投递和 `interaction_response`
+- 修改 [backend/workflow/execution-manager.ts](/Users/Zhuanz/Documents/work_fox/backend/workflow/execution-manager.ts)：
+  - `workflow:execute` 绑定发起执行的 `clientId`
+  - `agent_run` 改为通过 `interaction_required(type=agent_chat)` 回到 Electron 本地执行
+  - `window-manager` 节点改为通过 `interaction_required(type=node_execution)` 回到 Electron/Main 现有 `agent:execTool` 通道执行
+- 修改协议与前端 bridge：
+  - [shared/ws-protocol.ts](/Users/Zhuanz/Documents/work_fox/shared/ws-protocol.ts) 新增 `node_execution` interaction type 和 interaction error 字段
+  - [src/lib/ws-bridge.ts](/Users/Zhuanz/Documents/work_fox/src/lib/ws-bridge.ts) 增加 interaction handler 缺失/异常时的错误响应
+  - 新增 [src/lib/backend-api/interaction.ts](/Users/Zhuanz/Documents/work_fox/src/lib/backend-api/interaction.ts) 注册统一 renderer interaction handler
+- 为避免重复维护 Claude Agent 调用逻辑：
+  - 新增 [src/lib/workflow/agent-run.ts](/Users/Zhuanz/Documents/work_fox/src/lib/workflow/agent-run.ts)
+  - [src/lib/workflow/engine.ts](/Users/Zhuanz/Documents/work_fox/src/lib/workflow/engine.ts) 本地 `agent_run` 路径改为复用共享 helper
+- 修改 [src/stores/workflow.ts](/Users/Zhuanz/Documents/work_fox/src/stores/workflow.ts)，在 backend flag 打开时初始化 workflow interaction handler。
+- 验证：
+  - `pnpm build:backend` 通过
+  - `pnpm exec tsc -p tsconfig.web.json --noEmit` 仍失败，但仅剩仓库既有错误；本轮新增的 interaction bridge / agent-run helper 类型错误已清掉
+
+### Next Recommended Step
+
+- 继续 `Phase 8/9`：
+  - 把浏览器工具节点也纳入 backend registry 的 `node_execution` bridge
+  - 补 interaction reconnect / orphaned request 恢复策略
+  - 再评估是否要把更多 Electron-only 插件节点统一标记为 `requiresMainProcessBridge`

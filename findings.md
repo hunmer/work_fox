@@ -229,3 +229,80 @@
   - `useAIProviderStore`
   - renderer chat/agent stream
 - 这意味着“执行通道迁移”和“引擎解耦”不能再拆成纯通道工作；下一步应按 Phase 7 先抽 execution runner/context resolver/node dispatcher，再接 execution events 和 UI 订阅。
+
+## Execution Event Groundwork Findings
+
+- `WorkflowEngine` 已开始输出 shared execution events，store 不再只依赖 `onLogUpdate` 直接写状态。
+- [src/stores/workflow.ts](/Users/Zhuanz/Documents/work_fox/src/stores/workflow.ts) 已新增统一 `handleExecutionEvent(...)`，将以下状态更新收口到同一入口：
+  - `executionStatus`
+  - `executionLog`
+  - `executionContext`
+  - execution history append
+- 这让“本地 engine 事件”和“未来 backend WS 事件”可以共用同一套 UI 状态机，后续切换 backend 时不必再重写 `ExecutionBar` / `CustomNodeWrapper` 的状态来源。
+- 当前 backend 侧仅完成了前端订阅入口和 adapter method 预留：
+  - `workflow.pause(executionId)`
+  - `workflow.resume(executionId)`
+  - `workflow.stop(executionId)`
+
+## Backend Execution Findings
+
+- backend 已新增 [execution-manager.ts](/Users/Zhuanz/Documents/work_fox/backend/workflow/execution-manager.ts) 与 [execution-channels.ts](/Users/Zhuanz/Documents/work_fox/backend/ws/execution-channels.ts)，真正接通：
+  - `workflow:execute`
+  - `workflow:pause`
+  - `workflow:resume`
+  - `workflow:stop`
+- backend execution session 已具备：
+  - `executionId`
+  - `pauseRequested`
+  - `stopRequested`
+  - `currentIndex`
+  - execution log 构建
+  - execution history 持久化
+- backend 现会发出完整 execution event 流：
+  - `workflow:started/paused/resumed/completed/error`
+  - `node:start/progress/complete/error`
+  - `execution:log`
+  - `execution:context`
+- backend 插件 registry 已从“元数据读取”扩展为“可执行 handler registry”，复用现有插件 `workflow.js` 中的 handler。
+- backend 已新增 Node 侧内置插件 API：
+  - `fetchText/fetchJson/fetchBuffer/fetchBuffers/postJson`
+  - `writeFile/readFile/editFile/deleteFile/listFiles/createDir/removeDir/stat/exists/rename/copyFile`
+- 现阶段可在 backend 跑通的节点：
+  - built-in：`start` / `end` / `run_code` / `toast` / `switch` / `gallery_preview` / `music_player`
+  - plugin：`file-system`、`fetch`，以及理论上基于 HTTP/FS 的 `fish-audio`、`jimeng`
+- 现阶段仍不支持的节点：
+  - `agent_run`
+  - 浏览器工具节点
+  - `window-manager` 等依赖 Electron 本地窗口能力的插件节点
+- pause/resume 首版实现曾在 `_delay` 期间错误跳过节点，已通过 `executeNode -> interrupted` 返回值修复。
+
+## Verification Findings
+
+- backend smoke test 已验证：
+  - `workflow:create -> workflow:execute -> workflow:completed`
+  - `execution:log` / `execution:context` / `node:*` 事件流
+  - `executionLog:list` 可读到 backend 落盘日志
+  - plugin 节点 `write_file` / `read_file` 可在 backend 正常执行
+  - `workflow:pause -> workflow:paused -> workflow:resume -> workflow:completed` 正常
+
+## Interaction Bridge Findings
+
+- backend 已新增 [interaction-manager.ts](/Users/Zhuanz/Documents/work_fox/backend/workflow/interaction-manager.ts)，负责：
+  - 按 `executionId + requestId` 挂起交互
+  - 仅向发起 `workflow:execute` 的 WS client 定向下发 `interaction_required`
+  - 处理 timeout、cancel、renderer 断连
+- [connection-manager.ts](/Users/Zhuanz/Documents/work_fox/backend/ws/connection-manager.ts) 现在同时支持：
+  - 广播 execution events
+  - 定向向单个 renderer/client 发 interaction request
+  - 接收 `interaction_response`
+- backend execution 已支持两类本地桥接：
+  - `agent_run` -> `interaction_required(type=agent_chat)`
+  - `window-manager` 节点 -> `interaction_required(type=node_execution)`
+- renderer 已新增 [src/lib/backend-api/interaction.ts](/Users/Zhuanz/Documents/work_fox/src/lib/backend-api/interaction.ts)，统一把 interaction request 映射回现有本地执行能力：
+  - `agent_chat` 复用 `window.api.chat.completions`
+  - `node_execution` 复用 `window.api.agent.execTool`
+- 为避免本地执行与后端桥接逻辑分叉，已抽出 [src/lib/workflow/agent-run.ts](/Users/Zhuanz/Documents/work_fox/src/lib/workflow/agent-run.ts) 作为共享 `agent_run` 执行 helper，`WorkflowEngine` 本地路径与 WS interaction handler 共用这套实现。
+- 本轮完成后，backend build 通过；`tsconfig.web.json` 仍失败，但失败项回到仓库既有问题，未新增 interaction bridge 相关报错。
+- 剩余缺口：
+  - 浏览器工具节点尚未在 backend registry 中声明并转发到 `node_execution`
+  - interaction request 在 renderer 重连后的恢复/补发策略仍未实现

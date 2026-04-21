@@ -12,9 +12,10 @@ import type {
   WSError,
   WSClientHello,
 } from '@shared/ws-protocol'
+import { createErrorShape } from '@shared/errors'
 
 type PendingRequest = {
-  resolve: (value: unknown) => void
+  resolve: (value: any) => void
   reject: (reason?: unknown) => void
   timeout: ReturnType<typeof setTimeout>
 }
@@ -156,21 +157,52 @@ export class WSBridge {
   }
 
   private async handleInteraction(request: InteractionRequest): Promise<void> {
-    if (!this.interactionHandler || !this.ws) return
-    const result = await this.interactionHandler(request)
-    const response: InteractionResponse = 'type' in result
-      ? result
-      : {
-          id: request.id,
-          channel: 'workflow:interaction',
-          type: 'interaction_response',
-          executionId: request.executionId,
-          workflowId: request.workflowId,
-          nodeId: request.nodeId,
-          data: result.data,
-          cancelled: result.cancelled,
-        }
-    this.ws.send(JSON.stringify(response))
+    if (!this.ws) return
+
+    if (!this.interactionHandler) {
+      this.ws.send(JSON.stringify({
+        id: request.id,
+        channel: 'workflow:interaction',
+        type: 'interaction_response',
+        executionId: request.executionId,
+        workflowId: request.workflowId,
+        nodeId: request.nodeId,
+        data: null,
+        error: createErrorShape('HANDLER_FAILED', `未注册 interaction handler: ${request.interactionType}`),
+      } satisfies InteractionResponse))
+      return
+    }
+
+    try {
+      const result = await this.interactionHandler(request)
+      const response: InteractionResponse = 'type' in result
+        ? result
+        : {
+            id: request.id,
+            channel: 'workflow:interaction',
+            type: 'interaction_response',
+            executionId: request.executionId,
+            workflowId: request.workflowId,
+            nodeId: request.nodeId,
+            data: result.data,
+            cancelled: result.cancelled,
+          }
+      this.ws.send(JSON.stringify(response))
+    } catch (error) {
+      this.ws.send(JSON.stringify({
+        id: request.id,
+        channel: 'workflow:interaction',
+        type: 'interaction_response',
+        executionId: request.executionId,
+        workflowId: request.workflowId,
+        nodeId: request.nodeId,
+        data: null,
+        error: createErrorShape(
+          'HANDLER_FAILED',
+          error instanceof Error ? error.message : String(error),
+        ),
+      } satisfies InteractionResponse))
+    }
   }
 
   private emit(channel: string, data: unknown): void {

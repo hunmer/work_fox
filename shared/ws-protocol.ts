@@ -41,7 +41,28 @@ export type InteractionType =
   | 'form'
   | 'confirm'
   | 'agent_chat'
+  | 'node_execution'
   | 'custom'
+
+export interface AgentChatInteractionSchema {
+  prompt: string
+  systemPrompt?: string
+  cwd?: string
+  additionalDirectories?: string[]
+  permissionMode?: string
+  extraInstructions?: string
+  loadProjectClaudeMd?: boolean
+  loadRuleMd?: boolean
+  workflowId?: string
+  workflowName?: string
+  workflowDescription?: string
+  enabledPlugins?: string[]
+}
+
+export interface NodeExecutionInteractionSchema {
+  toolType: string
+  params: Record<string, unknown>
+}
 
 export interface InteractionRequest<Data = unknown> {
   id: string
@@ -64,6 +85,7 @@ export interface InteractionResponse<Data = unknown> {
   nodeId: string
   data: Data
   cancelled?: boolean
+  error?: BackendErrorShape
 }
 
 export type WSIncomingMessage =

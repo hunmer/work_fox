@@ -9,21 +9,42 @@ import { BackendOperationHistoryStore } from './storage/operation-history-store'
 import { registerStorageChannels } from './ws/storage-channels'
 import { BackendPluginRegistry } from './plugins/plugin-registry'
 import { registerPluginChannels } from './ws/plugin-channels'
+import { BackendWorkflowExecutionManager } from './workflow/execution-manager'
+import { BackendInteractionManager } from './workflow/interaction-manager'
+import { registerExecutionChannels } from './ws/execution-channels'
 
 async function main(): Promise<void> {
   const config = loadBackendConfig()
   const logger = createLogger(config.logLevel)
   const backend = createBackendServer(config, logger)
   const paths = createStoragePaths(config)
+  const workflowStore = new BackendWorkflowStore(paths)
+  const workflowVersionStore = new BackendWorkflowVersionStore(paths)
+  const executionLogStore = new BackendExecutionLogStore(paths)
+  const operationHistoryStore = new BackendOperationHistoryStore(paths)
   const plugins = new BackendPluginRegistry(config, logger)
   plugins.loadAll()
+  const interactionManager = new BackendInteractionManager({
+    connectionManager: backend.connections,
+    logger,
+    defaultTimeoutMs: config.interactionTimeoutMs,
+  })
+  const executionManager = new BackendWorkflowExecutionManager({
+    workflowStore,
+    executionLogStore,
+    pluginRegistry: plugins,
+    interactionManager,
+    emit: (channel, payload) => backend.connections.emit(channel, payload),
+    logger,
+  })
   registerStorageChannels(backend.router, {
-    workflowStore: new BackendWorkflowStore(paths),
-    workflowVersionStore: new BackendWorkflowVersionStore(paths),
-    executionLogStore: new BackendExecutionLogStore(paths),
-    operationHistoryStore: new BackendOperationHistoryStore(paths),
+    workflowStore,
+    workflowVersionStore,
+    executionLogStore,
+    operationHistoryStore,
   })
   registerPluginChannels(backend.router, plugins)
+  registerExecutionChannels(backend.router, executionManager)
   const { port } = await backend.start()
 
   const ready = {

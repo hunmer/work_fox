@@ -1,12 +1,16 @@
 import { defineStore } from 'pinia'
-import { ref, computed, watch, inject, provide, type Ref, type App } from 'vue'
+import { ref, shallowRef, computed, watch, inject, provide, type Ref, type App } from 'vue'
 import type { Workflow, WorkflowFolder, WorkflowNode, ExecutionLog } from '@/lib/workflow/types'
 import { WorkflowEngine, type EngineStatus } from '@/lib/workflow/engine'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { executeRendererWorkflowTool } from '@/lib/agent/workflow-renderer-tools'
+import { ensureWorkflowInteractionHandler } from '@/lib/backend-api/interaction'
 import { createWorkflowDomainApi } from '@/lib/backend-api/workflow-domain'
+import { useWorkflowBackend } from '@/lib/backend-api/runtime'
+import { wsBridge } from '@/lib/ws-bridge'
 import type { WorkflowToolExecuteRequest } from '../../preload'
 import { useAgentSettingsStore, createWorkflowAgentConfigFromGlobal } from './agent-settings'
+import type { ExecutionEventChannel, ExecutionEventMap } from '@shared/execution-events'
 
 export interface WorkflowChanges {
   upsertNodes: any[]
@@ -445,15 +449,92 @@ function createExecutionActions(
   engine: Ref<WorkflowEngine | null>,
   execLogMgr: ReturnType<typeof createExecutionLogManager>,
 ) {
+  let currentExecutionId: string | null = null
+
+  function handleExecutionEvent(channel: ExecutionEventChannel, payload: ExecutionEventMap[ExecutionEventChannel]) {
+    const workflowId = currentWorkflow.value?.id
+    if (workflowId && payload.workflowId && payload.workflowId !== workflowId) return
+
+    switch (channel) {
+      case 'workflow:started':
+        currentExecutionId = payload.executionId
+        executionStatus.value = 'running'
+        executionLog.value = null
+        executionContext.value = {}
+        execLogMgr.selectedExecutionLogId.value = null
+        break
+      case 'workflow:paused':
+        executionStatus.value = 'paused'
+        break
+      case 'workflow:resumed':
+        executionStatus.value = 'running'
+        break
+      case 'execution:log':
+        executionLog.value = (payload as ExecutionEventMap['execution:log']).log
+        break
+      case 'execution:context':
+        executionContext.value = (payload as ExecutionEventMap['execution:context']).context as Record<string, any>
+        break
+      case 'workflow:completed':
+        currentExecutionId = payload.executionId
+        executionStatus.value = 'completed'
+        executionLog.value = (payload as ExecutionEventMap['workflow:completed']).log
+        executionContext.value = (payload as ExecutionEventMap['workflow:completed']).context as Record<string, any>
+        if (currentWorkflow.value) {
+          const { nodes, edges } = currentWorkflow.value
+          execLogMgr.appendCompletedLog((payload as ExecutionEventMap['workflow:completed']).log, currentWorkflow.value.id, { nodes, edges })
+        }
+        break
+      case 'workflow:error':
+        currentExecutionId = payload.executionId
+        executionStatus.value = 'error'
+        if ((payload as ExecutionEventMap['workflow:error']).log) {
+          executionLog.value = (payload as ExecutionEventMap['workflow:error']).log || null
+          if (currentWorkflow.value) {
+            const { nodes, edges } = currentWorkflow.value
+            execLogMgr.appendCompletedLog((payload as ExecutionEventMap['workflow:error']).log!, currentWorkflow.value.id, { nodes, edges })
+          }
+        }
+        break
+      default:
+        break
+    }
+  }
+
+  const executionChannels: ExecutionEventChannel[] = [
+    'workflow:started',
+    'workflow:paused',
+    'workflow:resumed',
+    'workflow:completed',
+    'workflow:error',
+    'node:start',
+    'node:progress',
+    'node:complete',
+    'node:error',
+    'execution:log',
+    'execution:context',
+  ]
+
+  if (useWorkflowBackend()) {
+    ensureWorkflowInteractionHandler()
+    for (const channel of executionChannels) {
+      wsBridge.on(channel, (data) => handleExecutionEvent(channel, data as ExecutionEventMap[typeof channel]))
+    }
+  }
+
   async function startExecution(): Promise<void> {
     if (!currentWorkflow.value) return
-    executionStatus.value = 'running'
-    executionLog.value = null
-    executionContext.value = {}
+
+    if (useWorkflowBackend()) {
+      const result = await createWorkflowDomainApi().workflow.execute(currentWorkflow.value.id)
+      currentExecutionId = result.executionId
+      executionStatus.value = result.status as EngineStatus
+      return
+    }
 
     engine.value = new WorkflowEngine(currentWorkflow.value.nodes, currentWorkflow.value.edges, {
-      onLogUpdate: (log) => { executionLog.value = { ...log } },
       onNodeStatusChange: () => {},
+      onEvent: handleExecutionEvent,
     }, {
       workflowId: currentWorkflow.value.id,
       workflowName: currentWorkflow.value.name,
@@ -462,33 +543,43 @@ function createExecutionActions(
       pluginConfigSchemes: currentWorkflow.value.pluginConfigSchemes || {},
     })
 
-    const log = await engine.value.start()
-    executionStatus.value = engine.value.status as EngineStatus
-    executionContext.value = engine.value.currentContext
-    executionLog.value = log
-
-    if ((log.status === 'completed' || log.status === 'error') && currentWorkflow.value) {
-      const { nodes, edges } = currentWorkflow.value
-      execLogMgr.appendCompletedLog(log, currentWorkflow.value.id, { nodes, edges })
-    }
+    await engine.value.start()
   }
 
-  function pauseExecution(): void { engine.value?.pause() }
+  function pauseExecution(): void {
+    if (useWorkflowBackend()) {
+      if (!currentExecutionId) return
+      createWorkflowDomainApi().workflow.pause(currentExecutionId)
+      return
+    }
+
+    engine.value?.pause()
+  }
 
   async function resumeExecution(): Promise<void> {
-    if (!engine.value) return
-    const log = await engine.value.resume()
-    executionStatus.value = engine.value.status as EngineStatus
-    executionContext.value = engine.value.currentContext
-    executionLog.value = log
-
-    if ((log.status === 'completed' || log.status === 'error') && currentWorkflow.value) {
-      const { nodes, edges } = currentWorkflow.value
-      execLogMgr.appendCompletedLog(log, currentWorkflow.value!.id, { nodes, edges })
+    if (useWorkflowBackend()) {
+      if (!currentExecutionId) return
+      const result = await createWorkflowDomainApi().workflow.resume(currentExecutionId)
+      currentExecutionId = result.executionId
+      executionStatus.value = result.status as EngineStatus
+      return
     }
+
+    if (!engine.value) return
+    await engine.value.resume()
   }
 
-  function stopExecution(): void { engine.value?.stop() }
+  async function stopExecution(): Promise<void> {
+    if (useWorkflowBackend()) {
+      if (!currentExecutionId) return
+      const result = await createWorkflowDomainApi().workflow.stop(currentExecutionId)
+      currentExecutionId = result.executionId
+      executionStatus.value = result.status as EngineStatus
+      return
+    }
+
+    engine.value?.stop()
+  }
 
   return { startExecution, pauseExecution, resumeExecution, stopExecution }
 }
@@ -612,7 +703,7 @@ export function createWorkflowStore(tabId: string) {
     const executionStatus = ref<EngineStatus>('idle')
     const executionLog = ref<ExecutionLog | null>(null)
     const executionContext = ref<Record<string, any>>({})
-    const engine = ref<WorkflowEngine | null>(null)
+    const engine = shallowRef<WorkflowEngine | null>(null)
 
     const undoRedo = createUndoRedoManager(currentWorkflow, api)
     const execLogMgr = createExecutionLogManager(currentWorkflow, api)

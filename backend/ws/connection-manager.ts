@@ -5,6 +5,7 @@ import type { Logger } from '../app/logger'
 import type { BackendConfig } from '../app/config'
 import { createErrorShape } from '../../shared/errors'
 import type {
+  InteractionResponse,
   WSError,
   WSRequest,
   WSResponse,
@@ -22,7 +23,10 @@ interface ClientSession {
 
 export class ConnectionManager {
   private clients = new Map<WebSocket, ClientSession>()
+  private clientsById = new Map<string, ClientSession>()
   private heartbeatTimer: NodeJS.Timeout | null = null
+  private interactionResponseHandler?: (response: InteractionResponse, clientId: string) => void
+  private disconnectHandlers = new Set<(clientId: string) => void>()
 
   constructor(
     private wss: WebSocketServer,
@@ -42,6 +46,7 @@ export class ConnectionManager {
       client.socket.close()
     }
     this.clients.clear()
+    this.clientsById.clear()
   }
 
   private handleConnection(socket: WebSocket, request: IncomingMessage): void {
@@ -62,6 +67,7 @@ export class ConnectionManager {
       lastSeenAt: Date.now(),
     }
     this.clients.set(socket, session)
+    this.clientsById.set(clientId, session)
     this.logger.info('WS client connected', { clientId })
 
     this.send(socket, {
@@ -80,6 +86,8 @@ export class ConnectionManager {
     })
     socket.on('close', () => {
       this.clients.delete(socket)
+      this.clientsById.delete(clientId)
+      for (const handler of this.disconnectHandlers) handler(clientId)
       this.logger.info('WS client disconnected', { clientId })
     })
     socket.on('error', (error) => {
@@ -96,17 +104,21 @@ export class ConnectionManager {
   }
 
   private async handleMessage(session: ClientSession, raw: string): Promise<void> {
-    let parsed: WSRequest | WSClientHello
+    let parsed: unknown
     try {
-      parsed = JSON.parse(raw) as WSRequest | WSClientHello
+      parsed = JSON.parse(raw)
     } catch (error) {
       this.sendError(session.socket, undefined, undefined, createErrorShape('BAD_REQUEST', 'Invalid JSON payload', String(error)))
       return
     }
 
     if (isClientHello(parsed)) return
-    if (parsed.type !== 'request') {
-      this.sendError(session.socket, parsed.id, parsed.channel, createErrorShape('BAD_REQUEST', 'Only request messages are supported'))
+    if (isInteractionResponse(parsed)) {
+      this.interactionResponseHandler?.(parsed, session.id)
+      return
+    }
+    if (!isWSRequest(parsed)) {
+      this.sendError(session.socket, undefined, undefined, createErrorShape('BAD_REQUEST', 'Only request messages are supported'))
       return
     }
 
@@ -130,6 +142,24 @@ export class ConnectionManager {
       data,
     }
     for (const client of this.clients.values()) this.send(client.socket, payload)
+  }
+
+  sendToClient(clientId: string, payload: unknown): boolean {
+    const client = this.clientsById.get(clientId)
+    if (!client || client.socket.readyState !== client.socket.OPEN) {
+      return false
+    }
+    this.send(client.socket, payload)
+    return true
+  }
+
+  setInteractionResponseHandler(handler: (response: InteractionResponse, clientId: string) => void): void {
+    this.interactionResponseHandler = handler
+  }
+
+  onClientDisconnected(handler: (clientId: string) => void): () => void {
+    this.disconnectHandlers.add(handler)
+    return () => this.disconnectHandlers.delete(handler)
   }
 
   private send(socket: WebSocket, payload: unknown): void {
@@ -159,5 +189,23 @@ function isClientHello(value: unknown): value is WSClientHello {
     && typeof value === 'object'
     && 'protocolVersion' in value
     && !('type' in value),
+  )
+}
+
+function isInteractionResponse(value: unknown): value is InteractionResponse {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && 'type' in value
+    && (value as InteractionResponse).type === 'interaction_response',
+  )
+}
+
+function isWSRequest(value: unknown): value is WSRequest {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && 'type' in value
+    && (value as WSRequest).type === 'request',
   )
 }

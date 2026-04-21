@@ -29,6 +29,9 @@
 - `Phase 4` 已完成：后端服务骨架、health/version、WS router、system channels 已可运行
 - `Phase 5` 进行中：前端 WS Bridge、workflow 数据访问适配、plugin store/domain adapter 已落地，执行态 UI 事件订阅尚未接入
 - `Phase 6` 进行中：workflow/folder/version/executionLog/operationHistory 与 plugin 元数据/配置查询已迁到 backend，import/export 与 execution channels 尚未迁移
+- `Phase 7` 进行中：backend execution runner 已落地，Node 可闭环节点与部分需本地桥接节点已接入；仍需补浏览器工具节点覆盖和断线恢复细节
+- `Phase 8` 进行中：interaction session manager、renderer interaction handler 与 `agent_run` / `window-manager` bridge 已落地首版
+- `Phase 10` 进行中：`workflow store` 已改为消费 execution events，backend flag 下支持受限节点集的后端执行
 
 ## Implementation Phases
 
@@ -261,7 +264,7 @@ Status: `in_progress`
 - 暂未迁移插件 view/icon/import/install/uninstall 等仍依赖 Electron 本地能力的通道
 
 ### Phase 7. 工作流引擎解耦与后端迁移
-Status: `pending`
+Status: `in_progress`
 
 目标：
 - 将 `src/lib/workflow/engine.ts` 从前端依赖中剥离，形成纯服务端执行引擎
@@ -300,8 +303,38 @@ Status: `pending`
 - 引擎不再依赖 renderer 运行时
 - 工作流执行、暂停、恢复、停止都能由 backend 主导
 
+当前进展：
+- [src/lib/workflow/engine.ts](/Users/Zhuanz/Documents/work_fox/src/lib/workflow/engine.ts) 已开始发出统一 execution events：
+  - `workflow:started`
+  - `workflow:paused`
+  - `workflow:resumed`
+  - `workflow:completed`
+  - `workflow:error`
+  - `node:start`
+  - `node:complete`
+  - `node:error`
+  - `execution:log`
+  - `execution:context`
+- 当前仍未拆除 renderer 依赖：
+  - `window.api`
+  - `useAIProviderStore`
+  - `listenToChatStream`
+  - `toRaw`
+- backend 已新增 [execution-manager.ts](/Users/Zhuanz/Documents/work_fox/backend/workflow/execution-manager.ts)，并接入：
+  - `workflow:execute`
+  - `workflow:pause`
+  - `workflow:resume`
+  - `workflow:stop`
+- backend 当前支持执行的节点类型：
+  - built-in：`start` / `end` / `run_code` / `toast` / `switch` / `gallery_preview` / `music_player`
+  - plugin：可在 Node.js 内闭环的 `workflow.js` handlers，例如 `workfox.file-system`、`workfox.fetch`、`workfox.fish-audio`、`workfox.jimeng`
+- backend 当前明确不支持的节点类型：
+  - `agent_run`
+  - 浏览器工具节点
+  - `window-manager` 等依赖 Electron 本地窗口能力的插件节点
+
 ### Phase 8. 交互回调与 agent_run 桥接
-Status: `pending`
+Status: `in_progress`
 
 目标：
 - 解决最关键的跨端执行问题，即后端引擎如何安全等待 Electron 本地能力返回
@@ -334,6 +367,22 @@ Status: `pending`
 完成标准：
 - `agent_run` 不在 backend 本地执行，但 backend 能可靠挂起并恢复流程
 - 各类交互节点的取消和超时行为一致
+
+当前进展：
+- 已新增 backend interaction session manager，支持：
+  - pending request 缓存
+  - client 定向投递
+  - response correlation
+  - timeout / disconnect 清理
+- backend `workflow:execute` 已绑定发起执行的 WS client，`agent_run` 会通过 `interaction_required(type=agent_chat)` 回到 Electron 本地执行
+- `window-manager` 节点已通过 `interaction_required(type=node_execution)` 回到 Electron Main 侧现有 `agent:execTool` 通道执行
+- renderer 已新增统一 interaction handler，并复用现有：
+  - `window.api.chat.completions`
+  - `window.api.agent.execTool`
+- `WorkflowEngine` 本地执行路径已抽出共享 `agent_run` helper，避免本地执行和 backend interaction bridge 维护两套 Claude Agent 调用逻辑
+- 尚未补充：
+  - 浏览器工具节点的 backend plugin registry / node type 覆盖
+  - interaction 断线重连后的恢复策略
 
 ### Phase 9. 插件系统拆分与注册表迁移
 Status: `pending`
@@ -375,7 +424,7 @@ Status: `pending`
 - 插件 server/client 职责清晰，内置插件可逐个迁移
 
 ### Phase 10. 前端 Store 与执行 UI 改造
-Status: `pending`
+Status: `in_progress`
 
 目标：
 - 在不重写业务逻辑的前提下，把 store 从“本地执行驱动”切到“后端事件驱动”
@@ -407,6 +456,12 @@ Status: `pending`
 完成标准：
 - 用户仍在原有编辑器里工作，但执行态来自 backend
 - UI 不再依赖前端本地引擎实例
+
+当前进展：
+- [src/stores/workflow.ts](/Users/Zhuanz/Documents/work_fox/src/stores/workflow.ts) 的 execution state 已开始统一从 execution events 更新
+- 已预埋 backend execution event 订阅入口，后续 backend `workflow:execute/pause/resume/stop` 落地后可复用同一状态机
+- backend `workflow:execute/pause/resume/stop` 已落地，backend flag 下可驱动受限节点集的执行
+- 暂未移除本地 `WorkflowEngine` 实例；当前仍是“backend 优先 + 本地执行兜底”的过渡形态
 
 ### Phase 11. 内置插件迁移与兼容验证
 Status: `pending`

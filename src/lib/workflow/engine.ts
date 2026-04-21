@@ -2,10 +2,11 @@
 import { toRaw } from 'vue'
 import type { WorkflowNode, WorkflowEdge, ExecutionLog, ExecutionStep, ExecutionLogEntry, ConditionItem } from './types'
 import { getNodeDefinition } from './nodeRegistry'
-import { listenToChatStream } from '@/lib/agent/stream'
-import { useAIProviderStore } from '@/stores/ai-provider'
+import { executeAgentRunTask } from './agent-run'
+import type { ExecutionEventChannel, ExecutionEventMap } from '@shared/execution-events'
+import { createErrorShape } from '@shared/errors'
 
-export type EngineStatus = 'idle' | 'running' | 'paused' | 'error'
+export type EngineStatus = 'idle' | 'running' | 'paused' | 'completed' | 'error'
 
 export class WorkflowEngine {
   private nodes: WorkflowNode[]
@@ -20,7 +21,10 @@ export class WorkflowEngine {
   private steps: ExecutionStep[] = []
   private onLogUpdate?: (log: ExecutionLog) => void
   private onNodeStatusChange?: (nodeId: string, status: ExecutionStep['status']) => void
+  private onEvent?: <Channel extends ExecutionEventChannel>(channel: Channel, payload: ExecutionEventMap[Channel]) => void
   private activeBranches: Map<string, string> = new Map() // switchNodeId -> selectedHandle
+  private executionId = ''
+  private lastErrorMessage?: string
   private runtimeConfig?: {
     workflowId?: string
     workflowName?: string
@@ -35,6 +39,7 @@ export class WorkflowEngine {
     callbacks?: {
       onLogUpdate?: (log: ExecutionLog) => void
       onNodeStatusChange?: (nodeId: string, status: ExecutionStep['status']) => void
+      onEvent?: <Channel extends ExecutionEventChannel>(channel: Channel, payload: ExecutionEventMap[Channel]) => void
     },
     runtimeConfig?: {
       workflowId?: string
@@ -49,6 +54,7 @@ export class WorkflowEngine {
     this.context = {}
     this.onLogUpdate = callbacks?.onLogUpdate
     this.onNodeStatusChange = callbacks?.onNodeStatusChange
+    this.onEvent = callbacks?.onEvent
     this.runtimeConfig = runtimeConfig
   }
 
@@ -70,7 +76,9 @@ export class WorkflowEngine {
           ? 'running'
           : this._status === 'paused'
             ? 'paused'
-            : this._status,
+            : this._status === 'completed'
+              ? 'completed'
+              : 'error',
       steps: [...this.steps],
       finishedAt:
         this._status !== 'running' && this._status !== 'paused' ? Date.now() : undefined,
@@ -79,15 +87,26 @@ export class WorkflowEngine {
 
   async start(): Promise<ExecutionLog> {
     this.reset()
+    this.executionId = crypto.randomUUID()
     this.context.__config__ = await this.loadPluginConfigs()
     this.executionOrder = this.buildExecutionOrder()
     if (this.executionOrder.length === 0) {
       this._status = 'error'
+      this.lastErrorMessage = '工作流为空或无法建立执行顺序'
+      this.emitExecutionError()
       return this.currentLog
     }
     this._status = 'running'
     this.startTime = Date.now()
+    this.emitEvent('workflow:started', {
+      executionId: this.executionId,
+      workflowId: this.runtimeConfig?.workflowId || '',
+      timestamp: this.startTime,
+      status: 'running',
+      workflowName: this.runtimeConfig?.workflowName,
+    })
     this.emitLogUpdate()
+    this.emitContextUpdate()
     await this.runFromIndex(0)
     return this.currentLog
   }
@@ -102,6 +121,13 @@ export class WorkflowEngine {
     if (this._status !== 'paused') return this.currentLog
     this._status = 'running'
     this.pauseRequested = false
+    this.emitEvent('workflow:resumed', {
+      executionId: this.executionId,
+      workflowId: this.runtimeConfig?.workflowId || '',
+      timestamp: Date.now(),
+      status: 'running',
+      currentNodeId: this.executionOrder[this.currentIndex]?.id,
+    })
     this.emitLogUpdate()
     await this.runFromIndex(this.currentIndex)
     return this.currentLog
@@ -136,6 +162,8 @@ export class WorkflowEngine {
     this.stopRequested = false
     this._status = 'idle'
     this.startTime = 0
+    this.executionId = ''
+    this.lastErrorMessage = undefined
     this.activeBranches.clear()
   }
 
@@ -172,7 +200,9 @@ export class WorkflowEngine {
     for (let i = startIndex; i < this.executionOrder.length; i++) {
       if (this.stopRequested) {
         this._status = 'error'
+        this.lastErrorMessage = '执行已停止'
         this.emitLogUpdate()
+        this.emitExecutionError()
         return
       }
 
@@ -181,6 +211,13 @@ export class WorkflowEngine {
         this._status = 'paused'
         this.pauseRequested = false
         this.emitLogUpdate()
+        this.emitEvent('workflow:paused', {
+          executionId: this.executionId,
+          workflowId: this.runtimeConfig?.workflowId || '',
+          timestamp: Date.now(),
+          status: 'paused',
+          currentNodeId: this.executionOrder[i]?.id,
+        })
         return
       }
 
@@ -198,7 +235,9 @@ export class WorkflowEngine {
       if (nodeState === 'disabled') {
         this.recordSkippedStep(node, '节点已禁用，工作流中止')
         this._status = 'error'
+        this.lastErrorMessage = '节点已禁用，工作流中止'
         this.emitLogUpdate()
+        this.emitExecutionError()
         return
       }
 
@@ -213,6 +252,20 @@ export class WorkflowEngine {
 
     this._status = this.stopRequested ? 'error' : 'completed'
     this.emitLogUpdate()
+    this.emitContextUpdate()
+    if (this._status === 'completed') {
+      this.emitEvent('workflow:completed', {
+        executionId: this.executionId,
+        workflowId: this.runtimeConfig?.workflowId || '',
+        timestamp: Date.now(),
+        status: 'completed',
+        log: this.currentLog,
+        context: this.currentContext,
+      })
+    } else {
+      this.lastErrorMessage = this.lastErrorMessage || '工作流执行失败'
+      this.emitExecutionError()
+    }
   }
 
   /** 记录被跳过/禁用的节点步骤 */
@@ -249,6 +302,14 @@ export class WorkflowEngine {
     }
     this.steps.push(step)
     this.onNodeStatusChange?.(node.id, 'running')
+    this.emitEvent('node:start', {
+      executionId: this.executionId,
+      workflowId: this.runtimeConfig?.workflowId || '',
+      timestamp: Date.now(),
+      nodeId: node.id,
+      nodeLabel: node.label,
+      input: resolvedData,
+    })
     this.emitLogUpdate()
 
     try {
@@ -266,17 +327,34 @@ export class WorkflowEngine {
       this.context[node.id] = step.output
       if (!this.context.__data__) this.context.__data__ = {}
       this.context.__data__[node.id] = result
+      this.emitContextUpdate()
       // switch 节点记录活跃分支
       if (node.type === 'switch' && result?.__branch__) {
         this.activeBranches.set(node.id, result.__branch__)
       }
       this.onNodeStatusChange?.(node.id, 'completed')
+      this.emitEvent('node:complete', {
+        executionId: this.executionId,
+        workflowId: this.runtimeConfig?.workflowId || '',
+        timestamp: Date.now(),
+        nodeId: node.id,
+        step: { ...step },
+      })
     } catch (err: any) {
       step.finishedAt = Date.now()
       step.status = 'error'
       step.error = err?.message || String(err)
       this._status = 'error'
+      this.lastErrorMessage = step.error
       this.onNodeStatusChange?.(node.id, 'error')
+      this.emitEvent('node:error', {
+        executionId: this.executionId,
+        workflowId: this.runtimeConfig?.workflowId || '',
+        timestamp: Date.now(),
+        nodeId: node.id,
+        step: { ...step },
+        error: createErrorShape('WORKFLOW_ERROR', step.error || '节点执行失败'),
+      })
     }
 
     this.emitLogUpdate()
@@ -332,118 +410,7 @@ export class WorkflowEngine {
   }
 
   private async executeAgentRun(data: Record<string, any>): Promise<any> {
-    const prompt = typeof data.prompt === 'string' ? data.prompt : ''
-    if (!prompt.trim()) {
-      throw new Error('agent_run 节点缺少 prompt')
-    }
-
-    const providerStore = useAIProviderStore()
-    if (!providerStore.currentProvider || !providerStore.currentModel) {
-      throw new Error('请先在聊天面板中选择 AI Provider 和模型')
-    }
-
-    let assistantText = ''
-    const toolCalls: Array<Record<string, unknown>> = []
-    let usage: { inputTokens: number; outputTokens: number } | null = null
-
-    const additionalDirectories = typeof data.additionalDirectories === 'string'
-      ? data.additionalDirectories
-        .split('\n')
-        .map((item: string) => item.trim())
-        .filter(Boolean)
-      : []
-
-    const requestId = crypto.randomUUID()
-    const systemSections = [
-      '你是 WorkFox 工作流中的 Claude 执行型节点。',
-      '回复使用中文。',
-      '优先直接完成当前节点任务，并输出可供下游节点消费的结果。',
-      this.runtimeConfig?.workflowName
-        ? `当前工作流: ${this.runtimeConfig.workflowName}${this.runtimeConfig.workflowId ? ` (${this.runtimeConfig.workflowId})` : ''}`
-        : '',
-      typeof this.runtimeConfig?.workflowDescription === 'string' && this.runtimeConfig.workflowDescription.trim()
-        ? `工作流描述:\n${this.runtimeConfig.workflowDescription.trim()}`
-        : '',
-      typeof data.systemPrompt === 'string' && data.systemPrompt.trim()
-        ? `节点附加说明:\n${data.systemPrompt.trim()}`
-        : '',
-    ].filter(Boolean)
-
-    const completionFinished = new Promise<void>((resolve, reject) => {
-      const cleanup = listenToChatStream(requestId,
-        {
-          onToken: (token) => { assistantText += token },
-          onToolCall: (call) => {
-            toolCalls.push({
-              id: call.id,
-              name: call.name,
-              args: JSON.parse(JSON.stringify(call.args ?? {})),
-            })
-          },
-          onToolCallArgs: (event) => {
-            const toolCall = toolCalls.find((item) => item.id === event.toolUseId)
-            if (toolCall) {
-              toolCall.args = JSON.parse(JSON.stringify(event.args ?? {}))
-            }
-          },
-          onToolResult: (event) => {
-            const toolCall = toolCalls.find((item) => item.id === event.toolUseId)
-            if (toolCall) {
-              toolCall.result = JSON.parse(JSON.stringify(event.result ?? null))
-              toolCall.status = 'completed'
-            }
-          },
-          onThinking: () => {},
-          onUsage: (nextUsage) => { usage = nextUsage },
-          onDone: () => {
-            cleanup()
-            resolve()
-          },
-          onError: (error) => {
-            cleanup()
-            reject(error)
-          },
-        },
-      )
-    })
-
-    await window.api.chat.completions({
-      _requestId: requestId,
-      providerId: providerStore.currentProvider.id,
-      modelId: providerStore.currentModel.id,
-      system: systemSections.join('\n\n'),
-      messages: [{ role: 'user', content: prompt }],
-      stream: true,
-      maxTokens: providerStore.currentModel.maxTokens || 4096,
-      ...(providerStore.currentModel.supportsThinking ? { thinking: { type: 'enabled' as const, budgetTokens: 2000 } } : {}),
-      runtime: {
-        cwd: typeof data.cwd === 'string' && data.cwd.trim() ? data.cwd.trim() : undefined,
-        additionalDirectories,
-        permissionMode: typeof data.permissionMode === 'string' ? data.permissionMode : 'dontAsk',
-        extraInstructions: typeof data.extraInstructions === 'string' ? data.extraInstructions : undefined,
-        loadProjectClaudeMd: data.loadProjectClaudeMd !== false,
-        loadRuleMd: data.loadRuleMd !== false,
-        enabledPlugins: this.runtimeConfig?.enabledPlugins,
-      },
-    })
-
-    await completionFinished
-
-    return {
-      content: assistantText.trim(),
-      toolCalls,
-      usage,
-      prompt,
-      systemPrompt: typeof data.systemPrompt === 'string' ? data.systemPrompt : '',
-      runtime: {
-        cwd: typeof data.cwd === 'string' ? data.cwd : undefined,
-        additionalDirectories,
-        permissionMode: typeof data.permissionMode === 'string' ? data.permissionMode : undefined,
-        loadProjectClaudeMd: data.loadProjectClaudeMd !== false,
-        loadRuleMd: data.loadRuleMd !== false,
-        extraInstructions: typeof data.extraInstructions === 'string' ? data.extraInstructions : undefined,
-      },
-    }
+    return executeAgentRunTask(data, this.runtimeConfig)
   }
 
   private executeSwitch(conditions: ConditionItem[]): any {
@@ -645,7 +612,38 @@ export class WorkflowEngine {
   }
 
   private emitLogUpdate(): void {
-    this.onLogUpdate?.(this.currentLog)
+    const log = this.currentLog
+    this.onLogUpdate?.(log)
+    this.emitEvent('execution:log', {
+      executionId: this.executionId,
+      workflowId: this.runtimeConfig?.workflowId || '',
+      timestamp: Date.now(),
+      log,
+    })
+  }
+
+  private emitContextUpdate(): void {
+    this.emitEvent('execution:context', {
+      executionId: this.executionId,
+      workflowId: this.runtimeConfig?.workflowId || '',
+      timestamp: Date.now(),
+      context: this.currentContext,
+    })
+  }
+
+  private emitExecutionError(): void {
+    this.emitEvent('workflow:error', {
+      executionId: this.executionId,
+      workflowId: this.runtimeConfig?.workflowId || '',
+      timestamp: Date.now(),
+      status: 'error',
+      error: createErrorShape('WORKFLOW_ERROR', this.lastErrorMessage || '工作流执行失败'),
+      log: this.currentLog,
+    })
+  }
+
+  private emitEvent<Channel extends ExecutionEventChannel>(channel: Channel, payload: ExecutionEventMap[Channel]): void {
+    this.onEvent?.(channel, payload)
   }
 
   private sleep(ms: number): Promise<void> {

@@ -4,6 +4,10 @@ import type { Logger } from '../app/logger'
 import type { BackendConfig } from '../app/config'
 import type { PluginInfo, PluginMeta, AgentToolDefinition } from '../../shared/plugin-types'
 import type { NodeTypeDefinition } from '../../shared/workflow-types'
+import { createBuiltinFetchApi } from './builtin-fetch-api'
+import { createBuiltinFsApi } from './builtin-fs-api'
+
+type WorkflowNodeHandler = (ctx: any, args: Record<string, any>) => Promise<any>
 
 interface LoadedPlugin {
   dir: string
@@ -11,6 +15,7 @@ interface LoadedPlugin {
   enabled: boolean
   workflowNodes: NodeTypeDefinition[]
   agentTools: AgentToolDefinition[]
+  workflowHandlers: Map<string, WorkflowNodeHandler>
 }
 
 export class BackendPluginRegistry {
@@ -126,6 +131,50 @@ export class BackendPluginRegistry {
     return { success: true }
   }
 
+  canExecuteNode(nodeType: string): boolean {
+    return this.getPluginByNodeType(nodeType)?.workflowHandlers.has(nodeType) ?? false
+  }
+
+  requiresMainProcessBridge(nodeType: string): boolean {
+    const plugin = this.getPluginByNodeType(nodeType)
+    if (!plugin) return false
+    return plugin.dir.includes('window-manager')
+  }
+
+  async executeWorkflowNode(
+    nodeType: string,
+    args: Record<string, any>,
+    hooks: {
+      logger: {
+        info(message: string): void
+        warning(message: string): void
+        error(message: string): void
+      }
+    },
+  ): Promise<any> {
+    const plugin = this.getPluginByNodeType(nodeType)
+    if (!plugin || !plugin.enabled) {
+      throw new Error(`插件节点未启用或不存在: ${nodeType}`)
+    }
+
+    const handler = plugin.workflowHandlers.get(nodeType)
+    if (!handler) {
+      throw new Error(`插件节点无可执行 handler: ${nodeType}`)
+    }
+
+    const api = this.createPluginApi(plugin)
+    return handler(
+      {
+        api,
+        nodeId: '',
+        nodeLabel: nodeType,
+        upstream: {},
+        logger: hooks.logger,
+      },
+      args,
+    )
+  }
+
   private loadPlugin(pluginDir: string): void {
     const infoPath = join(pluginDir, 'info.json')
     if (!existsSync(infoPath)) return
@@ -136,7 +185,7 @@ export class BackendPluginRegistry {
       throw new Error(`Invalid info.json in ${pluginDir}`)
     }
 
-    const workflowNodes = this.loadWorkflowNodes(pluginDir)
+    const { nodes: workflowNodes, handlers: workflowHandlers } = this.loadWorkflowNodes(pluginDir)
     const agentTools = this.loadAgentTools(pluginDir)
 
     this.plugins.set(info.id, {
@@ -145,21 +194,27 @@ export class BackendPluginRegistry {
       enabled: !this.disabledIds.has(info.id),
       workflowNodes,
       agentTools,
+      workflowHandlers,
     })
   }
 
-  private loadWorkflowNodes(pluginDir: string): NodeTypeDefinition[] {
+  private loadWorkflowNodes(pluginDir: string): { nodes: NodeTypeDefinition[]; handlers: Map<string, WorkflowNodeHandler> } {
     const workflowPath = join(pluginDir, 'workflow.js')
-    if (!existsSync(workflowPath)) return []
+    if (!existsSync(workflowPath)) return { nodes: [], handlers: new Map() }
 
     const workflowModule = require(workflowPath) as { nodes?: Array<Record<string, unknown>> }
-    return (workflowModule.nodes || []).map((node) => {
+    const handlers = new Map<string, WorkflowNodeHandler>()
+    const nodes = (workflowModule.nodes || []).map((node) => {
       const { handler: _handler, ...serializable } = node
+      if (typeof _handler === 'function' && typeof serializable.type === 'string') {
+        handlers.set(serializable.type, _handler as WorkflowNodeHandler)
+      }
       return {
         properties: [],
         ...serializable,
       } as unknown as NodeTypeDefinition
     })
+    return { nodes, handlers }
   }
 
   private loadAgentTools(pluginDir: string): AgentToolDefinition[] {
@@ -232,5 +287,54 @@ export class BackendPluginRegistry {
 
   private ensureDir(dir: string): void {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+  }
+
+  private getPluginByNodeType(nodeType: string): LoadedPlugin | undefined {
+    for (const plugin of this.plugins.values()) {
+      if (plugin.workflowHandlers.has(nodeType)) return plugin
+    }
+    return undefined
+  }
+
+  private createPluginApi(plugin: LoadedPlugin): Record<string, any> {
+    const fetchApi = createBuiltinFetchApi()
+    const fsApi = createBuiltinFsApi()
+
+    // Window-manager and other Electron-local APIs stay unsupported until interaction/main-process bridge lands.
+    if (plugin.dir.includes('window-manager')) {
+      return {
+        ...fetchApi,
+        ...fsApi,
+        createWindow() {
+          throw new Error('该插件节点依赖 Electron 本地窗口能力，当前 backend 版本尚未支持')
+        },
+        closeWindow() {
+          throw new Error('该插件节点依赖 Electron 本地窗口能力，当前 backend 版本尚未支持')
+        },
+        navigateWindow() {
+          throw new Error('该插件节点依赖 Electron 本地窗口能力，当前 backend 版本尚未支持')
+        },
+        focusWindow() {
+          throw new Error('该插件节点依赖 Electron 本地窗口能力，当前 backend 版本尚未支持')
+        },
+        screenshotWindow() {
+          throw new Error('该插件节点依赖 Electron 本地窗口能力，当前 backend 版本尚未支持')
+        },
+        getWindowDetail() {
+          throw new Error('该插件节点依赖 Electron 本地窗口能力，当前 backend 版本尚未支持')
+        },
+        listWindows() {
+          throw new Error('该插件节点依赖 Electron 本地窗口能力，当前 backend 版本尚未支持')
+        },
+        injectJS() {
+          throw new Error('该插件节点依赖 Electron 本地窗口能力，当前 backend 版本尚未支持')
+        },
+      }
+    }
+
+    return {
+      ...fetchApi,
+      ...fsApi,
+    }
   }
 }
