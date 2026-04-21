@@ -259,11 +259,7 @@ onMounted(() => {
   cleanupFileUpdates = store.listenForFileUpdates()
   cleanupWorkflowToolRequests = store.listenForWorkflowToolRequests()
   if (!store.currentWorkflow) {
-    if (route.query.open === '1' || route.query.create === '1') {
-      openWorkflowList(route.query.create === '1')
-    } else {
-      router.replace('/home')
-    }
+    openWorkflowList(route.query.create === '1')
   }
   autoSaveTimer = setInterval(() => {
     if (store.isDirty && store.currentWorkflow) {
