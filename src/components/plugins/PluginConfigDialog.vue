@@ -34,6 +34,8 @@ const props = defineProps<{
   pluginId: string
   pluginName: string
   config: PluginConfigField[]
+  schemeName?: string    // custom scheme name (empty/undefined = default/global)
+  workflowId?: string    // needed for scheme-based save
 }>()
 
 const emit = defineEmits<{
@@ -48,8 +50,15 @@ const errorMessage = ref('')
 watch(() => props.open, async (isOpen) => {
   if (!isOpen || !props.pluginId) return
   errorMessage.value = ''
-  // IPC get-config 已返回合并后的值（默认值 + 用户值），直接使用
-  formValues.value = await pluginStore.getPluginConfig(props.pluginId)
+  if (props.schemeName && props.workflowId) {
+    try {
+      formValues.value = await pluginStore.readPluginScheme(props.workflowId, props.pluginId, props.schemeName)
+    } catch {
+      formValues.value = await pluginStore.getPluginConfig(props.pluginId)
+    }
+  } else {
+    formValues.value = await pluginStore.getPluginConfig(props.pluginId)
+  }
 })
 
 /** Validate object type fields are valid JSON */
@@ -78,12 +87,18 @@ async function handleSave() {
   saving.value = true
   errorMessage.value = ''
   try {
-    const result = await pluginStore.savePluginConfig(props.pluginId, { ...formValues.value })
-    if (!result.success) {
-      errorMessage.value = result.error || '保存失败'
-      return
+    if (props.schemeName && props.workflowId) {
+      await pluginStore.savePluginScheme(props.workflowId, props.pluginId, props.schemeName, { ...formValues.value })
+    } else {
+      const result = await pluginStore.savePluginConfig(props.pluginId, { ...formValues.value })
+      if (!result.success) {
+        errorMessage.value = result.error || '保存失败'
+        return
+      }
     }
     emit('update:open', false)
+  } catch (e: any) {
+    errorMessage.value = e?.message || '保存失败'
   } finally {
     saving.value = false
   }
@@ -94,7 +109,7 @@ async function handleSave() {
   <Dialog :open="open" @update:open="emit('update:open', $event)">
     <DialogContent class="sm:max-w-md">
       <DialogHeader>
-        <DialogTitle>{{ pluginName }} - 设置</DialogTitle>
+        <DialogTitle>{{ pluginName }} - 设置{{ schemeName ? ` (${schemeName})` : '' }}</DialogTitle>
         <DialogDescription>配置插件的参数</DialogDescription>
       </DialogHeader>
 
