@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { allNodeDefinitions, searchNodeDefinitions, registerPluginNodeDefinitions, type NodeTypeDefinition } from '@/lib/workflow/nodeRegistry'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
 import { usePluginStore } from '@/stores/plugin'
+import { useWorkflowStore } from '@/stores/workflow'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -11,7 +12,28 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import { Search, Plus, Settings } from 'lucide-vue-next'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
+  Command,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Search, Plus, Trash2, ChevronDown, Settings } from 'lucide-vue-next'
 import PluginConfigDialog from '@/components/plugins/PluginConfigDialog.vue'
 
 const props = defineProps<{
@@ -23,12 +45,19 @@ const emit = defineEmits<{
 }>()
 
 const pluginStore = usePluginStore()
+const workflowStore = useWorkflowStore()
 const pluginNodes = ref<any[]>([])
 const categoryPluginMap = ref<Record<string, string>>({})
 const configPluginId = ref<string | null>(null)
 const configPluginName = ref('')
 const configFields = ref<any[]>([])
 const configDialogOpen = ref(false)
+const schemeMap = ref<Record<string, string[]>>({})
+const newSchemeDialogOpen = ref(false)
+const newSchemeName = ref('')
+const newSchemePluginId = ref<string | null>(null)
+const configSchemeName = ref<string | undefined>(undefined)
+const configWorkflowId = ref<string | undefined>(undefined)
 
 const searchQuery = ref('')
 const openCategories = ref<Record<string, boolean>>({})
@@ -68,10 +97,75 @@ function openPluginConfig(pluginId: string) {
   configPluginId.value = plugin.id
   configPluginName.value = plugin.name
   configFields.value = plugin.config
+  configSchemeName.value = getSelectedScheme(pluginId) || undefined
+  configWorkflowId.value = workflowStore.currentWorkflow?.id
   configDialogOpen.value = true
 }
 
-watch(() => props.enabledPlugins, loadPluginNodes, { immediate: true, deep: true })
+async function loadSchemes() {
+  if (!workflowStore.currentWorkflow?.id) return
+  const map: Record<string, string[]> = {}
+  for (const pluginId of Object.values(categoryPluginMap.value)) {
+    if (!map[pluginId]) {
+      try {
+        map[pluginId] = await pluginStore.listPluginSchemes(workflowStore.currentWorkflow.id, pluginId)
+      } catch {
+        map[pluginId] = []
+      }
+    }
+  }
+  schemeMap.value = map
+}
+
+function getSelectedScheme(pluginId: string): string {
+  return workflowStore.currentWorkflow?.pluginConfigSchemes?.[pluginId] || ''
+}
+
+async function selectScheme(pluginId: string, schemeName: string) {
+  if (!workflowStore.currentWorkflow) return
+  const schemes = { ...(workflowStore.currentWorkflow.pluginConfigSchemes || {}) }
+  schemes[pluginId] = schemeName
+  await workflowStore.saveWorkflow({
+    ...workflowStore.currentWorkflow,
+    pluginConfigSchemes: schemes,
+  })
+}
+
+function openNewSchemeDialog(pluginId: string) {
+  newSchemePluginId.value = pluginId
+  newSchemeName.value = ''
+  newSchemeDialogOpen.value = true
+}
+
+async function createScheme() {
+  if (!newSchemeName.value.trim() || !newSchemePluginId.value || !workflowStore.currentWorkflow?.id) return
+  const name = newSchemeName.value.trim()
+  try {
+    await pluginStore.createPluginScheme(workflowStore.currentWorkflow.id, newSchemePluginId.value, name)
+    await loadSchemes()
+    await selectScheme(newSchemePluginId.value, name)
+    newSchemeDialogOpen.value = false
+  } catch (e: any) {
+    console.error('[NodeSidebar] 创建方案失败:', e)
+  }
+}
+
+async function deleteCurrentScheme(pluginId: string) {
+  const schemeName = getSelectedScheme(pluginId)
+  if (!schemeName || !workflowStore.currentWorkflow?.id) return
+  try {
+    await pluginStore.deletePluginScheme(workflowStore.currentWorkflow.id, pluginId, schemeName)
+    await selectScheme(pluginId, '')
+    await loadSchemes()
+  } catch (e: any) {
+    console.error('[NodeSidebar] 删除方案失败:', e)
+  }
+}
+
+watch(() => props.enabledPlugins, async () => {
+  await loadPluginNodes()
+  await loadSchemes()
+}, { immediate: true, deep: true })
 
 const categories = computed(() => {
   const base = searchQuery.value.trim()
@@ -122,17 +216,67 @@ function getIcon(name: string) {
             @update:open="openCategories[category] = $event"
           >
             <CollapsibleTrigger class="flex items-center w-full px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground rounded hover:bg-muted/50">
-              <span>{{ category }}</span>
+              <span class="truncate">{{ category }}</span>
               <span class="ml-auto flex items-center gap-1">
-                <Button
-                  v-if="categoryPluginMap[category as string]"
-                  variant="ghost"
-                  size="icon"
-                  class="h-4 w-4"
-                  @click.stop="openPluginConfig(categoryPluginMap[category as string])"
-                >
-                  <Settings class="h-3 w-3" />
-                </Button>
+                <template v-if="categoryPluginMap[category as string]">
+                  <Popover>
+                    <PopoverTrigger as-child>
+                      <Button variant="ghost" size="sm" class="h-5 px-1.5 text-[10px] gap-0.5">
+                        <span class="truncate max-w-[60px]">
+                          {{ getSelectedScheme(categoryPluginMap[category as string]) || '默认配置' }}
+                        </span>
+                        <ChevronDown class="h-2.5 w-2.5 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent class="w-44 p-0" align="end">
+                      <Command>
+                        <CommandList>
+                          <CommandGroup>
+                            <CommandItem
+                              value="__default__"
+                              @select="selectScheme(categoryPluginMap[category as string], '')"
+                              class="text-xs"
+                            >
+                              默认配置
+                            </CommandItem>
+                            <CommandItem
+                              v-for="name in (schemeMap[categoryPluginMap[category as string]] || [])"
+                              :key="name"
+                              :value="name"
+                              @select="selectScheme(categoryPluginMap[category as string], name)"
+                              class="text-xs"
+                            >
+                              {{ name }}
+                            </CommandItem>
+                          </CommandGroup>
+                          <CommandGroup>
+                            <CommandItem
+                              @select="openNewSchemeDialog(categoryPluginMap[category as string])"
+                              class="text-xs text-primary"
+                            >
+                              <Plus class="h-3 w-3 mr-1" /> 新增方案
+                            </CommandItem>
+                            <CommandItem
+                              v-if="getSelectedScheme(categoryPluginMap[category as string])"
+                              @select="deleteCurrentScheme(categoryPluginMap[category as string])"
+                              class="text-xs text-destructive"
+                            >
+                              <Trash2 class="h-3 w-3 mr-1" /> 删除当前方案
+                            </CommandItem>
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="h-4 w-4"
+                    @click.stop="openPluginConfig(categoryPluginMap[category as string])"
+                  >
+                    <Settings class="h-3 w-3" />
+                  </Button>
+                </template>
                 <span class="text-[10px]">{{ nodes.length }}</span>
               </span>
             </CollapsibleTrigger>
@@ -170,11 +314,28 @@ function getIcon(name: string) {
     </div>
   </div>
 
+  <!-- New Scheme Dialog -->
+  <AlertDialog :open="newSchemeDialogOpen" @update:open="newSchemeDialogOpen = $event">
+    <AlertDialogContent class="sm:max-w-sm">
+      <AlertDialogHeader>
+        <AlertDialogTitle>新增配置方案</AlertDialogTitle>
+        <AlertDialogDescription>输入方案名称，将基于插件默认配置创建新方案。</AlertDialogDescription>
+      </AlertDialogHeader>
+      <Input v-model="newSchemeName" placeholder="方案名称" class="text-sm" />
+      <AlertDialogFooter>
+        <AlertDialogCancel @click="newSchemeDialogOpen = false">取消</AlertDialogCancel>
+        <AlertDialogAction :disabled="!newSchemeName.trim()" @click="createScheme">创建</AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
+
   <PluginConfigDialog
     v-if="configPluginId"
     v-model:open="configDialogOpen"
     :plugin-id="configPluginId"
     :plugin-name="configPluginName"
     :config="configFields"
+    :scheme-name="configSchemeName"
+    :workflow-id="configWorkflowId"
   />
 </template>
