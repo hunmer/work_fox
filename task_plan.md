@@ -32,7 +32,7 @@
 - `Phase 7` 进行中：backend execution runner 已落地，Node 可闭环节点与部分需本地桥接节点已接入；execution snapshot/backlog recovery 已补齐，仍需后续浏览器节点 capability 清单化
 - `Phase 8` 已完成：interaction session manager、renderer interaction handler、`agent_run` / `window-manager` / `delay` bridge、reconnect resend、execution recovery 与前端可观测状态已落地
 - `Phase 9` 进行中：插件 `entries`、workflow/tools/api loader contract 与 runtime type 已开始成为 shared source-of-truth，Electron `plugin manager` 已拆为 catalog/runtime host/orchestrator，local bridge workflow node capability 已从 renderer/Electron 硬编码中抽离
-- `Phase 10` 进行中：`workflow store` 已改为消费 execution events，并在 backend flag 下支持重连后的 execution snapshot recovery
+- `Phase 10` 已完成：`workflow store` 已切到 backend-only execution path，execution recovery/重连刷新生效，已迁移 domain 的旧 IPC 与旧本地执行 fallback 已清理
 
 ## Implementation Phases
 
@@ -485,9 +485,10 @@ Status: `completed`
 当前进展：
 - [src/stores/workflow.ts](/Users/Zhuanz/Documents/work_fox/src/stores/workflow.ts) 的 execution state 已开始统一从 execution events 更新
 - 已预埋 backend execution event 订阅入口，后续 backend `workflow:execute/pause/resume/stop` 落地后可复用同一状态机
-- backend `workflow:execute/pause/resume/stop` 已落地，backend flag 下可驱动受限节点集的执行
-- workflow store 已不再持有 store 级 `WorkflowEngine` 实例；本地执行 fallback 仅保留为 `createExecutionActions(...)` 内部的短生命周期 `localEngine`
-- backend 模式下已在 `ws:connected/ws:reconnected` 后主动刷新列表数据并触发 execution recovery
+- backend `workflow:execute/pause/resume/stop` 已落地，workflow store 执行链路现只走 backend
+- workflow store 已不再持有 store 级 `WorkflowEngine` 实例，执行控制侧的本地 fallback 已删除；仅单节点调试仍保留独立本地 `WorkflowEngine`
+- 已迁移 domain 对应的 preload/Electron 旧 IPC 已删除，仅保留 import/export 与本地桌面能力相关 IPC
+- 已在 `ws:connected/ws:reconnected` 后主动刷新列表数据并触发 execution recovery
 - 已修正首次 connect 重复触发 `ws:reconnected` 的问题，避免初次进入页面时重复 recovery / reload
 - [src/lib/agent/workflow-renderer-tools.ts](/Users/Zhuanz/Documents/work_fox/src/lib/agent/workflow-renderer-tools.ts) 已切到真实 `executionId` + 终态等待 / 异步轮询，不再假设 `startExecution()` 立即返回最终 log
 - `WorkflowEngine.currentLog` 与执行历史保留真实 `executionId`，同步/异步工具查询与 backend recovery/persisted logs 已能对齐

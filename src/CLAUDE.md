@@ -206,13 +206,11 @@ interface WorkflowNode {
 
 ## Backend Workflow Mode
 
-- 默认迁移开关：
-  - `localStorage['workfox.useWorkflowBackend'] = '1'`
-  - 或 `VITE_USE_WORKFLOW_BACKEND=1`
-- backend 模式下：
+- backend workflow/domain 已为默认主路径：
   - CRUD / version / execution log / operation history 走 backend adapter
   - execution state 来自 WS execution events 和 recovery
   - `agent_run` / 本地 bridge 节点通过 interaction handler 回到 Electron
+  - 已迁移 domain 的旧 preload IPC 与 workflow 本地执行 fallback 已删除
 
 ## 测试与质量
 
@@ -231,7 +229,7 @@ pnpm build
 A: `createChatStore(scope)` 根据 scope（'agent' 或 'workflow'）创建独立的 store 实例，支持多个 Chat 面板各自维护独立的会话和消息。
 
 **Q: 工作流引擎现在在哪里执行？**
-A: 迁移后的主路径由 backend execution manager 执行；renderer 里的 `WorkflowEngine` 只保留为 local fallback 和单节点调试基础。
+A: 迁移后的主路径由 backend execution manager 执行；renderer 里的 `WorkflowEngine` 仅保留给单节点调试与少量本地辅助逻辑，不再承担工作流主执行路径。
 
 **Q: UI 组件库是怎么组织的？**
 A: `src/components/ui/` 采用 shadcn-vue 风格，每个组件一个独立目录，包含 Vue 组件和 `index.ts` 导出。

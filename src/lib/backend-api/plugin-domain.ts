@@ -1,9 +1,7 @@
 import { pluginBackendApi } from './plugin'
-import { useWorkflowBackend } from './runtime'
 
 export function createPluginDomainApi() {
   const localPluginApi = (window as any).api.plugin
-  if (!useWorkflowBackend()) return localPluginApi
 
   return {
     list: pluginBackendApi.list,

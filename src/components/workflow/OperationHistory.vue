@@ -21,11 +21,10 @@ async function restoreTo(index: number) {
 }
 
 function clearHistory() {
-  const workflowId = store.currentWorkflow?.id
   store.undoStack.splice(0)
   store.redoStack.splice(0)
   store.operationLog.splice(0)
-  if (workflowId) (window as any).api.operationHistory.clear(workflowId)
+  void store.clearOperationHistory()
 }
 </script>
 

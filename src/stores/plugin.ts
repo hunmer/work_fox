@@ -18,7 +18,10 @@ export const usePluginStore = defineStore('plugin', () => {
   async function init(): Promise<void> {
     isLoading.value = true
     try {
-      plugins.value = await pluginApi().list()
+      plugins.value = (await pluginApi().list()).map((plugin) => ({
+        ...plugin,
+        iconPath: plugin.iconPath || '',
+      }))
     } finally {
       isLoading.value = false
     }

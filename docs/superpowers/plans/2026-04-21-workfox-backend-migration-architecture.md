@@ -373,9 +373,9 @@ backend: {
 
 短期兼容：
 
-- 原 workflow IPC 不立刻删除
-- 通过 feature flag 决定 store 使用 IPC 还是 WS
-- Backend ready 失败时可以回退 IPC 路径，直到迁移完成
+- 本节为迁移期设计记录；当前仓库状态已不再按这里的“IPC/WS 双栈 + feature flag 回退”运行
+- 已迁移 workflow/plugin domain 默认走 WS/backend 主路径
+- 原 workflow CRUD/version/executionLog/operationHistory 与 plugin 查询/配置类旧 IPC 已删除
 
 ## 8. 构建计划
 
@@ -454,7 +454,7 @@ backend: {
 | Endpoint 获取 | Preload 暴露 backend endpoint/status |
 | 数据目录 | Electron 获取 `userData` 后通过环境变量传给 backend |
 | 插件目录 | Electron 根据 dev/packaged 解析后传给 backend |
-| 兼容策略 | IPC/WS 双栈短期共存，feature flag 控制 |
+| 兼容策略 | 当前以 backend/WS 为默认单主路径；仅 import/export 与桌面本地能力保留 Electron IPC |
 | Electron API | 禁止在 `backend/` 引入 |
 | Agent SDK | 保留 Electron Main，本地交互通过 interaction 协议桥接 |
 

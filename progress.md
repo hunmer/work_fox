@@ -465,3 +465,49 @@
 ### Next Recommended Step
 
 - 若继续推进 `Phase 10`，优先把 `ExecutionBar.vue`、`CustomNodeWrapper.vue`、`workflow-renderer-tools.ts` 对“同步返回 executionLog”的旧假设清掉，并决定是否彻底移除 backend 模式下的本地执行 fallback。
+
+### Session 18
+
+- 直接清理已迁移后的旧 IPC / 旧本地执行死代码。
+- 修改 [src/lib/backend-api/workflow-domain.ts](/Users/Zhuanz/Documents/work_fox/src/lib/backend-api/workflow-domain.ts) 与 [src/lib/backend-api/plugin-domain.ts](/Users/Zhuanz/Documents/work_fox/src/lib/backend-api/plugin-domain.ts)：
+  - 移除 `useWorkflowBackend` feature flag 分支
+  - 已迁移 domain 统一改为只走 backend adapter
+- 修改 [src/stores/workflow.ts](/Users/Zhuanz/Documents/work_fox/src/stores/workflow.ts)：
+  - 删除 execution control 的本地 `localEngine` fallback
+  - `start/pause/resume/stop` 统一只走 backend
+  - 增加 `clearOperationHistory()`
+- 修改 [src/lib/workflow/engine.ts](/Users/Zhuanz/Documents/work_fox/src/lib/workflow/engine.ts)：
+  - 单节点调试加载插件配置改走 backend adapter
+  - 避免继续依赖已删除的 preload workflow/plugin 配置 IPC
+- 修改 [preload/index.ts](/Users/Zhuanz/Documents/work_fox/preload/index.ts)：
+  - 删除 workflow/workflowFolder/workflowVersion/executionLog/operationHistory 与 plugin 查询/配置类旧 IPC 暴露
+- 修改 Electron Main / IPC：
+  - [electron/main.ts](/Users/Zhuanz/Documents/work_fox/electron/main.ts) 不再注册 workflowVersion/executionLog/operationHistory 旧 IPC
+  - [electron/ipc/workflow.ts](/Users/Zhuanz/Documents/work_fox/electron/ipc/workflow.ts) 仅保留 import/export
+  - [electron/ipc/plugin.ts](/Users/Zhuanz/Documents/work_fox/electron/ipc/plugin.ts) 删除已迁移 plugin domain 查询/配置旧 IPC
+- 删除死代码文件：
+  - [electron/ipc/workflow-version.ts](/Users/Zhuanz/Documents/work_fox/electron/ipc/workflow-version.ts)
+  - [electron/ipc/execution-log.ts](/Users/Zhuanz/Documents/work_fox/electron/ipc/execution-log.ts)
+  - [electron/ipc/operation-history.ts](/Users/Zhuanz/Documents/work_fox/electron/ipc/operation-history.ts)
+  - [electron/services/workflow-version.ts](/Users/Zhuanz/Documents/work_fox/electron/services/workflow-version.ts)
+  - [electron/services/execution-log.ts](/Users/Zhuanz/Documents/work_fox/electron/services/execution-log.ts)
+  - [electron/services/operation-history.ts](/Users/Zhuanz/Documents/work_fox/electron/services/operation-history.ts)
+- 验证：
+  - `pnpm build:backend` 通过
+  - `pnpm exec tsc -p tsconfig.web.json --noEmit` 通过
+  - `pnpm build` 通过
+
+### Next Recommended Step
+
+- 若继续收尾，可同步更新架构文档与设计稿里关于 backend feature flag、旧 preload IPC 面的过时说明，避免后续继续按已删除路径开发。
+
+### Session 19
+
+- 继续清理第二层残留文档，优先修正仍会误导当前开发的说明，而不重写历史计划稿。
+- 修改 [src/CLAUDE.md](/Users/Zhuanz/Documents/work_fox/src/CLAUDE.md)：
+  - 将 `WorkflowEngine` 描述从“local fallback + 单节点调试”修正为“仅保留单节点调试与少量本地辅助逻辑”
+- 修改 [docs/superpowers/plans/2026-04-21-workfox-backend-migration-architecture.md](/Users/Zhuanz/Documents/work_fox/docs/superpowers/plans/2026-04-21-workfox-backend-migration-architecture.md)：
+  - 显式标注其中的 IPC/WS 双栈与 feature flag 回退属于迁移期设计记录
+  - 将兼容策略改为当前真实状态：backend/WS 单主路径，Electron IPC 仅保留 import/export 与桌面本地能力
+- 修改 [findings.md](/Users/Zhuanz/Documents/work_fox/findings.md)：
+  - 把 Phase 5/6 中关于 backend feature flag 的表述更新为“迁移期曾存在，当前已移除”

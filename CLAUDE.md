@@ -163,12 +163,11 @@ pnpm pack
 - workflow CRUD、folder、version、execution log、operation history 已可通过 backend WS 通道工作
 - workflow execution 已默认按 backend-first 设计组织，前端 store 通过 execution events 和 recovery 驱动执行态
 - `agent_run`、`window-manager`、`delay` 这类本地能力通过 interaction bridge 回到 Electron 执行
-- renderer 仍保留少量 local fallback，用于兼容未完全迁移场景，不应再作为默认主路径扩展
+- renderer 不再保留已迁移 domain 的旧 IPC / 本地执行 fallback；仅单节点调试和明确的桌面本地能力继续留在 Electron
 
 ### Feature Flag
 
-- 持久开关：`localStorage['workfox.useWorkflowBackend'] = '1'`
-- 构建期开关：`VITE_USE_WORKFLOW_BACKEND=1`
+- backend workflow/domain 已改为默认主路径，旧 `workfox.useWorkflowBackend` 开关已移除
 
 ### Verification Gate
 

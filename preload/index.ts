@@ -88,52 +88,8 @@ const api = {
   },
 
   workflow: {
-    list: (folderId?: string | null): Promise<any[]> => ipcRenderer.invoke('workflow:list', folderId),
-    get: (id: string): Promise<any> => ipcRenderer.invoke('workflow:get', id),
-    create: (data: any): Promise<any> => ipcRenderer.invoke('workflow:create', data),
-    update: (id: string, data: any): Promise<void> => ipcRenderer.invoke('workflow:update', id, data),
-    delete: (id: string): Promise<void> => ipcRenderer.invoke('workflow:delete', id),
     importOpenFile: (): Promise<any> => ipcRenderer.invoke('workflow:importOpenFile'),
     exportSaveFile: (id: string): Promise<void> => ipcRenderer.invoke('workflow:exportSaveFile', id),
-    listPluginSchemes: (workflowId: string, pluginId: string): Promise<string[]> =>
-      ipcRenderer.invoke('workflow:list-plugin-schemes', { workflowId, pluginId }),
-    readPluginScheme: (workflowId: string, pluginId: string, schemeName: string): Promise<Record<string, string>> =>
-      ipcRenderer.invoke('workflow:read-plugin-scheme', { workflowId, pluginId, schemeName }),
-    createPluginScheme: (workflowId: string, pluginId: string, schemeName: string): Promise<void> =>
-      ipcRenderer.invoke('workflow:create-plugin-scheme', { workflowId, pluginId, schemeName }),
-    savePluginScheme: (workflowId: string, pluginId: string, schemeName: string, data: Record<string, string>): Promise<void> =>
-      ipcRenderer.invoke('workflow:save-plugin-scheme', { workflowId, pluginId, schemeName, data }),
-    deletePluginScheme: (workflowId: string, pluginId: string, schemeName: string): Promise<void> =>
-      ipcRenderer.invoke('workflow:delete-plugin-scheme', { workflowId, pluginId, schemeName }),
-  },
-
-  workflowFolder: {
-    list: (): Promise<any[]> => ipcRenderer.invoke('workflowFolder:list'),
-    create: (data: any): Promise<any> => ipcRenderer.invoke('workflowFolder:create', data),
-    update: (id: string, data: any): Promise<void> => ipcRenderer.invoke('workflowFolder:update', id, data),
-    delete: (id: string): Promise<void> => ipcRenderer.invoke('workflowFolder:delete', id),
-  },
-
-  workflowVersion: {
-    list: (workflowId: string): Promise<any[]> => ipcRenderer.invoke('workflowVersion:list', workflowId),
-    add: (workflowId: string, name: string, nodes: any[], edges: any[]): Promise<any> => ipcRenderer.invoke('workflowVersion:add', workflowId, name, nodes, edges),
-    get: (workflowId: string, versionId: string): Promise<any> => ipcRenderer.invoke('workflowVersion:get', workflowId, versionId),
-    delete: (workflowId: string, versionId: string): Promise<void> => ipcRenderer.invoke('workflowVersion:delete', workflowId, versionId),
-    clear: (workflowId: string): Promise<void> => ipcRenderer.invoke('workflowVersion:clear', workflowId),
-    nextName: (workflowId: string): Promise<string> => ipcRenderer.invoke('workflowVersion:nextName', workflowId),
-  },
-
-  executionLog: {
-    list: (workflowId: string): Promise<any[]> => ipcRenderer.invoke('executionLog:list', workflowId),
-    save: (workflowId: string, log: any): Promise<any> => ipcRenderer.invoke('executionLog:save', workflowId, log),
-    delete: (workflowId: string, id: string): Promise<void> => ipcRenderer.invoke('executionLog:delete', workflowId, id),
-    clear: (workflowId: string): Promise<void> => ipcRenderer.invoke('executionLog:clear', workflowId),
-  },
-
-  operationHistory: {
-    load: (workflowId: string): Promise<any[]> => ipcRenderer.invoke('operationHistory:load', workflowId),
-    save: (workflowId: string, entries: any[]): Promise<void> => ipcRenderer.invoke('operationHistory:save', workflowId, entries),
-    clear: (workflowId: string): Promise<void> => ipcRenderer.invoke('operationHistory:clear', workflowId),
   },
 
   shortcut: {
@@ -156,13 +112,6 @@ const api = {
     openFolder: () => ipcRenderer.invoke('plugin:open-folder'),
     install: (url: string) => ipcRenderer.invoke('plugin:install', url),
     uninstall: (id: string) => ipcRenderer.invoke('plugin:uninstall', id),
-    getWorkflowNodes: (pluginId: string) => ipcRenderer.invoke('plugin:get-workflow-nodes', pluginId),
-    listWorkflowPlugins: () => ipcRenderer.invoke('plugin:list-workflow-plugins'),
-    getAgentTools: (pluginIds: string[]) => ipcRenderer.invoke('plugin:get-agent-tools', pluginIds),
-    getConfig: (pluginId: string): Promise<Record<string, string>> =>
-      ipcRenderer.invoke('plugin:get-config', pluginId),
-    saveConfig: (pluginId: string, data: Record<string, string>): Promise<{ success: boolean; error?: string }> =>
-      ipcRenderer.invoke('plugin:save-config', pluginId, data),
   },
 
   agentSettings: {

@@ -6,7 +6,6 @@ import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { executeRendererWorkflowTool } from '@/lib/agent/workflow-renderer-tools'
 import { ensureWorkflowInteractionHandler } from '@/lib/backend-api/interaction'
 import { createWorkflowDomainApi } from '@/lib/backend-api/workflow-domain'
-import { useWorkflowBackend } from '@/lib/backend-api/runtime'
 import { wsBridge } from '@/lib/ws-bridge'
 import type { WorkflowToolExecuteRequest } from '../../preload'
 import { useAgentSettingsStore, createWorkflowAgentConfigFromGlobal } from './agent-settings'
@@ -155,10 +154,17 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () =>
     } catch { /* ignore */ }
   }
 
+  async function clearHistory(): Promise<void> {
+    const workflowId = currentWorkflow.value?.id
+    if (!workflowId) return
+    await api().operationHistory.clear(workflowId)
+  }
+
   return {
     undoStack, redoStack, operationLog, pushUndo, undo, redo, restoreToStep,
     reset: () => { undoStack.value = []; redoStack.value = []; operationLog.value = [] },
     loadOperationHistory: loadFromDisk,
+    clearOperationHistory: clearHistory,
     canUndo, canRedo,
   }
 }
@@ -456,7 +462,6 @@ function createExecutionActions(
   loadData: () => Promise<void>,
 ) {
   let currentExecutionId: string | null = null
-  let localEngine: WorkflowEngine | null = null
   const backendConnectionState = ref<'idle' | 'connected' | 'reconnecting' | 'error'>('idle')
   const backendReconnectAttempt = ref(0)
   const backendLastError = ref<string | null>(null)
@@ -510,7 +515,6 @@ function createExecutionActions(
     switch (channel) {
       case 'workflow:started':
         currentExecutionId = payload.executionId
-        localEngine = null
         executionStatus.value = 'running'
         executionLog.value = null
         executionContext.value = {}
@@ -531,7 +535,6 @@ function createExecutionActions(
         break
       case 'workflow:completed':
         currentExecutionId = payload.executionId
-        localEngine = null
         executionStatus.value = 'completed'
         executionLog.value = (payload as ExecutionEventMap['workflow:completed']).log
         executionContext.value = (payload as ExecutionEventMap['workflow:completed']).context as Record<string, any>
@@ -543,7 +546,6 @@ function createExecutionActions(
         break
       case 'workflow:error':
         currentExecutionId = payload.executionId
-        localEngine = null
         executionStatus.value = 'error'
         if ((payload as ExecutionEventMap['workflow:error']).log) {
           executionLog.value = (payload as ExecutionEventMap['workflow:error']).log || null
@@ -573,105 +575,70 @@ function createExecutionActions(
     'execution:context',
   ]
 
-  if (useWorkflowBackend()) {
-    ensureWorkflowInteractionHandler()
-    for (const channel of executionChannels) {
-      wsBridge.on(channel, (data) => handleExecutionEvent(channel, data as ExecutionEventMap[typeof channel]))
-    }
-    wsBridge.on('ws:connected', () => {
-      backendConnectionState.value = 'connected'
-      backendReconnectAttempt.value = 0
-      backendLastError.value = null
-      void loadData().catch((error) => {
-        backendLastError.value = error instanceof Error ? error.message : String(error)
-      })
-      void recoverExecutionState()
-    })
-    wsBridge.on('ws:reconnected', () => {
-      backendConnectionState.value = 'connected'
-      backendLastError.value = null
-      void loadData().catch((error) => {
-        backendLastError.value = error instanceof Error ? error.message : String(error)
-      })
-      void recoverExecutionState()
-    })
-    wsBridge.on('ws:reconnecting', (payload) => {
-      const state = payload as { attempt?: number }
-      backendConnectionState.value = 'reconnecting'
-      backendReconnectAttempt.value = state.attempt || 0
-    })
-    wsBridge.on('ws:error', (error) => {
-      backendConnectionState.value = 'error'
-      backendLastError.value = error instanceof Error
-        ? error.message
-        : typeof error === 'object' && error && 'message' in error
-          ? String((error as { message?: unknown }).message)
-          : String(error)
-    })
+  ensureWorkflowInteractionHandler()
+  for (const channel of executionChannels) {
+    wsBridge.on(channel, (data) => handleExecutionEvent(channel, data as ExecutionEventMap[typeof channel]))
   }
+  wsBridge.on('ws:connected', () => {
+    backendConnectionState.value = 'connected'
+    backendReconnectAttempt.value = 0
+    backendLastError.value = null
+    void loadData().catch((error) => {
+      backendLastError.value = error instanceof Error ? error.message : String(error)
+    })
+    void recoverExecutionState()
+  })
+  wsBridge.on('ws:reconnected', () => {
+    backendConnectionState.value = 'connected'
+    backendLastError.value = null
+    void loadData().catch((error) => {
+      backendLastError.value = error instanceof Error ? error.message : String(error)
+    })
+    void recoverExecutionState()
+  })
+  wsBridge.on('ws:reconnecting', (payload) => {
+    const state = payload as { attempt?: number }
+    backendConnectionState.value = 'reconnecting'
+    backendReconnectAttempt.value = state.attempt || 0
+  })
+  wsBridge.on('ws:error', (error) => {
+    backendConnectionState.value = 'error'
+    backendLastError.value = error instanceof Error
+      ? error.message
+      : typeof error === 'object' && error && 'message' in error
+        ? String((error as { message?: unknown }).message)
+        : String(error)
+  })
 
   async function startExecution(): Promise<{ executionId: string | null; status: EngineStatus }> {
     if (!currentWorkflow.value) {
       return { executionId: null, status: executionStatus.value }
     }
 
-    if (useWorkflowBackend()) {
-      backendLastError.value = null
-      const result = await createWorkflowDomainApi().workflow.execute(currentWorkflow.value.id)
-      currentExecutionId = result.executionId
-      executionStatus.value = result.status as EngineStatus
-      return { executionId: currentExecutionId, status: executionStatus.value }
-    }
-
-    localEngine = new WorkflowEngine(currentWorkflow.value.nodes, currentWorkflow.value.edges, {
-      onNodeStatusChange: () => {},
-      onEvent: handleExecutionEvent,
-    }, {
-      workflowId: currentWorkflow.value.id,
-      workflowName: currentWorkflow.value.name,
-      workflowDescription: currentWorkflow.value.description,
-      enabledPlugins: currentWorkflow.value.enabledPlugins || [],
-      pluginConfigSchemes: currentWorkflow.value.pluginConfigSchemes || {},
-    })
-
-    const result = await localEngine.start()
-    currentExecutionId = result.id || currentExecutionId
+    backendLastError.value = null
+    const result = await createWorkflowDomainApi().workflow.execute(currentWorkflow.value.id)
+    currentExecutionId = result.executionId
+    executionStatus.value = result.status as EngineStatus
     return { executionId: currentExecutionId, status: executionStatus.value }
   }
 
   function pauseExecution(): void {
-    if (useWorkflowBackend()) {
-      if (!currentExecutionId) return
-      createWorkflowDomainApi().workflow.pause(currentExecutionId)
-      return
-    }
-
-    localEngine?.pause()
+    if (!currentExecutionId) return
+    createWorkflowDomainApi().workflow.pause(currentExecutionId)
   }
 
   async function resumeExecution(): Promise<void> {
-    if (useWorkflowBackend()) {
-      if (!currentExecutionId) return
-      const result = await createWorkflowDomainApi().workflow.resume(currentExecutionId)
-      currentExecutionId = result.executionId
-      executionStatus.value = result.status as EngineStatus
-      return
-    }
-
-    if (!localEngine) return
-    await localEngine.resume()
+    if (!currentExecutionId) return
+    const result = await createWorkflowDomainApi().workflow.resume(currentExecutionId)
+    currentExecutionId = result.executionId
+    executionStatus.value = result.status as EngineStatus
   }
 
   async function stopExecution(): Promise<void> {
-    if (useWorkflowBackend()) {
-      if (!currentExecutionId) return
-      const result = await createWorkflowDomainApi().workflow.stop(currentExecutionId)
-      currentExecutionId = result.executionId
-      executionStatus.value = result.status as EngineStatus
-      return
-    }
-
-    localEngine?.stop()
+    if (!currentExecutionId) return
+    const result = await createWorkflowDomainApi().workflow.stop(currentExecutionId)
+    currentExecutionId = result.executionId
+    executionStatus.value = result.status as EngineStatus
   }
 
   return {
@@ -904,6 +871,7 @@ export function createWorkflowStore(tabId: string) {
       redoStack: undoRedo.redoStack,
       operationLog: undoRedo.operationLog,
       restoreToStep: undoRedo.restoreToStep,
+      clearOperationHistory: undoRedo.clearOperationHistory,
       versions: versionMgr.versions,
       loadVersions: versionMgr.loadVersions,
       saveVersion: versionMgr.saveVersion,

@@ -183,9 +183,7 @@
 
 ## Phase 5/6 Integration Findings
 
-- workflow 数据域 adapter 已新增，feature flag 为：
-  - `localStorage['workfox.useWorkflowBackend'] = '1'`
-  - 或 `VITE_USE_WORKFLOW_BACKEND=1`
+- workflow 数据域 adapter 已落地；该阶段最初通过 feature flag 灰度切换，当前仓库状态已改为 backend 默认主路径，旧开关已删除。
 - [src/stores/workflow.ts](/Users/Zhuanz/Documents/work_fox/src/stores/workflow.ts) 已改为通过 adapter 访问 workflow CRUD、folder、version、executionLog、operationHistory。
 - backend 已接通以下存储通道：
   - `workflow:list/get/create/update/delete`
@@ -369,15 +367,25 @@
 
 ## Phase 10 Store And UI Findings
 
-- [src/stores/workflow.ts](/Users/Zhuanz/Documents/work_fox/src/stores/workflow.ts) 现在已不再持有 store 级 `WorkflowEngine` ref；本地执行 fallback 仍保留，但只存在于 `createExecutionActions(...)` 闭包内的短生命周期 `localEngine`。
-- 这让 workflow store 的主状态源进一步收口为：
-  - backend mode：WS execution events + recovery API
-  - local mode：临时 `localEngine` 发出的同构 execution events
+- [src/stores/workflow.ts](/Users/Zhuanz/Documents/work_fox/src/stores/workflow.ts) 已切到 backend-only execution path；执行控制不再保留 `createExecutionActions(...)` 内的本地 `localEngine` fallback。
+- workflow store 的主状态源现已收口为：
+  - WS execution events
+  - recovery API
 - `workflow:completed` / `workflow:error` 事件现在会把终态 `ExecutionLog.snapshot` 应回 `currentWorkflow`，因此即使前端错过最后一条中间 `execution:log`，节点高亮和运行态也不会停在旧快照。
 - [src/lib/ws-bridge.ts](/Users/Zhuanz/Documents/work_fox/src/lib/ws-bridge.ts) 已修正连接语义：
   - 首次 connect 不再同时触发 `ws:connected` 和 `ws:reconnected`
   - store 可以把“初次加载”和“断线恢复”都挂在这两个事件上，而不至于首次进入页面时重复 recovery / reload
-- workflow store 在 backend 模式下已开始在 `ws:connected/ws:reconnected` 后主动刷新 workflow/folder 列表，因此 Phase 10 的“连接成功后加载数据、断线后恢复列表数据”已经有了最小实现。
-- 当前还未收掉的 Phase 10 遗留点主要有两类：
-  - 部分前端消费方仍隐含“`startExecution()` 返回后马上有最终 `executionLog`”的旧本地执行假设，例如 [src/lib/agent/workflow-renderer-tools.ts](/Users/Zhuanz/Documents/work_fox/src/lib/agent/workflow-renderer-tools.ts)
-  - backend 模式虽然已不再依赖 store 级 engine，但整体仍保留 local fallback 分支，尚未彻底变成 backend-only execution path
+- workflow store 现已在 `ws:connected/ws:reconnected` 后主动刷新 workflow/folder 列表，Phase 10 的“连接成功后加载数据、断线后恢复列表数据”已经闭环。
+- 已迁移 domain 的旧 IPC 已完成清理：
+  - [preload/index.ts](/Users/Zhuanz/Documents/work_fox/preload/index.ts) 不再暴露 workflow/workflowFolder/workflowVersion/executionLog/operationHistory 以及 plugin 查询/配置类旧 IPC
+  - [electron/main.ts](/Users/Zhuanz/Documents/work_fox/electron/main.ts) 不再注册对应旧 IPC handler
+  - [electron/ipc/workflow.ts](/Users/Zhuanz/Documents/work_fox/electron/ipc/workflow.ts) 仅保留 import/export 本地能力
+  - [electron/ipc/plugin.ts](/Users/Zhuanz/Documents/work_fox/electron/ipc/plugin.ts) 仅保留 view/icon/install/uninstall 等本地插件能力
+- 已删除纯死代码文件：
+  - [electron/ipc/workflow-version.ts](/Users/Zhuanz/Documents/work_fox/electron/ipc/workflow-version.ts)
+  - [electron/ipc/execution-log.ts](/Users/Zhuanz/Documents/work_fox/electron/ipc/execution-log.ts)
+  - [electron/ipc/operation-history.ts](/Users/Zhuanz/Documents/work_fox/electron/ipc/operation-history.ts)
+  - [electron/services/workflow-version.ts](/Users/Zhuanz/Documents/work_fox/electron/services/workflow-version.ts)
+  - [electron/services/execution-log.ts](/Users/Zhuanz/Documents/work_fox/electron/services/execution-log.ts)
+  - [electron/services/operation-history.ts](/Users/Zhuanz/Documents/work_fox/electron/services/operation-history.ts)
+- [src/lib/workflow/engine.ts](/Users/Zhuanz/Documents/work_fox/src/lib/workflow/engine.ts) 的插件配置读取已改走 backend adapter，避免单节点调试仍偷偷依赖已删除的 preload IPC。

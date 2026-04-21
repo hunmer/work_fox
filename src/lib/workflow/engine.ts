@@ -3,6 +3,8 @@ import { toRaw } from 'vue'
 import type { WorkflowNode, WorkflowEdge, ExecutionLog, ExecutionStep, ExecutionLogEntry, ConditionItem } from './types'
 import { getNodeDefinition } from './nodeRegistry'
 import { executeAgentRunTask } from './agent-run'
+import { pluginBackendApi } from '../backend-api/plugin'
+import { workflowBackendApi } from '../backend-api/workflow'
 import type { ExecutionEventChannel, ExecutionEventMap } from '@shared/execution-events'
 import { createErrorShape } from '@shared/errors'
 
@@ -178,16 +180,16 @@ export class WorkflowEngine {
       try {
         const schemeName = schemes?.[pluginId]
         if (schemeName) {
-          config[pluginId] = await (window as any).api.workflow.readPluginScheme(
+          config[pluginId] = await workflowBackendApi.readPluginScheme(
             this.runtimeConfig!.workflowId!, pluginId, schemeName,
           )
         } else {
-          config[pluginId] = await (window as any).api.plugin.getConfig(pluginId)
+          config[pluginId] = await pluginBackendApi.getConfig(pluginId)
         }
       } catch (e) {
         console.warn(`[Engine] 加载插件 ${pluginId} 配置失败，使用默认值:`, e)
         try {
-          config[pluginId] = await (window as any).api.plugin.getConfig(pluginId)
+          config[pluginId] = await pluginBackendApi.getConfig(pluginId)
         } catch {
           config[pluginId] = {}
         }
