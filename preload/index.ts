@@ -197,6 +197,13 @@ const api = {
       ipcRenderer.invoke('fs:rename', oldPath, newName),
   },
 
+  backend: {
+    getEndpoint: (): Promise<{ url: string; token: string }> =>
+      ipcRenderer.invoke('backend:get-endpoint'),
+    getStatus: (): Promise<{ running: boolean; url?: string; pid?: number; error?: string }> =>
+      ipcRenderer.invoke('backend:get-status'),
+  },
+
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
 
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion'),

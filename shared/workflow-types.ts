@@ -161,3 +161,9 @@ export interface WorkflowVersion {
 }
 
 export type EngineStatus = 'idle' | 'running' | 'paused' | 'completed' | 'error'
+
+export interface OperationEntry {
+  description: string
+  timestamp: number
+  snapshot?: string
+}

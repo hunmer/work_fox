@@ -74,7 +74,7 @@ function getVersion() {
 
     // 1. 使用 electron-vite 构建（同时编译 main + preload + renderer）
     console.log('\n📦 步骤 1/5: 使用 electron-vite 构建...')
-    execSync('npx electron-vite build', {
+    execSync('pnpm build:backend && npx electron-vite build', {
       stdio: 'inherit',
       cwd: projectRoot
     })

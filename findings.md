@@ -161,5 +161,71 @@
 ## Verification Findings
 
 - `shared/` 独立 TypeScript 检查通过。
-- `pnpm build` 当前失败在 renderer 依赖解析：Rollup 无法解析 `@tiptap/vue-3`，失败点为 `src/components/chat/tiptap/ChatInputEditor.vue`。这不是本次 shared 类型新增导致的失败。
+- 现在 `pnpm build` 已通过。此前 renderer 对 `@tiptap/vue-3` 的解析失败已因依赖安装恢复。
 - `pnpm exec tsc -p tsconfig.web.json --noEmit` 和 `pnpm exec tsc -p tsconfig.node.json --noEmit` 暴露多处仓库既有类型问题，包括 notification options、workflow engine status、nullable workflowStore、missing `src/types/split`、node project include 等。
+
+## Phase 4 Backend Findings
+
+- backend 现已采用独立 `tsconfig.backend.json` 编译到 `out/backend/main.js`。
+- Electron Main 会通过 [backend-process.ts](/Users/Zhuanz/Documents/work_fox/electron/services/backend-process.ts) 启动 backend 子进程，并通过 preload 暴露 endpoint/status。
+- backend 已支持：
+  - `GET /health`
+  - `GET /version`
+  - WebSocket `/ws`
+  - `system:ping`
+  - `system:echo`
+- WebSocket 已具备：
+  - client id
+  - request/response
+  - error envelope
+  - heartbeat ping
+  - token 校验
+
+## Phase 5/6 Integration Findings
+
+- workflow 数据域 adapter 已新增，feature flag 为：
+  - `localStorage['workfox.useWorkflowBackend'] = '1'`
+  - 或 `VITE_USE_WORKFLOW_BACKEND=1`
+- [src/stores/workflow.ts](/Users/Zhuanz/Documents/work_fox/src/stores/workflow.ts) 已改为通过 adapter 访问 workflow CRUD、folder、version、executionLog、operationHistory。
+- backend 已接通以下存储通道：
+  - `workflow:list/get/create/update/delete`
+  - `workflow:list-plugin-schemes/read-plugin-scheme/create/save/delete`
+  - `workflowFolder:list/create/update/delete`
+  - `workflowVersion:list/add/get/delete/clear/nextName`
+  - `executionLog:list/save/delete/clear`
+  - `operationHistory:load/save/clear`
+- backend smoke test 已验证：
+  - `/health` 返回正常
+  - WS `system:ping` 返回正常
+  - WS `workflow:list` 返回正常
+
+## Plugin Domain Migration Findings
+
+- backend 已新增最小 `plugin registry`，直接从 `WORKFOX_PLUGIN_DIR` 扫描 `info.json`、`workflow.js`、`tools.js`。
+- 当前 backend 插件域已支持：
+  - `plugin:list`
+  - `plugin:enable`
+  - `plugin:disable`
+  - `plugin:get-workflow-nodes`
+  - `plugin:list-workflow-plugins`
+  - `plugin:get-agent-tools`
+  - `plugin:get-config`
+  - `plugin:save-config`
+- 插件配置文件继续复用现有用户目录结构：
+  - `plugin-data/<pluginId>/data.json`
+  - `plugin-data/disabled.json`
+- 前端已新增 `src/lib/backend-api/plugin-domain.ts`，在 backend flag 打开时让 plugin store 走 WS 通道，同时保留 `getView/getIcon/import/openFolder/install/uninstall` 继续走 Electron 本地 API。
+- [src/stores/plugin.ts](/Users/Zhuanz/Documents/work_fox/src/stores/plugin.ts) 已切换为统一 domain adapter，不再直接依赖 `window.api.plugin.*` 的已迁移通道。
+- [src/components/chat/ChatPanel.vue](/Users/Zhuanz/Documents/work_fox/src/components/chat/ChatPanel.vue) 已改为通过 plugin store 拉取 agent tools，避免聊天面板绕过 domain adapter。
+- backend smoke test 已验证：
+  - `plugin:list-workflow-plugins` 可返回内置 workflow 插件及 `nodeCount`
+  - `plugin:get-config` 可返回配置数据
+
+## Remaining Execution Gap
+
+- `workflow:execute/pause/resume/stop` 仍未迁移到 backend，本质阻塞点是 [src/lib/workflow/engine.ts](/Users/Zhuanz/Documents/work_fox/src/lib/workflow/engine.ts) 仍耦合：
+  - `vue` 的 `toRaw`
+  - `window.api`
+  - `useAIProviderStore`
+  - renderer chat/agent stream
+- 这意味着“执行通道迁移”和“引擎解耦”不能再拆成纯通道工作；下一步应按 Phase 7 先抽 execution runner/context resolver/node dispatcher，再接 execution events 和 UI 订阅。

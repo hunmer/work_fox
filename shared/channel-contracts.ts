@@ -5,6 +5,7 @@ import type {
 } from './execution-events'
 import type {
   ExecutionLog,
+  OperationEntry,
   Workflow,
   WorkflowFolder,
   WorkflowVersion,
@@ -124,7 +125,7 @@ export interface OperationHistoryLoadRequest {
 
 export interface OperationHistorySaveRequest {
   workflowId: string
-  entries: Array<Record<string, unknown>>
+  entries: OperationEntry[]
 }
 
 export interface OperationHistoryClearRequest {
@@ -201,7 +202,7 @@ export interface BackendChannelMap {
   'executionLog:delete': ChannelContract<ExecutionLogDeleteRequest, EmptyResponse>
   'executionLog:clear': ChannelContract<ExecutionLogClearRequest, EmptyResponse>
 
-  'operationHistory:load': ChannelContract<OperationHistoryLoadRequest, Array<Record<string, unknown>>>
+  'operationHistory:load': ChannelContract<OperationHistoryLoadRequest, OperationEntry[]>
   'operationHistory:save': ChannelContract<OperationHistorySaveRequest, EmptyResponse>
   'operationHistory:clear': ChannelContract<OperationHistoryClearRequest, EmptyResponse>
 

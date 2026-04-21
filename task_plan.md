@@ -26,7 +26,9 @@
 - `Phase 1` 已完成：读取设计文档与仓库现状，建立详细计划
 - `Phase 2` 已完成：明确 backend 目录、进程边界、启动链路、配置与构建策略
 - `Phase 3` 已完成：建立 shared 类型、WS 协议、执行事件、错误模型和通道契约
-- `Phase 4` 待执行：创建后端服务骨架与 WS 路由
+- `Phase 4` 已完成：后端服务骨架、health/version、WS router、system channels 已可运行
+- `Phase 5` 进行中：前端 WS Bridge、workflow 数据访问适配、plugin store/domain adapter 已落地，执行态 UI 事件订阅尚未接入
+- `Phase 6` 进行中：workflow/folder/version/executionLog/operationHistory 与 plugin 元数据/配置查询已迁到 backend，import/export 与 execution channels 尚未迁移
 
 ## Implementation Phases
 
@@ -139,7 +141,7 @@ Status: `completed`
 - [shared/channel-metadata.ts](/Users/Zhuanz/Documents/work_fox/shared/channel-metadata.ts)
 
 ### Phase 4. 后端服务骨架与 WS 路由
-Status: `pending`
+Status: `completed`
 
 目标：
 - 先打通连接，再逐步迁移业务，而不是边迁移边造底座
@@ -170,8 +172,18 @@ Status: `pending`
 - Renderer 可通过 WSBridge 建立连接、发请求、收响应、收事件
 - 断线和超时有基础可观测输出
 
+产物：
+- [backend/main.ts](/Users/Zhuanz/Documents/work_fox/backend/main.ts)
+- [backend/app/create-server.ts](/Users/Zhuanz/Documents/work_fox/backend/app/create-server.ts)
+- [backend/ws/router.ts](/Users/Zhuanz/Documents/work_fox/backend/ws/router.ts)
+- [backend/ws/connection-manager.ts](/Users/Zhuanz/Documents/work_fox/backend/ws/connection-manager.ts)
+- [backend/ws/channels.ts](/Users/Zhuanz/Documents/work_fox/backend/ws/channels.ts)
+- [electron/services/backend-process.ts](/Users/Zhuanz/Documents/work_fox/electron/services/backend-process.ts)
+- [electron/ipc/backend.ts](/Users/Zhuanz/Documents/work_fox/electron/ipc/backend.ts)
+- [tsconfig.backend.json](/Users/Zhuanz/Documents/work_fox/tsconfig.backend.json)
+
 ### Phase 5. 前端 WS Bridge 与 API 适配层
-Status: `pending`
+Status: `in_progress`
 
 目标：
 - 把现有 `window.api` 消费面统一收口，为后续 store 迁移降风险
@@ -200,8 +212,16 @@ Status: `pending`
 - 有可替代 `window.api.workflow*`、`workflowFolder*`、`workflowVersion*` 等的统一客户端层
 - store 层不直接处理 WS 协议细节
 
+当前进展：
+- 已新增 [src/lib/ws-bridge.ts](/Users/Zhuanz/Documents/work_fox/src/lib/ws-bridge.ts)
+- 已新增 workflow/folder/version/log/history 的 backend adapter
+- 已将 [src/stores/workflow.ts](/Users/Zhuanz/Documents/work_fox/src/stores/workflow.ts) 切换为通过 adapter 访问数据域
+- 已将 [src/stores/plugin.ts](/Users/Zhuanz/Documents/work_fox/src/stores/plugin.ts) 切换为通过 domain adapter 访问迁移后的 plugin/workflow scheme 通道
+- 已将 [src/components/chat/ChatPanel.vue](/Users/Zhuanz/Documents/work_fox/src/components/chat/ChatPanel.vue) 改为通过 plugin store 读取 agent tools
+- 尚未覆盖 workflow execution 的事件订阅、重连恢复和 interaction handler
+
 ### Phase 6. 持久化域迁移
-Status: `pending`
+Status: `in_progress`
 
 目标：
 - 先迁移低风险 CRUD 和文件存储，为执行引擎迁移扫清依赖
@@ -231,6 +251,14 @@ Status: `pending`
 完成标准：
 - 前端可以不依赖 Electron IPC 完成工作流列表、读写、版本、日志、操作历史管理
 - 数据文件结构向后兼容现有用户目录
+
+当前进展：
+- 已迁移 workflow / workflowFolder / workflowVersion / executionLog / operationHistory 到 backend storage
+- 已注册对应 WS channels
+- 已新增 backend plugin registry 与 `plugin:list/enable/disable/get-workflow-nodes/list-workflow-plugins/get-agent-tools/get-config/save-config` 通道
+- 暂未迁移 `workflow:importOpenFile/exportSaveFile`
+- 暂未迁移 `workflow:execute/pause/resume/stop`
+- 暂未迁移插件 view/icon/import/install/uninstall 等仍依赖 Electron 本地能力的通道
 
 ### Phase 7. 工作流引擎解耦与后端迁移
 Status: `pending`

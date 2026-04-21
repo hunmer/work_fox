@@ -4,6 +4,7 @@ import type { Workflow, WorkflowFolder, WorkflowNode, ExecutionLog } from '@/lib
 import { WorkflowEngine, type EngineStatus } from '@/lib/workflow/engine'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { executeRendererWorkflowTool } from '@/lib/agent/workflow-renderer-tools'
+import { createWorkflowDomainApi } from '@/lib/backend-api/workflow-domain'
 import type { WorkflowToolExecuteRequest } from '../../preload'
 import { useAgentSettingsStore, createWorkflowAgentConfigFromGlobal } from './agent-settings'
 
@@ -601,7 +602,7 @@ function createAIActions(
 export function createWorkflowStore(tabId: string) {
   const storeId = `workflow-tab-${tabId}`
   const useStore = defineStore(storeId, () => {
-    const api = () => (window as any).api
+    const api = () => createWorkflowDomainApi()
 
     const workflows = ref<Workflow[]>([])
     const workflowFolders = ref<WorkflowFolder[]>([])

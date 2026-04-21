@@ -4,6 +4,7 @@ import type { ChatStoreInstance } from '@/stores/chat'
 import { useAIProviderStore } from '@/stores/ai-provider'
 import { useChatUIStore } from '@/stores/chat-ui'
 import { useTabStore } from '@/stores/tab'
+import { usePluginStore } from '@/stores/plugin'
 import { BROWSER_TOOL_LIST } from '@/lib/agent/tools'
 import { WORKFLOW_TOOL_DEFINITIONS } from '@/lib/agent/workflow-tools'
 import type { ToolDisplayItem } from '@/types'
@@ -24,6 +25,7 @@ const props = defineProps<{
 const providerStore = useAIProviderStore()
 const uiStore = useChatUIStore()
 const tabStore = useTabStore()
+const pluginStore = usePluginStore()
 const showSettings = ref(false)
 const showWorkflowWorkspaceDialog = ref(false)
 const pluginTools = ref<ToolDisplayItem[]>([])
@@ -36,7 +38,7 @@ async function loadPluginTools(pluginIds: string[]) {
   }
   try {
     const rawIds = JSON.parse(JSON.stringify(pluginIds))
-    const tools = await window.api.plugin.getAgentTools(rawIds)
+    const tools = await pluginStore.getAgentTools(rawIds)
     pluginTools.value = (tools || []).map((t: any) => ({
       name: t.name,
       description: t.description,

@@ -12,10 +12,12 @@ import { registerPluginIpcHandlers } from './ipc/plugin'
 import { registerTabsIpcHandlers } from './ipc/tabs'
 import { registerAgentSettingsIpcHandlers } from './ipc/agent-settings'
 import { registerFsIpcHandlers } from './ipc/fs'
+import { registerBackendIpcHandlers } from './ipc/backend'
 import { pluginManager } from './services/plugin-manager'
 import { workflowNodeRegistry } from './services/workflow-node-registry'
 import { getWindowMaximized, setWindowMaximized } from './services/store'
 import { builtinNodeDefinitions } from './services/builtin-nodes'
+import { backendProcessManager } from './services/backend-process'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -126,8 +128,12 @@ app.whenReady().then(() => {
   registerTabsIpcHandlers()
   registerAgentSettingsIpcHandlers()
   registerFsIpcHandlers()
+  registerBackendIpcHandlers()
   workflowNodeRegistry.registerBuiltinNodes(builtinNodeDefinitions)
   pluginManager.loadAll()
+  backendProcessManager.start().catch((error) => {
+    console.error('[backend-process] startup failed', error)
+  })
 
   ipcMain.on('window:minimize', () => mainWindow?.minimize())
   ipcMain.on('window:maximize', () => {
@@ -156,5 +162,8 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   unregisterGlobalShortcuts()
   pluginManager.shutdown()
+  backendProcessManager.stop().catch((error) => {
+    console.error('[backend-process] shutdown failed', error)
+  })
   if (process.platform !== 'darwin') app.quit()
 })

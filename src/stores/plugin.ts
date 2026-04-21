@@ -1,8 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { PluginMeta } from '@/types/plugin'
+import { createPluginDomainApi } from '@/lib/backend-api/plugin-domain'
+import { createWorkflowDomainApi } from '@/lib/backend-api/workflow-domain'
 
 export const usePluginStore = defineStore('plugin', () => {
+  const pluginApi = () => createPluginDomainApi()
+  const workflowApi = () => createWorkflowDomainApi()
   const plugins = ref<PluginMeta[]>([])
   const isLoading = ref(false)
   const activeViewPluginId = ref<string | null>(null)
@@ -14,20 +18,20 @@ export const usePluginStore = defineStore('plugin', () => {
   async function init(): Promise<void> {
     isLoading.value = true
     try {
-      plugins.value = await window.api.plugin.list()
+      plugins.value = await pluginApi().list()
     } finally {
       isLoading.value = false
     }
   }
 
   async function enablePlugin(pluginId: string): Promise<void> {
-    await window.api.plugin.enable(pluginId)
+    await pluginApi().enable(pluginId)
     const plugin = plugins.value.find((p) => p.id === pluginId)
     if (plugin) plugin.enabled = true
   }
 
   async function disablePlugin(pluginId: string): Promise<void> {
-    await window.api.plugin.disable(pluginId)
+    await pluginApi().disable(pluginId)
     const plugin = plugins.value.find((p) => p.id === pluginId)
     if (plugin) plugin.enabled = false
     if (activeViewPluginId.value === pluginId) {
@@ -37,7 +41,7 @@ export const usePluginStore = defineStore('plugin', () => {
 
   async function loadViewContent(pluginId: string): Promise<string | null> {
     if (viewContents.value[pluginId]) return viewContents.value[pluginId]
-    const content = await window.api.plugin.getView(pluginId)
+    const content = await pluginApi().getView(pluginId)
     if (content) {
       viewContents.value[pluginId] = content
     }
@@ -45,7 +49,7 @@ export const usePluginStore = defineStore('plugin', () => {
   }
 
   async function loadIcon(pluginId: string): Promise<string | null> {
-    return window.api.plugin.getIcon(pluginId)
+    return pluginApi().getIcon(pluginId)
   }
 
   function openView(pluginId: string): void {
@@ -57,7 +61,7 @@ export const usePluginStore = defineStore('plugin', () => {
   }
 
   async function importPlugin(): Promise<{ success: boolean; pluginName?: string; error?: string }> {
-    const result = await window.api.plugin.importZip()
+    const result = await pluginApi().importZip()
     if (result.success) {
       await init()
     }
@@ -65,43 +69,48 @@ export const usePluginStore = defineStore('plugin', () => {
   }
 
   async function openPluginsFolder(): Promise<void> {
-    await window.api.plugin.openFolder()
+    await pluginApi().openFolder()
   }
 
   async function getWorkflowNodes(pluginId: string): Promise<any[]> {
-    return window.api.plugin.getWorkflowNodes(pluginId)
+    const result = await pluginApi().getWorkflowNodes(pluginId)
+    return Array.isArray(result?.nodes) ? result.nodes : []
   }
 
   async function listWorkflowPlugins(): Promise<any[]> {
-    return window.api.plugin.listWorkflowPlugins()
+    return pluginApi().listWorkflowPlugins()
+  }
+
+  async function getAgentTools(pluginIds: string[]): Promise<any[]> {
+    return pluginApi().getAgentTools(pluginIds)
   }
 
   async function getPluginConfig(pluginId: string): Promise<Record<string, string>> {
-    return window.api.plugin.getConfig(pluginId)
+    return pluginApi().getConfig(pluginId)
   }
 
   async function savePluginConfig(pluginId: string, data: Record<string, string>): Promise<{ success: boolean; error?: string }> {
-    return window.api.plugin.saveConfig(pluginId, data)
+    return pluginApi().saveConfig(pluginId, data)
   }
 
   async function listPluginSchemes(workflowId: string, pluginId: string): Promise<string[]> {
-    return window.api.workflow.listPluginSchemes(workflowId, pluginId)
+    return workflowApi().workflow.listPluginSchemes(workflowId, pluginId)
   }
 
   async function createPluginScheme(workflowId: string, pluginId: string, schemeName: string): Promise<void> {
-    return window.api.workflow.createPluginScheme(workflowId, pluginId, schemeName)
+    return workflowApi().workflow.createPluginScheme(workflowId, pluginId, schemeName)
   }
 
   async function deletePluginScheme(workflowId: string, pluginId: string, schemeName: string): Promise<void> {
-    return window.api.workflow.deletePluginScheme(workflowId, pluginId, schemeName)
+    return workflowApi().workflow.deletePluginScheme(workflowId, pluginId, schemeName)
   }
 
   async function readPluginScheme(workflowId: string, pluginId: string, schemeName: string): Promise<Record<string, string>> {
-    return window.api.workflow.readPluginScheme(workflowId, pluginId, schemeName)
+    return workflowApi().workflow.readPluginScheme(workflowId, pluginId, schemeName)
   }
 
   async function savePluginScheme(workflowId: string, pluginId: string, schemeName: string, data: Record<string, string>): Promise<void> {
-    return window.api.workflow.savePluginScheme(workflowId, pluginId, schemeName, data)
+    return workflowApi().workflow.savePluginScheme(workflowId, pluginId, schemeName, data)
   }
 
   return {
@@ -122,6 +131,7 @@ export const usePluginStore = defineStore('plugin', () => {
     openPluginsFolder,
     getWorkflowNodes,
     listWorkflowPlugins,
+    getAgentTools,
     getPluginConfig,
     savePluginConfig,
     listPluginSchemes,
