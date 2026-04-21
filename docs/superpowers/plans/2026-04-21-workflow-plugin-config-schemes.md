@@ -75,12 +75,16 @@ git commit -m "feat(types): add pluginConfigSchemes to Workflow type"
 
 - [ ] **Step 1: Add scheme file helper functions**
 
+First, update line 4 import to add `rmSync`:
+
+```typescript
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync, rmSync } from 'node:fs'
+```
+
 After the existing `deleteWorkflowFile` function (line 73), add:
 
 ```typescript
 // ====== 插件配置方案 ======
-
-import { rmSync } from 'node:fs'
 
 function pluginConfigsDir(workflowId: string): string {
   return join(agentWorkflowsDir, workflowId, 'plugin_configs')
@@ -118,6 +122,7 @@ export function createPluginScheme(workflowId: string, pluginId: string, schemeN
   if (existsSync(path)) throw new Error(`方案 ${schemeName} 已存在`)
 
   // Read defaults from plugin info.json
+  // Use require() to avoid circular dependency with plugin-manager
   const pluginManager = require('./plugin-manager').pluginManager
   const plugin = pluginManager.getPlugin(pluginId)
   const defaults: Record<string, string> = {}
@@ -156,7 +161,7 @@ function deleteWorkflowFile(id: string): void {
 }
 ```
 
-Note: `rmSync` is already available from `node:fs`. Add it to the import at line 4.
+Note: `rmSync` was already added to the `node:fs` import in Step 1.
 
 - [ ] **Step 3: Commit**
 
@@ -832,8 +837,19 @@ Add imports:
 
 ```typescript
 import { usePluginStore } from '@/stores/plugin'
-import { useWorkflowStore } from '@/stores/workflow'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 ```
+
+Replace the existing dropdown-menu import block (lines 9-17) with this expanded version that includes `DropdownMenuItem`.
 
 Add inside `<script setup>` after `const store = useWorkflowStore()`:
 
@@ -956,7 +972,7 @@ Replace the entire `<template>` with:
 </template>
 ```
 
-Also add `DropdownMenuItem` to the dropdown-menu imports.
+Also add `DropdownMenuItem` to the dropdown-menu imports (already done in Step 1).
 
 - [ ] **Step 4: Commit**
 
