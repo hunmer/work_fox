@@ -3,6 +3,7 @@ directories:
   buildResources: build
 appId: com.work-fox.app
 productName: WorkFox
+electronDist: node_modules/electron/dist
 files:
   - filter:
       - out/**/*
@@ -25,6 +26,22 @@ win:
     - target: nsis
       arch:
         - x64
+  requestedExecutionLevel: asInvoker
+nsis:
+  oneClick: false
+  perMachine: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+extraResources:
+  - from: resources/plugins
+    to: plugins
+    filter:
+      - '**/*'
 compression: store
 asar: true
+publish:
+  provider: github
+  owner: hunmer
+  repo: work_fox
 electronVersion: 35.7.5

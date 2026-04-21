@@ -1,6 +1,7 @@
 {
   "appId": "com.work-fox.app",
   "productName": "WorkFox",
+  "electronDist": "node_modules/electron/dist",
   "directories": {
     "output": "dist-app"
   },
