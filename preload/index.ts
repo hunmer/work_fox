@@ -149,6 +149,10 @@ const api = {
     getWorkflowNodes: (pluginId: string) => ipcRenderer.invoke('plugin:get-workflow-nodes', pluginId),
     listWorkflowPlugins: () => ipcRenderer.invoke('plugin:list-workflow-plugins'),
     getAgentTools: (pluginIds: string[]) => ipcRenderer.invoke('plugin:get-agent-tools', pluginIds),
+    getConfig: (pluginId: string): Promise<Record<string, string>> =>
+      ipcRenderer.invoke('plugin:get-config', pluginId),
+    saveConfig: (pluginId: string, data: Record<string, string>): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('plugin:save-config', pluginId, data),
   },
 
   agentSettings: {

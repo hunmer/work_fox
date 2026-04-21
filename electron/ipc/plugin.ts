@@ -57,4 +57,25 @@ export function registerPluginIpcHandlers(): void {
   ipcMain.handle('plugin:get-agent-tools', (_e, pluginIds: string[]) => {
     return workflowNodeRegistry.getAgentTools(pluginIds)
   })
+
+  ipcMain.handle('plugin:get-config', async (_e, pluginId: string) => {
+    const instance = pluginManager.getPlugin(pluginId)
+    if (!instance) return {}
+    const configFields = instance.info.config || []
+    const userValues = instance.configStorage ? await instance.configStorage.getAll() : {}
+    // Merge: user values take priority, otherwise use info.json defaults
+    const merged: Record<string, string> = {}
+    for (const field of configFields) {
+      merged[field.key] = userValues[field.key] ?? field.value
+    }
+    return merged
+  })
+
+  ipcMain.handle('plugin:save-config', async (_e, pluginId: string, data: Record<string, string>) => {
+    const instance = pluginManager.getPlugin(pluginId)
+    if (!instance) return { success: false, error: '插件未找到' }
+    if (!instance.configStorage) return { success: false, error: '插件无配置定义' }
+    await instance.configStorage.setAll(data)
+    return { success: true }
+  })
 }
