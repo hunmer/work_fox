@@ -175,6 +175,25 @@ const customViewProps = computed(() => {
     }
     return { items: [] }
   }
+  if (definition.value?.type === 'music_player') {
+    const tracks = props.data?.tracks
+    const volume = props.data?.volume ?? 80
+    const loop = props.data?.loop ?? false
+    // tracks 是直接数组
+    if (Array.isArray(tracks)) {
+      return { tracks, volume, loop }
+    }
+    // 从执行结果取解析后的数据
+    const output = executionStep.value?.output
+    if (output) {
+      return {
+        tracks: Array.isArray(output.tracks) ? output.tracks : [],
+        volume: output.volume ?? volume,
+        loop: output.loop ?? loop,
+      }
+    }
+    return { tracks: [], volume, loop }
+  }
   return props.data || {}
 })
 
@@ -434,7 +453,7 @@ async function copyNodeInfo() {
 <style scoped>
 .custom-view-area {
   overflow: hidden;
-  max-height: 200px;
+  max-height: 280px;
 }
 .custom-view-area :deep(.gallery-grid) {
   gap: 4px;

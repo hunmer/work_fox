@@ -294,6 +294,13 @@ export class WorkflowEngine {
       case 'gallery_preview':
         // 展示节点仅消费已解析的数据供画布渲染，不调用外部工具。
         return { items: Array.isArray(resolvedData.items) ? resolvedData.items : [] }
+      case 'music_player':
+        // 音乐播放节点：将解析后的数据传递给画布渲染。
+        return {
+          tracks: Array.isArray(resolvedData.tracks) ? resolvedData.tracks : [],
+          volume: typeof resolvedData.volume === 'number' ? resolvedData.volume : 80,
+          loop: !!resolvedData.loop,
+        }
       case 'run_code':
         return this.executeCode(resolvedData.code || '')
       case 'toast':
