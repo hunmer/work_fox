@@ -353,6 +353,12 @@ function createEditActions(
     const def = getNodeDefinition(type)
     const label = def?.label || type
     const data: Record<string, any> = {}
+    // Apply property default values from node definition
+    if (def?.properties?.length) {
+      for (const prop of def.properties) {
+        if (prop.default !== undefined) data[prop.key] = prop.default
+      }
+    }
     if (def?.outputs?.length) data.outputs = JSON.parse(JSON.stringify(def.outputs))
     const node: WorkflowNode = { id: crypto.randomUUID(), type, label, position, data }
     currentWorkflow.value!.nodes.push(node)
