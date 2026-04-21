@@ -6,5 +6,21 @@
   "author": { "name": "workfox" },
   "tags": ["网络", "请求", "抓取", "下载"],
   "hasWorkflow": true,
-  "hasView": false
+  "hasView": false,
+  "config": [
+    {
+      "key": "defaultTimeout",
+      "label": "默认超时(ms)",
+      "desc": "请求的默认超时时间",
+      "type": "number",
+      "value": "30000"
+    },
+    {
+      "key": "userAgent",
+      "label": "User-Agent",
+      "desc": "默认请求头 User-Agent",
+      "type": "string",
+      "value": "WorkFox/1.0"
+    }
+  ]
 }
