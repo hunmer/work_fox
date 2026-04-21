@@ -50,6 +50,7 @@ export interface PluginInstance {
   module: any
   context: PluginContext
   storage: import('./plugin-storage').PluginStorage
+  configStorage?: import('./plugin-storage').PluginConfigStorage
   /** 清理该插件注册的所有事件监听器 */
   cleanupEvents: () => void
 }

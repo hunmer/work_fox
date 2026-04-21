@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, rename
 import { app, BrowserWindow, shell, dialog } from 'electron'
 import AdmZip from 'adm-zip'
 import { pluginEventBus } from './plugin-event-bus'
-import { PluginStorage } from './plugin-storage'
+import { PluginStorage, PluginConfigStorage } from './plugin-storage'
 import { createPluginContext } from './plugin-context'
 import type { PluginInfo, PluginMeta, PluginInstance } from './plugin-types'
 import { workflowNodeRegistry } from './workflow-node-registry'
@@ -89,7 +89,8 @@ class PluginManager {
     }
 
     const storage = new PluginStorage(info.id, this.userDataPath)
-    const { context, cleanupEvents } = createPluginContext(info, storage, pluginEventBus, () => this.mainWindow, !!info.hasWorkflow)
+    const configStorage = info.config?.length ? new PluginConfigStorage(info.id, this.userDataPath) : undefined
+    const { context, cleanupEvents } = createPluginContext(info, storage, pluginEventBus, () => this.mainWindow, !!info.hasWorkflow, configStorage)
     const isDisabled = this.disabledIds.has(info.id)
     const pluginModule = require(mainPath)
 
@@ -101,6 +102,7 @@ class PluginManager {
       module: pluginModule,
       context,
       storage,
+      configStorage,
       cleanupEvents
     }
 
@@ -211,6 +213,10 @@ class PluginManager {
     this.saveDisabledList()
   }
 
+  getPlugin(pluginId: string): PluginInstance | undefined {
+    return this.plugins.get(pluginId)
+  }
+
   list(): PluginMeta[] {
     return Array.from(this.plugins.values()).map((instance) => ({
       id: instance.info.id,
@@ -221,6 +227,7 @@ class PluginManager {
       tags: instance.info.tags || [],
       hasView: instance.info.hasView || false,
       enabled: instance.enabled,
+      config: instance.info.config,
       iconPath: this.getIconPath(instance)
     }))
   }

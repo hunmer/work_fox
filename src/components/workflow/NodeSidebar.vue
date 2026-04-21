@@ -11,7 +11,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import { Search, Plus } from 'lucide-vue-next'
+import { Search, Plus, Settings } from 'lucide-vue-next'
+import PluginConfigDialog from '@/components/plugins/PluginConfigDialog.vue'
 
 const props = defineProps<{
   enabledPlugins?: string[]
@@ -23,6 +24,11 @@ const emit = defineEmits<{
 
 const pluginStore = usePluginStore()
 const pluginNodes = ref<any[]>([])
+const categoryPluginMap = ref<Record<string, string>>({})
+const configPluginId = ref<string | null>(null)
+const configPluginName = ref('')
+const configFields = ref<any[]>([])
+const configDialogOpen = ref(false)
 
 const searchQuery = ref('')
 const openCategories = ref<Record<string, boolean>>({})
@@ -33,21 +39,36 @@ async function loadPluginNodes() {
   const seq = ++pluginLoadSeq
   if (!props.enabledPlugins?.length) {
     pluginNodes.value = []
+    categoryPluginMap.value = {}
     registerPluginNodeDefinitions([])
     return
   }
   try {
     const allNodes: any[] = []
+    const catMap: Record<string, string> = {}
     for (const pluginId of props.enabledPlugins) {
       const nodes = await pluginStore.getWorkflowNodes(pluginId)
       if (seq !== pluginLoadSeq) return
       allNodes.push(...nodes)
+      for (const node of nodes) {
+        if (node.category) catMap[node.category] = pluginId
+      }
     }
     pluginNodes.value = allNodes
+    categoryPluginMap.value = catMap
     registerPluginNodeDefinitions(allNodes)
   } catch (e) {
     console.error('[NodeSidebar] 加载插件节点失败:', e)
   }
+}
+
+function openPluginConfig(pluginId: string) {
+  const plugin = pluginStore.plugins.find(p => p.id === pluginId)
+  if (!plugin?.config?.length) return
+  configPluginId.value = plugin.id
+  configPluginName.value = plugin.name
+  configFields.value = plugin.config
+  configDialogOpen.value = true
 }
 
 watch(() => props.enabledPlugins, loadPluginNodes, { immediate: true, deep: true })
@@ -102,7 +123,18 @@ function getIcon(name: string) {
           >
             <CollapsibleTrigger class="flex items-center w-full px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground rounded hover:bg-muted/50">
               <span>{{ category }}</span>
-              <span class="ml-auto text-[10px]">{{ nodes.length }}</span>
+              <span class="ml-auto flex items-center gap-1">
+                <Button
+                  v-if="categoryPluginMap[category as string]"
+                  variant="ghost"
+                  size="icon"
+                  class="h-4 w-4"
+                  @click.stop="openPluginConfig(categoryPluginMap[category as string])"
+                >
+                  <Settings class="h-3 w-3" />
+                </Button>
+                <span class="text-[10px]">{{ nodes.length }}</span>
+              </span>
             </CollapsibleTrigger>
             <CollapsibleContent>
               <div class="space-y-0.5 mt-0.5">
@@ -137,4 +169,12 @@ function getIcon(name: string) {
       </ScrollArea>
     </div>
   </div>
+
+  <PluginConfigDialog
+    v-if="configPluginId"
+    v-model:open="configDialogOpen"
+    :plugin-id="configPluginId"
+    :plugin-name="configPluginName"
+    :config="configFields"
+  />
 </template>
