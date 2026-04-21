@@ -95,6 +95,16 @@ const api = {
     delete: (id: string): Promise<void> => ipcRenderer.invoke('workflow:delete', id),
     importOpenFile: (): Promise<any> => ipcRenderer.invoke('workflow:importOpenFile'),
     exportSaveFile: (id: string): Promise<void> => ipcRenderer.invoke('workflow:exportSaveFile', id),
+    listPluginSchemes: (workflowId: string, pluginId: string): Promise<string[]> =>
+      ipcRenderer.invoke('workflow:list-plugin-schemes', { workflowId, pluginId }),
+    readPluginScheme: (workflowId: string, pluginId: string, schemeName: string): Promise<Record<string, string>> =>
+      ipcRenderer.invoke('workflow:read-plugin-scheme', { workflowId, pluginId, schemeName }),
+    createPluginScheme: (workflowId: string, pluginId: string, schemeName: string): Promise<void> =>
+      ipcRenderer.invoke('workflow:create-plugin-scheme', { workflowId, pluginId, schemeName }),
+    savePluginScheme: (workflowId: string, pluginId: string, schemeName: string, data: Record<string, string>): Promise<void> =>
+      ipcRenderer.invoke('workflow:save-plugin-scheme', { workflowId, pluginId, schemeName, data }),
+    deletePluginScheme: (workflowId: string, pluginId: string, schemeName: string): Promise<void> =>
+      ipcRenderer.invoke('workflow:delete-plugin-scheme', { workflowId, pluginId, schemeName }),
   },
 
   workflowFolder: {

@@ -9,6 +9,11 @@ import {
   createWorkflowFolder,
   updateWorkflowFolder,
   deleteWorkflowFolder,
+  listPluginSchemes,
+  readPluginScheme,
+  createPluginScheme,
+  savePluginScheme,
+  deletePluginScheme,
 } from '../services/workflow-store'
 
 export function registerWorkflowIpcHandlers(): void {
@@ -53,4 +58,21 @@ export function registerWorkflowIpcHandlers(): void {
   ipcMain.handle('workflowFolder:create', (_e, data) => createWorkflowFolder(data))
   ipcMain.handle('workflowFolder:update', (_e, id: string, data) => updateWorkflowFolder(id, data))
   ipcMain.handle('workflowFolder:delete', (_e, id: string) => deleteWorkflowFolder(id))
+
+  // 插件配置方案
+  ipcMain.handle('workflow:list-plugin-schemes', (_e, { workflowId, pluginId }: { workflowId: string; pluginId: string }) => {
+    try { return listPluginSchemes(workflowId, pluginId) } catch { return [] }
+  })
+  ipcMain.handle('workflow:read-plugin-scheme', (_e, { workflowId, pluginId, schemeName }: { workflowId: string; pluginId: string; schemeName: string }) => {
+    return readPluginScheme(workflowId, pluginId, schemeName)
+  })
+  ipcMain.handle('workflow:create-plugin-scheme', (_e, { workflowId, pluginId, schemeName }: { workflowId: string; pluginId: string; schemeName: string }) => {
+    return createPluginScheme(workflowId, pluginId, schemeName)
+  })
+  ipcMain.handle('workflow:save-plugin-scheme', (_e, { workflowId, pluginId, schemeName, data }: { workflowId: string; pluginId: string; schemeName: string; data: Record<string, string> }) => {
+    return savePluginScheme(workflowId, pluginId, schemeName, data)
+  })
+  ipcMain.handle('workflow:delete-plugin-scheme', (_e, { workflowId, pluginId, schemeName }: { workflowId: string; pluginId: string; schemeName: string }) => {
+    return deletePluginScheme(workflowId, pluginId, schemeName)
+  })
 }
