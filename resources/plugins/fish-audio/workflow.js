@@ -8,6 +8,7 @@ const {
   getMimeType,
   buildAuthHeader,
   resolveBaseUrl,
+  resolveProxy,
 } = require('./shared')
 
 module.exports = {
@@ -48,6 +49,7 @@ module.exports = {
           { label: 'Low（最低延迟）', value: 'low' },
         ] },
         { key: 'baseUrl', label: 'API 地址', type: 'text', default: 'https://api.fish.audio', tooltip: 'FishAudio API 基础地址' },
+        { key: 'proxy', label: 'HTTP 代理', type: 'text', tooltip: 'HTTP 代理地址，如 http://127.0.0.1:7890（留空则使用插件全局配置）', placeholder: 'http://127.0.0.1:7890' },
       ],
       outputs: [
         { key: 'success', type: 'boolean' },
@@ -61,6 +63,7 @@ module.exports = {
       ],
       handler: async (ctx, args) => {
         const baseUrl = resolveBaseUrl(args)
+        const proxy = resolveProxy(args)
         const headers = buildAuthHeader(args.apiKey)
 
         const model = args.model || 's2-pro'
@@ -83,7 +86,7 @@ module.exports = {
           },
         }
 
-        ctx.logger.info(`TTS 请求: ${baseUrl}/v1/tts`)
+        ctx.logger.info(`TTS 请求: ${baseUrl}/v1/tts${proxy ? ` (代理: ${proxy})` : ''}`)
         ctx.logger.info(`模型: ${model}, 格式: ${format}, 采样率: ${sampleRate}Hz`)
         ctx.logger.info(`语速: ${body.prosody.speed}, 表现力: ${body.temperature}`)
         ctx.logger.info(`文字长度: ${args.text.length} 字符`)
@@ -92,6 +95,7 @@ module.exports = {
           headers: { ...headers, 'model': model },
           body,
           timeout: 120000,
+          proxy,
         })
 
         const ext = getFormatExt(format)
@@ -126,6 +130,7 @@ module.exports = {
           { label: '西班牙文', value: 'es' },
         ] },
         { key: 'baseUrl', label: 'API 地址', type: 'text', default: 'https://api.fish.audio', tooltip: 'FishAudio API 基础地址' },
+        { key: 'proxy', label: 'HTTP 代理', type: 'text', tooltip: 'HTTP 代理地址，如 http://127.0.0.1:7890（留空则使用插件全局配置）', placeholder: 'http://127.0.0.1:7890' },
       ],
       outputs: [
         { key: 'success', type: 'boolean' },
@@ -138,13 +143,14 @@ module.exports = {
       ],
       handler: async (ctx, args) => {
         const baseUrl = resolveBaseUrl(args)
+        const proxy = resolveProxy(args)
         const headers = buildAuthHeader(args.apiKey)
 
         const audioBuffer = readAudioFile(args.filePath)
         const ext = path.extname(args.filePath).toLowerCase()
         const mimeType = getMimeType(ext)
 
-        ctx.logger.info(`STT 请求: ${baseUrl}/v1/asr`)
+        ctx.logger.info(`STT 请求: ${baseUrl}/v1/asr${proxy ? ` (代理: ${proxy})` : ''}`)
         ctx.logger.info(`文件: ${args.filePath} (${(audioBuffer.length / 1024).toFixed(1)}KB, ${mimeType})`)
         ctx.logger.info(`语言: ${args.language || '自动检测'}`)
 
@@ -153,6 +159,7 @@ module.exports = {
           file: { buffer: audioBuffer, mimeType },
           language: args.language || null,
           timeout: 120000,
+          proxy,
         })
 
         ctx.logger.info(`STT 完成: 时长 ${result.duration?.toFixed(1) || '?'}秒, 文字长度 ${result.text?.length || 0}`)

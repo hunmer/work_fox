@@ -7,6 +7,7 @@ const {
   getMimeType,
   buildAuthHeader,
   resolveBaseUrl,
+  resolveProxy,
 } = require('./shared')
 
 module.exports = {
@@ -30,6 +31,7 @@ module.exports = {
           chunkLength: { type: 'number', description: '文本分片长度，100-300，默认 300' },
           latency: { type: 'string', description: '延迟模式：normal(最佳质量)/balanced(较低延迟)/low(最低延迟)' },
           baseUrl: { type: 'string', description: 'API 地址，默认 https://api.fish.audio' },
+          proxy: { type: 'string', description: 'HTTP 代理地址，如 http://127.0.0.1:7890（也可在插件配置中全局设置）' },
         },
         required: ['text'],
       },
@@ -45,6 +47,7 @@ module.exports = {
           language: { type: 'string', description: '音频语言，如 zh/en/ja/ko 等，不填则自动检测' },
           ignoreTimestamps: { type: 'boolean', description: '是否忽略精确时间戳，默认 true' },
           baseUrl: { type: 'string', description: 'API 地址，默认 https://api.fish.audio' },
+          proxy: { type: 'string', description: 'HTTP 代理地址，如 http://127.0.0.1:7890（也可在插件配置中全局设置）' },
         },
         required: ['filePath'],
       },
@@ -53,6 +56,7 @@ module.exports = {
 
   handler: async (name, args, api) => {
     const baseUrl = resolveBaseUrl(args)
+    const proxy = resolveProxy(args)
 
     switch (name) {
       case 'fish_audio_tts': {
@@ -81,6 +85,7 @@ module.exports = {
           headers: { ...headers, 'model': model },
           body,
           timeout: 120000,
+          proxy,
         })
 
         const ext = getFormatExt(format)
@@ -105,6 +110,7 @@ module.exports = {
           file: { buffer: audioBuffer, mimeType },
           language: args.language || null,
           timeout: 120000,
+          proxy,
         })
 
         return {

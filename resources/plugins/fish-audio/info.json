@@ -43,6 +43,14 @@
       "type": "string",
       "value": "https://api.fish.audio",
       "placeholder": "https://api.fish.audio"
+    },
+    {
+      "key": "httpProxy",
+      "label": "HTTP 代理",
+      "desc": "HTTP 代理地址，如 http://127.0.0.1:7890（留空则不使用代理）",
+      "type": "string",
+      "value": "",
+      "placeholder": "http://127.0.0.1:7890"
     }
   ]
 }

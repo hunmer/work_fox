@@ -75,6 +75,8 @@ export interface FetchOptions {
   encoding?: string
   timeout?: number
   userAgent?: string
+  /** HTTP 代理地址，如 http://127.0.0.1:7890 */
+  proxy?: string
 }
 
 /** 单个下载结果 */
