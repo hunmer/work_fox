@@ -1,6 +1,7 @@
 {
   "appId": "com.work-fox.app",
   "productName": "WorkFox",
+  "electronDist": "node_modules/electron/dist",
   "directories": {
     "output": "dist-app"
   },
@@ -14,11 +15,10 @@
     "!node_modules/**/{test,tests,__tests__,example,examples,docs,doc,website,.github,.vscode}"
   ],
   "mac": {
-    "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }],
+    "target": [{ "target": "dmg", "arch": ["universal"] }],
     "category": "public.app-category.productivity"
   },
   "win": {
-    "artifactName": "${productName}-Setup-${version}.${ext}",
     "target": [{ "target": "nsis", "arch": ["x64"] }],
     "requestedExecutionLevel": "asInvoker"
   },
@@ -39,8 +39,7 @@
   "compression": "store",
   "asar": true,
   "publish": {
-    "provider": "github",
-    "owner": "hunmer",
-    "repo": "work_fox"
+    "provider": "generic",
+    "url": "http://192.168.1.200/workfox_updates/"
   }
 }

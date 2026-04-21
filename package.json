@@ -10,7 +10,9 @@
     "dev-win": "chcp 65001 && electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "pack": "electron-vite build && electron-builder --config electron-builder.json --dir"
+    "pack": "node scripts/build-production.js local",
+    "pack:release": "node scripts/build-production.js release",
+    "pack:dir": "npx electron-vite build && npx electron-builder --config electron-builder.json --dir"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.114",
