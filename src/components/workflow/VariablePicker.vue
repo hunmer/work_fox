@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useWorkflowStore } from '@/stores/workflow'
+import { usePluginStore } from '@/stores/plugin'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
 import type { OutputField } from '@/lib/workflow/types'
@@ -9,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuLabel,
+  DropdownMenuItem,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -26,6 +27,29 @@ const emit = defineEmits<{
 }>()
 
 const store = useWorkflowStore()
+const pluginStore = usePluginStore()
+
+/** Get config fields for enabled plugins */
+const configPlugins = computed(() => {
+  if (!store.currentWorkflow?.enabledPlugins?.length) return []
+  return store.currentWorkflow.enabledPlugins
+    .map(pluginId => {
+      const plugin = pluginStore.plugins.find(p => p.id === pluginId)
+      if (!plugin?.config?.length) return null
+      return { id: pluginId, name: plugin.name, config: plugin.config }
+    })
+    .filter(Boolean) as Array<{ id: string; name: string; config: any[] }>
+})
+
+/** Build config variable path */
+function buildConfigPath(pluginId: string, key: string): string {
+  return `{{ __config__["${pluginId}"]["${key}"] }}`
+}
+
+/** Handle config field selection */
+function handleSelectConfigField(pluginId: string, key: string) {
+  emit('select', buildConfigPath(pluginId, key))
+}
 
 /** 获取画布上除当前节点外的所有节点 */
 const otherNodes = computed(() => {
@@ -79,43 +103,68 @@ function handleSelectField(nodeId: string, fieldPath: string) {
       align="end"
       class="w-56"
     >
-      <template v-if="otherNodes.length === 0">
-        <DropdownMenuLabel class="text-xs text-muted-foreground">
-          画布上没有其他节点
-        </DropdownMenuLabel>
-      </template>
-
-      <template
-        v-for="node in otherNodes"
-        :key="node.id"
-      >
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger class="text-xs">
-            <component
-              :is="getNodeIcon(node.type)"
-              v-if="getNodeIcon(node.type)"
-              class="w-3.5 h-3.5 mr-1.5 shrink-0 text-muted-foreground"
-            />
-            <span class="truncate">{{ getNodeLabel(node) }}</span>
-          </DropdownMenuSubTrigger>
-
-          <DropdownMenuSubContent class="min-w-[180px]">
-            <template v-if="getNodeOutputs(node).length > 0">
-              <VariableFieldMenu
-                :fields="getNodeOutputs(node)"
-                :node-id="node.id"
-                @select="handleSelectField"
-              />
-            </template>
-            <div
-              v-else
-              class="px-2 py-1.5 text-xs text-muted-foreground"
-            >
-              无输出字段
+      <!-- 节点属性 sub-menu -->
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger class="text-xs font-medium">
+          <span>节点属性</span>
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent class="w-56">
+          <template v-if="otherNodes.length === 0">
+            <div class="px-2 py-1.5 text-xs text-muted-foreground">
+              画布上没有其他节点
             </div>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-      </template>
+          </template>
+          <template v-for="node in otherNodes" :key="node.id">
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger class="text-xs">
+                <component
+                  :is="getNodeIcon(node.type)"
+                  v-if="getNodeIcon(node.type)"
+                  class="w-3.5 h-3.5 mr-1.5 shrink-0 text-muted-foreground"
+                />
+                <span class="truncate">{{ getNodeLabel(node) }}</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent class="min-w-[180px]">
+                <template v-if="getNodeOutputs(node).length > 0">
+                  <VariableFieldMenu
+                    :fields="getNodeOutputs(node)"
+                    :node-id="node.id"
+                    @select="handleSelectField"
+                  />
+                </template>
+                <div v-else class="px-2 py-1.5 text-xs text-muted-foreground">
+                  无输出字段
+                </div>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </template>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+
+      <!-- 配置属性 sub-menu -->
+      <DropdownMenuSub v-if="configPlugins.length > 0">
+        <DropdownMenuSubTrigger class="text-xs font-medium">
+          <span>配置属性</span>
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent class="w-56">
+          <DropdownMenuSub v-for="plugin in configPlugins" :key="plugin.id">
+            <DropdownMenuSubTrigger class="text-xs">
+              <span class="truncate">{{ plugin.name }}</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent class="min-w-[180px]">
+              <DropdownMenuItem
+                v-for="field in plugin.config"
+                :key="field.key"
+                class="text-xs"
+                @click="handleSelectConfigField(plugin.id, field.key)"
+              >
+                <span class="font-mono text-[10px] text-muted-foreground mr-1">{{ field.type }}</span>
+                <span>{{ field.label }}</span>
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
     </DropdownMenuContent>
   </DropdownMenu>
 </template>
