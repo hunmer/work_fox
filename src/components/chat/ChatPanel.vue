@@ -193,11 +193,11 @@ function formatTime(timestamp: number): string {
     </div>
 
     <!-- 内容区域：根据活跃 Tab 显示 -->
-    <div class="flex-1 overflow-hidden">
+    <div class="flex-1 overflow-hidden flex flex-col min-h-0">
       <!-- 历史会话 -->
       <ScrollArea
         v-if="activeTab === 'history'"
-        class="h-full"
+        class="flex-1 min-h-0"
       >
         <div class="p-2 space-y-0.5">
           <Button
@@ -238,43 +238,42 @@ function formatTime(timestamp: number): string {
         </div>
       </ScrollArea>
 
-      <!-- 消息列表（默认） -->
-      <ChatMessageList
-        v-if="activeTab === 'messages'"
-        :chat="chat"
-        :messages="chat.messages"
-        :is-streaming="chat.isStreaming"
-        :streaming-token="chat.streamingToken"
-        :streaming-tool-calls="chat.streamingToolCalls"
-        :streaming-thinking-blocks="chat.streamingThinkingBlocks"
-        :streaming-usage="chat.streamingUsage"
-        @retry="chat.retryMessage($event)"
-        @delete="chat.deleteMessageAndAfter($event)"
-        @edit="handleEdit"
-      />
+      <!-- 消息列表（默认） + 输入区域在 Tab 内部 -->
+      <template v-if="activeTab === 'messages'">
+        <ChatMessageList
+          :chat="chat"
+          :messages="chat.messages"
+          :is-streaming="chat.isStreaming"
+          :streaming-token="chat.streamingToken"
+          :streaming-tool-calls="chat.streamingToolCalls"
+          :streaming-thinking-blocks="chat.streamingThinkingBlocks"
+          :streaming-usage="chat.streamingUsage"
+          @retry="chat.retryMessage($event)"
+          @delete="chat.deleteMessageAndAfter($event)"
+          @edit="handleEdit"
+        />
+        <ChatInput
+          :is-streaming="chat.isStreaming"
+          :disabled="!providerStore.currentModel"
+          :tools="toolDisplayItems"
+          :enabled-tools="enabledTools"
+          :is-workflow-context="isWorkflowContext"
+          :workflow-edit-mode="uiStore.workflowEditMode"
+          :selected-nodes="selectedNodes"
+          @send="handleSend"
+          @stop="chat.stopGeneration()"
+          @clear="handleClear"
+          @toggle-tool="handleToggleTool"
+          @toggle-workflow-edit="handleToggleWorkflowEdit"
+          @open-agent-settings="handleOpenAgentSettings"
+        />
+      </template>
 
       <!-- 工作区文件 -->
       <WorkspaceFileTree
         v-if="activeTab === 'files'"
       />
     </div>
-
-    <!-- 输入区域（始终在底部） -->
-    <ChatInput
-      :is-streaming="chat.isStreaming"
-      :disabled="!providerStore.currentModel"
-      :tools="toolDisplayItems"
-      :enabled-tools="enabledTools"
-      :is-workflow-context="isWorkflowContext"
-      :workflow-edit-mode="uiStore.workflowEditMode"
-      :selected-nodes="selectedNodes"
-      @send="handleSend"
-      @stop="chat.stopGeneration()"
-      @clear="handleClear"
-      @toggle-tool="handleToggleTool"
-      @toggle-workflow-edit="handleToggleWorkflowEdit"
-      @open-agent-settings="handleOpenAgentSettings"
-    />
 
     <!-- 设置对话框 -->
     <SettingsDialog

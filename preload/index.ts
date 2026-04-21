@@ -169,8 +169,18 @@ const api = {
   },
 
   fs: {
-    listDir: (dirPath: string): Promise<Array<{ name: string; path: string; type: 'file' | 'directory' }>> =>
+    listDir: (dirPath: string): Promise<Array<{ name: string; path: string; type: 'file' | 'directory'; modifiedAt: string }>> =>
       ipcRenderer.invoke('fs:listDir', dirPath),
+    delete: (targetPath: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('fs:delete', targetPath),
+    createFile: (filePath: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('fs:createFile', filePath),
+    createDir: (dirPath: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('fs:createDir', dirPath),
+    openInExplorer: (targetPath: string): Promise<void> =>
+      ipcRenderer.invoke('fs:openInExplorer', targetPath),
+    rename: (oldPath: string, newName: string): Promise<{ success: boolean; newPath?: string; error?: string }> =>
+      ipcRenderer.invoke('fs:rename', oldPath, newName),
   },
 
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
