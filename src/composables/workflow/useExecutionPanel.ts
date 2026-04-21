@@ -30,7 +30,7 @@ export function useExecutionPanel() {
     if (expanded) {
       nextTick(() => {
         nextTick(() => {
-          execPanelRef.value?.resize(execPanelSizes.value[1])
+          ;(execPanelRef.value as { resize?: (size: number) => void } | null)?.resize?.(execPanelSizes.value[1])
         })
       })
     }

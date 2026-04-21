@@ -449,7 +449,7 @@ Status: `in_progress`
 - Electron local mode 与 backend mode 的 `PluginMeta`/`PluginInfo` 口径已进一步对齐到 `type/hasWorkflow/entries`
 
 ### Phase 10. 前端 Store 与执行 UI 改造
-Status: `in_progress`
+Status: `completed`
 
 目标：
 - 在不重写业务逻辑的前提下，把 store 从“本地执行驱动”切到“后端事件驱动”
@@ -486,10 +486,14 @@ Status: `in_progress`
 - [src/stores/workflow.ts](/Users/Zhuanz/Documents/work_fox/src/stores/workflow.ts) 的 execution state 已开始统一从 execution events 更新
 - 已预埋 backend execution event 订阅入口，后续 backend `workflow:execute/pause/resume/stop` 落地后可复用同一状态机
 - backend `workflow:execute/pause/resume/stop` 已落地，backend flag 下可驱动受限节点集的执行
-- 暂未移除本地 `WorkflowEngine` 实例；当前仍是“backend 优先 + 本地执行兜底”的过渡形态
+- workflow store 已不再持有 store 级 `WorkflowEngine` 实例；本地执行 fallback 仅保留为 `createExecutionActions(...)` 内部的短生命周期 `localEngine`
+- backend 模式下已在 `ws:connected/ws:reconnected` 后主动刷新列表数据并触发 execution recovery
+- 已修正首次 connect 重复触发 `ws:reconnected` 的问题，避免初次进入页面时重复 recovery / reload
+- [src/lib/agent/workflow-renderer-tools.ts](/Users/Zhuanz/Documents/work_fox/src/lib/agent/workflow-renderer-tools.ts) 已切到真实 `executionId` + 终态等待 / 异步轮询，不再假设 `startExecution()` 立即返回最终 log
+- `WorkflowEngine.currentLog` 与执行历史保留真实 `executionId`，同步/异步工具查询与 backend recovery/persisted logs 已能对齐
 
 ### Phase 11. 内置插件迁移与兼容验证
-Status: `pending`
+Status: `in_progress`
 
 目标：
 - 逐个迁移内置插件，避免一次性切换导致整个执行链不可用
@@ -515,8 +519,14 @@ Status: `pending`
 - 至少内置关键插件能在新架构下稳定执行
 - 插件配置和节点定义对现有工作流保持兼容
 
+当前进展：
+- 内置插件 `workfox.fetch` / `workfox.file-system` / `workfox.fish-audio` / `workfox.jimeng` 已声明为 `server`
+- `workfox.window-manager` 已声明为 `both`，并通过 interaction bridge 回到 Electron 本地执行
+- plugin entry / capability loader / runtime type 已统一到 shared source-of-truth，backend build 与全量 app build 当前均通过
+- 尚未补一轮面向内置插件矩阵的显式回归用例，因此该阶段先保留 `in_progress`
+
 ### Phase 12. 测试、切换与收尾
-Status: `pending`
+Status: `in_progress`
 
 目标：
 - 降低切换风险，确保迁移可回退、可验证、可观测
@@ -555,6 +565,14 @@ Status: `pending`
 完成标准：
 - 新架构默认启用且通过回归
 - 保留明确回退手段
+
+当前进展：
+- `pnpm exec tsc -p tsconfig.web.json --noEmit` 已通过
+- `pnpm build:backend` 已通过
+- `pnpm build` 已通过，修复了 renderer 对 `@shared/*` alias 的打包解析问题
+- 已新增 [scripts/backend-smoke-test.mjs](/Users/Zhuanz/Documents/work_fox/scripts/backend-smoke-test.mjs)，并通过 `pnpm smoke:backend` 验证 backend HTTP/WS、workflow CRUD、plugin schemes、execution pause/resume/recovery、executionLog 持久化与内置 server plugins
+- 已新增 [docs/superpowers/plans/2026-04-22-workfox-backend-migration-verification.md](/Users/Zhuanz/Documents/work_fox/docs/superpowers/plans/2026-04-22-workfox-backend-migration-verification.md)，收敛 Phase 11/12 的验证命令、覆盖范围和仍需人工检查的 Electron-local 场景
+- 仍未补充更细粒度单测，以及 `agent_run` / `window-manager` 的自动化端到端验证，因此当前保持 `in_progress`
 
 ## Milestones
 

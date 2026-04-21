@@ -1,5 +1,8 @@
 import { useTabStore } from '@/stores/tab'
+import type { WorkflowStore } from '@/stores/workflow'
 import type { Workflow, ExecutionLog } from '@/lib/workflow/types'
+import { createWorkflowDomainApi } from '@/lib/backend-api/workflow-domain'
+import type { EngineStatus } from '@/lib/workflow/engine'
 
 interface ToolResult {
   success: boolean
@@ -43,8 +46,15 @@ const asyncExecutions = new Map<string, {
   log: ExecutionLog
 }>()
 
+const EXECUTION_WAIT_TIMEOUT_MS = 60_000
+const EXECUTION_WAIT_INTERVAL_MS = 150
+type ActiveWorkflowStore = WorkflowStore
+
 function getCurrentWorkflow(args: Record<string, unknown> = {}): ToolResult {
   const workflowStore = useTabStore().activeStore
+  if (!workflowStore) {
+    return { success: false, message: '当前没有激活的工作流标签页' }
+  }
   const workflow = workflowStore.currentWorkflow
   if (!workflow) {
     return { success: false, message: '当前没有加载工作流画布' }
@@ -109,6 +119,9 @@ export function executeRendererWorkflowTool(
 
 async function executeWorkflowSync(): Promise<ToolResult> {
   const workflowStore = useTabStore().activeStore
+  if (!workflowStore) {
+    return { success: false, message: '当前没有激活的工作流标签页' }
+  }
   const workflow = workflowStore.currentWorkflow
   if (!workflow) {
     return { success: false, message: '当前没有加载工作流画布' }
@@ -117,25 +130,27 @@ async function executeWorkflowSync(): Promise<ToolResult> {
     return { success: false, message: '工作流正在执行中，请等待完成后再试' }
   }
 
-  await workflowStore.startExecution()
+  const started = await workflowStore.startExecution()
+  const executionId = started.executionId
 
+  const status = await waitForExecutionTerminalState(workflowStore, executionId)
   const log = workflowStore.executionLog
   if (!log) {
     return { success: false, message: '执行未返回日志' }
   }
 
-  const executionId = `exec-sync-${Date.now()}`
-  asyncExecutions.set(executionId, {
+  const recordExecutionId = executionId || log.id || `exec-sync-${Date.now()}`
+  asyncExecutions.set(recordExecutionId, {
     workflowId: workflow.id,
     log: clone(log),
   })
 
   return {
     success: true,
-    message: `工作流同步执行完成，状态: ${workflowStore.executionStatus}`,
+    message: `工作流同步执行完成，状态: ${status}`,
     data: {
-      executionId,
-      status: workflowStore.executionStatus,
+      executionId: recordExecutionId,
+      status,
       steps: formatExecutionResult(log),
     },
   }
@@ -143,6 +158,9 @@ async function executeWorkflowSync(): Promise<ToolResult> {
 
 async function executeWorkflowAsync(): Promise<ToolResult> {
   const workflowStore = useTabStore().activeStore
+  if (!workflowStore) {
+    return { success: false, message: '当前没有激活的工作流标签页' }
+  }
   const workflow = workflowStore.currentWorkflow
   if (!workflow) {
     return { success: false, message: '当前没有加载工作流画布' }
@@ -151,36 +169,28 @@ async function executeWorkflowAsync(): Promise<ToolResult> {
     return { success: false, message: '工作流正在执行中，请等待完成后再试' }
   }
 
-  const executionId = `exec-async-${Date.now()}`
-
-  // 先保存初始状态引用
+  const started = await workflowStore.startExecution()
+  const executionId = started.executionId || `exec-async-${Date.now()}`
   asyncExecutions.set(executionId, {
     workflowId: workflow.id,
     log: {
       id: executionId,
       workflowId: workflow.id,
       startedAt: Date.now(),
-      status: 'running',
+      status: started.status === 'paused' ? 'paused' : 'running',
       steps: [],
     },
   })
-
-  // 后台执行，不 await
-  workflowStore.startExecution().then(() => {
-    const record = asyncExecutions.get(executionId)
-    if (record) {
-      record.log = clone(workflowStore.executionLog!) || record.log
-    }
-  })
+  void syncAsyncExecutionRecord(workflowStore, executionId)
 
   return {
     success: true,
     message: '工作流异步执行已启动',
-    data: { executionId, status: 'running' },
+    data: { executionId, status: started.status },
   }
 }
 
-function getWorkflowResult(args: Record<string, unknown>): ToolResult {
+async function getWorkflowResult(args: Record<string, unknown>): Promise<ToolResult> {
   const executionId = args.execution_id as string
   if (!executionId) {
     return { success: false, message: '缺少必填参数: execution_id' }
@@ -196,19 +206,31 @@ function getWorkflowResult(args: Record<string, unknown>): ToolResult {
 
   // 从 workflowStore 获取实时状态（如果对应的执行仍在运行）
   const workflowStore = useTabStore().activeStore
-  if (workflowStore.executionStatus === 'running' && record.workflowId === workflowStore.currentWorkflow?.id) {
+  if (
+    workflowStore
+    && (workflowStore.executionStatus === 'running' || workflowStore.executionStatus === 'paused')
+    && record.workflowId === workflowStore.currentWorkflow?.id
+    && workflowStore.executionLog?.id === executionId
+  ) {
     const currentLog = workflowStore.executionLog
     if (currentLog) {
       record.log = clone(currentLog)
       return {
         success: true,
-        message: `工作流执行中`,
+        message: workflowStore.executionStatus === 'paused' ? '工作流已暂停' : '工作流执行中',
         data: {
           executionId,
-          status: 'running',
+          status: workflowStore.executionStatus,
           steps: formatExecutionResult(currentLog, nodeId),
         },
       }
+    }
+  }
+
+  if (record.log.status === 'running' || record.log.status === 'paused') {
+    const persistedLog = await findPersistedExecutionLog(record.workflowId, executionId)
+    if (persistedLog) {
+      record.log = clone(persistedLog)
     }
   }
 
@@ -221,4 +243,66 @@ function getWorkflowResult(args: Record<string, unknown>): ToolResult {
       steps,
     },
   }
+}
+
+async function waitForExecutionTerminalState(
+  workflowStore: ActiveWorkflowStore,
+  executionId: string | null,
+): Promise<EngineStatus> {
+  const startedAt = Date.now()
+  for (;;) {
+    const status = workflowStore.executionStatus
+    const log = workflowStore.executionLog
+    const sameExecution = !executionId || !log?.id || log.id === executionId
+    if (sameExecution && (status === 'completed' || status === 'error')) {
+      return status
+    }
+    if (Date.now() - startedAt > EXECUTION_WAIT_TIMEOUT_MS) {
+      throw new Error('等待工作流执行完成超时')
+    }
+    await sleep(EXECUTION_WAIT_INTERVAL_MS)
+  }
+}
+
+async function syncAsyncExecutionRecord(
+  workflowStore: ActiveWorkflowStore,
+  executionId: string,
+): Promise<void> {
+  const record = asyncExecutions.get(executionId)
+  if (!record) return
+
+  const startedAt = Date.now()
+  for (;;) {
+    const currentLog = workflowStore.executionLog
+    if (currentLog?.id === executionId) {
+      record.log = clone(currentLog)
+      if (workflowStore.executionStatus === 'completed' || workflowStore.executionStatus === 'error') {
+        return
+      }
+    } else {
+      const persistedLog = await findPersistedExecutionLog(record.workflowId, executionId)
+      if (persistedLog) {
+        record.log = clone(persistedLog)
+        return
+      }
+    }
+
+    if (Date.now() - startedAt > EXECUTION_WAIT_TIMEOUT_MS) {
+      return
+    }
+    await sleep(EXECUTION_WAIT_INTERVAL_MS)
+  }
+}
+
+async function findPersistedExecutionLog(workflowId: string, executionId: string): Promise<ExecutionLog | null> {
+  try {
+    const logs = await createWorkflowDomainApi().executionLog.list(workflowId)
+    return logs.find((log: ExecutionLog) => log.id === executionId) || null
+  } catch {
+    return null
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }

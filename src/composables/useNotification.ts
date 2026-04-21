@@ -24,6 +24,8 @@ export interface NotificationOptions {
   id?: string | number
 }
 
+type SonnerNotificationOptions = Omit<NotificationOptions, 'title'>
+
 /** Promise 通知的文案配置 */
 export interface PromiseNotificationMessages {
   loading: string
@@ -73,7 +75,7 @@ const DEFAULT_DURATION = 4000
  */
 export function useNotification() {
   /** 构建 vue-sonner 所需的 options 对象 */
-  function buildSonnerOptions(options?: NotificationOptions) {
+  function buildSonnerOptions(options?: SonnerNotificationOptions) {
     if (!options) return undefined
     const opts: Record<string, any> = {
       description: options.description,
@@ -98,7 +100,7 @@ export function useNotification() {
   /** 解析参数：支持 string 或 NotificationOptions */
   function resolveArgs(
     messageOrOptions: string | NotificationOptions
-  ): [string, Record<string, any> | undefined] {
+  ): [string, SonnerNotificationOptions | undefined] {
     if (typeof messageOrOptions === 'string') {
       return [messageOrOptions, { duration: DEFAULT_DURATION }]
     }

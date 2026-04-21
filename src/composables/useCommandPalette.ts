@@ -12,7 +12,22 @@ export interface ParsedQuery {
   unknownPrefix: boolean
 }
 
-export function useCommandPalette() {
+export interface UseCommandPaletteResult {
+  providers: ReturnType<typeof shallowRef<CommandProvider[]>>
+  results: ReturnType<typeof ref<Map<string, CommandItem[]>>>
+  loading: ReturnType<typeof ref<boolean>>
+  activeProvider: ReturnType<typeof ref<CommandProvider | null>>
+  queryText: ReturnType<typeof ref<string>>
+  registerProvider: (provider: CommandProvider) => void
+  registerProviders: (list: CommandProvider[]) => void
+  activateProvider: (provider: CommandProvider) => void
+  deactivateProvider: () => void
+  searchWithProvider: (provider: CommandProvider, query: string) => Promise<void>
+  parseQuery: (input: string) => ParsedQuery
+  search: (input: string) => Promise<void>
+}
+
+export function useCommandPalette(): UseCommandPaletteResult {
   const providers = shallowRef<CommandProvider[]>([])
   const results = ref<Map<string, CommandItem[]>>(new Map())
   const loading = ref(false)

@@ -7,7 +7,7 @@ const cache = new Map<string, Component | null>()
 export function resolveLucideIcon(name: string): Component | null {
   let comp = cache.get(name)
   if (comp !== undefined) return comp
-  const raw = (lucideIcons as any)[name]
+  const raw = ((lucideIcons as unknown) as Record<string, Component | undefined>)[name]
   comp = raw ? markRaw(raw) : null
   cache.set(name, comp)
   return comp

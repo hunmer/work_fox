@@ -445,3 +445,23 @@
 ### Next Recommended Step
 
 - 若继续推进，优先切入 `Phase 10`，收掉 workflow store 的本地执行兜底分支，让 execution path 真正只剩 backend-first，而不是继续在 plugin loader 细节上做边缘优化。
+
+### Session 17
+
+- 开始 `Phase 10` 收口，优先处理 workflow store 的执行态组织方式，而不是继续扩展协议或插件边界。
+- 修改 [src/stores/workflow.ts](/Users/Zhuanz/Documents/work_fox/src/stores/workflow.ts)：
+  - `createExecutionActions(...)` 不再依赖 store 级持久 `WorkflowEngine` ref
+  - 本地模式改为闭包内 `localEngine`，仅作为非 backend 模式下的执行 fallback
+  - backend `ws:connected/ws:reconnected` 时主动刷新 workflow/folder 列表并触发 execution recovery
+  - `workflow:completed/workflow:error` 现在会把终态 `ExecutionLog.snapshot` 应回当前画布，避免节点状态停留在最后一条中间 `execution:log`
+- 修改 [src/lib/ws-bridge.ts](/Users/Zhuanz/Documents/work_fox/src/lib/ws-bridge.ts)：
+  - 初次连接仅发 `ws:connected`
+  - 只有真实重连时才发 `ws:reconnected`
+  - 避免 workflow store 在首次 connect 时重复执行 recovery / loadData
+- 验证：
+  - `pnpm exec tsc -p tsconfig.web.json --noEmit` 仍失败，但失败项仍为仓库既有错误
+  - 本轮未新增 `workflow store` / `ws-bridge` 相关类型错误
+
+### Next Recommended Step
+
+- 若继续推进 `Phase 10`，优先把 `ExecutionBar.vue`、`CustomNodeWrapper.vue`、`workflow-renderer-tools.ts` 对“同步返回 executionLog”的旧假设清掉，并决定是否彻底移除 backend 模式下的本地执行 fallback。

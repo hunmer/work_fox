@@ -68,8 +68,8 @@ export class WorkflowEngine {
 
   get currentLog(): ExecutionLog {
     return {
-      id: '',
-      workflowId: '',
+      id: this.executionId,
+      workflowId: this.runtimeConfig?.workflowId || '',
       startedAt: this.startTime,
       status:
         this._status === 'running'

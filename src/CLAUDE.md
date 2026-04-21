@@ -32,16 +32,20 @@
 
 ## 对外接口
 
-渲染进程不直接对外暴露接口，而是通过 `window.api`（由 `preload/index.ts` 注入）与主进程通信。
+渲染进程不直接对外暴露接口，而是通过两类桥接通信：
+
+- `window.api`：Electron preload 注入，本地桌面能力与兼容 IPC
+- `wsBridge`：workflow backend WS 通道，承载已迁移的 workflow / execution / plugin domain
 
 ### 关键 IPC 调用
 
 - `window.api.chat.completions(params)` -- 发送 AI 对话请求
 - `window.api.chat.abort(requestId)` -- 中止对话
-- `window.api.workflow.*` -- 工作流 CRUD
 - `window.api.plugin.*` -- 插件管理
 - `window.api.agent.execTool(type, params)` -- 执行工具
 - `window.api.on(channel, callback)` -- 监听主进程推送事件
+- `wsBridge.invoke(channel, data)` -- 调用 backend workflow / execution / plugin channels
+- `wsBridge.on(channel, handler)` -- 订阅 backend execution / connection 事件
 
 ## 目录结构
 
@@ -60,7 +64,7 @@ src/
     globals.css                        Tailwind + 主题变量（light/dark）
   stores/
     chat.ts                            Chat 会话/消息管理（工厂模式）
-    workflow.ts                        工作流编辑状态（Undo/Redo + CRUD）
+    workflow.ts                        工作流编辑状态（Undo/Redo + backend-first execution state）
     ai-provider.ts                     AI Provider/Model 选择
     tab.ts                             多标签页管理
     plugin.ts                          插件状态
@@ -82,7 +86,7 @@ src/
       workflow-renderer-tools.ts       工作流渲染端工具执行
     workflow/
       types.ts                         工作流类型定义
-      engine.ts                        执行引擎（WorkflowEngine 类）
+      engine.ts                        本地 fallback 执行引擎（非 backend 主路径）
       nodeRegistry.ts                  节点注册表（内置 + 插件）
       nodes/
         index.ts                       节点定义汇总
@@ -200,17 +204,34 @@ interface WorkflowNode {
 }
 ```
 
+## Backend Workflow Mode
+
+- 默认迁移开关：
+  - `localStorage['workfox.useWorkflowBackend'] = '1'`
+  - 或 `VITE_USE_WORKFLOW_BACKEND=1`
+- backend 模式下：
+  - CRUD / version / execution log / operation history 走 backend adapter
+  - execution state 来自 WS execution events 和 recovery
+  - `agent_run` / 本地 bridge 节点通过 interaction handler 回到 Electron
+
 ## 测试与质量
 
-当前无自动化测试。
+当前已有 backend migration 的最小验证命令：
+
+```bash
+pnpm exec tsc -p tsconfig.web.json --noEmit
+pnpm build:backend
+pnpm smoke:backend
+pnpm build
+```
 
 ## 常见问题 (FAQ)
 
 **Q: Chat Store 为什么用工厂模式？**
 A: `createChatStore(scope)` 根据 scope（'agent' 或 'workflow'）创建独立的 store 实例，支持多个 Chat 面板各自维护独立的会话和消息。
 
-**Q: 工作流引擎在哪里执行？**
-A: `WorkflowEngine` 在渲染进程中运行（拓扑排序、变量解析、节点分发），但 `agent_run` 和浏览器工具节点通过 IPC 委托给主进程执行。
+**Q: 工作流引擎现在在哪里执行？**
+A: 迁移后的主路径由 backend execution manager 执行；renderer 里的 `WorkflowEngine` 只保留为 local fallback 和单节点调试基础。
 
 **Q: UI 组件库是怎么组织的？**
 A: `src/components/ui/` 采用 shadcn-vue 风格，每个组件一个独立目录，包含 Vue 组件和 `index.ts` 导出。

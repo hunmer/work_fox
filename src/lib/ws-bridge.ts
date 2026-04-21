@@ -60,13 +60,16 @@ export class WSBridge {
         url.searchParams.set('clientId', this.clientId)
       }
       const ws = new WebSocket(url.toString())
+      const wasReconnect = this.reconnectAttempts > 0
 
       ws.addEventListener('open', () => {
         this.ws = ws
         this.reconnectAttempts = 0
         this.sendHello()
         this.emit('ws:connected', { clientId: this.clientId })
-        this.emit('ws:reconnected', { clientId: this.clientId })
+        if (wasReconnect) {
+          this.emit('ws:reconnected', { clientId: this.clientId })
+        }
         resolve()
       })
       ws.addEventListener('message', (event) => this.handleMessage(event.data))

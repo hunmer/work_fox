@@ -43,6 +43,18 @@ Main (Electron)
           |-- chat-history-store.ts     Chat 历史（IndexedDB 跨进程代理或文件存储）
           |-- workflow-tool-dispatcher.ts 工作流工具调度（主进程 <-> 渲染进程协作）
           |-- ...
+  |
+Backend (Node.js 子进程)
+  |-- backend/
+      |-- main.ts               backend 入口，启动 HTTP + WS 服务
+      |-- app/                  config / logger / server factory
+      |-- ws/                   channel router / connection manager / handlers
+      |-- workflow/             execution / interaction / recovery
+      |-- storage/              workflow / version / execution-log / operation-history
+      |-- plugins/              backend plugin registry / builtin fs/fetch api
+  |
+Shared
+  |-- shared/                  前后端共享协议、执行事件、插件入口与能力定义
 ```
 
 ## 模块结构图
@@ -92,7 +104,7 @@ graph TD
 |---|---|---|---|
 | `src/` | 渲染进程（Vue 3 SPA） | TypeScript / Vue | `src/main.ts` |
 | `src/lib/agent/` | AI Agent 流式通信、工具发现、工作流工具 | TypeScript | `agent.ts` |
-| `src/lib/workflow/` | 工作流引擎（拓扑排序、节点执行、变量解析） | TypeScript | `engine.ts` |
+| `src/lib/workflow/` | 工作流编辑与本地 fallback 执行逻辑 | TypeScript | `engine.ts` |
 | `src/components/chat/` | Chat 对话面板组件集 | Vue / TS | - |
 | `src/components/workflow/` | 工作流编辑器组件集（画布、节点、属性面板） | Vue / TS | - |
 | `src/components/settings/` | 设置对话框组件 | Vue / TS | - |
@@ -100,6 +112,8 @@ graph TD
 | `src/types/` | 全局类型定义 | TypeScript | `index.ts` |
 | `preload/` | Electron Preload（contextBridge） | TypeScript | `index.ts` |
 | `electron/` | Electron 主进程 | TypeScript | `main.ts` |
+| `backend/` | Node.js backend 服务 | TypeScript | `backend/main.ts` |
+| `shared/` | shared WS 协议 / 执行事件 / 插件入口能力 | TypeScript | `shared/index.ts` |
 | `electron/ipc/` | IPC Handler 注册 | TypeScript | - |
 | `electron/services/` | 主进程业务服务 | TypeScript | - |
 | `resources/plugins/` | 内置插件（window-manager / file-system / fetch / jimeng） | JavaScript | 各 `main.js` |
@@ -115,6 +129,12 @@ pnpm dev
 
 # 构建产物
 pnpm build
+
+# 单独编译 backend
+pnpm build:backend
+
+# backend smoke 回归
+pnpm smoke:backend
 
 # 打包安装程序（electron-builder）
 pnpm pack
@@ -136,6 +156,34 @@ pnpm pack
 ### 路径别名
 
 - `@/*` -> `./src/*`（在 `tsconfig.web.json` 和 `electron.vite.config.ts` 中配置）
+- `@shared/*` -> `./shared/*`（renderer / backend / node 共享协议）
+
+## Backend Migration Status
+
+- workflow CRUD、folder、version、execution log、operation history 已可通过 backend WS 通道工作
+- workflow execution 已默认按 backend-first 设计组织，前端 store 通过 execution events 和 recovery 驱动执行态
+- `agent_run`、`window-manager`、`delay` 这类本地能力通过 interaction bridge 回到 Electron 执行
+- renderer 仍保留少量 local fallback，用于兼容未完全迁移场景，不应再作为默认主路径扩展
+
+### Feature Flag
+
+- 持久开关：`localStorage['workfox.useWorkflowBackend'] = '1'`
+- 构建期开关：`VITE_USE_WORKFLOW_BACKEND=1`
+
+### Verification Gate
+
+迁移相关的最小回归命令：
+
+```bash
+pnpm exec tsc -p tsconfig.web.json --noEmit
+pnpm build:backend
+pnpm smoke:backend
+pnpm build
+```
+
+更细的验证说明见：
+
+- `docs/superpowers/plans/2026-04-22-workfox-backend-migration-verification.md`
 
 ## 测试策略
 
@@ -169,10 +217,10 @@ pnpm pack
 
 ### 工作流执行
 
-1. `WorkflowEngine`（渲染进程）通过拓扑排序确定节点执行顺序
-2. 支持的节点类型：`start` / `end` / `run_code` / `toast` / `switch` / `agent_run` / 浏览器工具
-3. `agent_run` 节点通过 IPC 调用主进程的 Claude Agent SDK
-4. 浏览器工具节点通过 `agent:execTool` IPC 调用主进程注册的 handler
+1. backend execution manager 负责工作流执行、pause/resume/stop、execution recovery、execution log 持久化
+2. renderer workflow store 订阅 `workflow:*` / `node:*` / `execution:*` 事件更新 UI
+3. `agent_run` 与本地 bridge 节点通过 WS interaction 回到 Electron 执行
+4. Node.js 内可闭环的插件节点直接在 backend plugin registry 中执行
 
 ### 插件系统
 
@@ -184,9 +232,12 @@ pnpm pack
 ### 修改代码时的注意事项
 
 - 修改 IPC 接口时，需同时更新 `preload/index.ts` 的 API 定义和对应的 `electron/ipc/*.ts` handler
-- 工作流类型在 `src/lib/workflow/types.ts` 和 `electron/services/store.ts` 中有重复定义，需保持同步
+- 新增 shared 协议或执行事件时，优先改 `shared/`，再让 renderer / backend / Electron 消费 shared source-of-truth
 - Chat store 使用工厂模式 `createChatStore(scope)` 支持多 scope（agent / workflow）
-- 新增工作流节点需在 `src/lib/workflow/nodes/` 注册定义，并在 `engine.ts` 的 `dispatchNode` 中添加处理逻辑
+- 新增工作流节点时，先判断它属于：
+  - backend 可直接执行的 server/plugin 节点
+  - 需要 interaction bridge 的 Electron-local 节点
+  - renderer-only 编辑态节点
 
 ## 变更记录 (Changelog)
 

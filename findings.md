@@ -366,3 +366,18 @@
 - 当前仍未完成的部分：
   - backend plugin registry 与 Electron runtime host 虽已共用 loader，但仍各自维护一层“把 loaded capability 注入各自宿主”的 glue code
   - Phase 10 之前，前端 workflow store 仍处于 backend 优先 + 本地执行兜底的过渡形态
+
+## Phase 10 Store And UI Findings
+
+- [src/stores/workflow.ts](/Users/Zhuanz/Documents/work_fox/src/stores/workflow.ts) 现在已不再持有 store 级 `WorkflowEngine` ref；本地执行 fallback 仍保留，但只存在于 `createExecutionActions(...)` 闭包内的短生命周期 `localEngine`。
+- 这让 workflow store 的主状态源进一步收口为：
+  - backend mode：WS execution events + recovery API
+  - local mode：临时 `localEngine` 发出的同构 execution events
+- `workflow:completed` / `workflow:error` 事件现在会把终态 `ExecutionLog.snapshot` 应回 `currentWorkflow`，因此即使前端错过最后一条中间 `execution:log`，节点高亮和运行态也不会停在旧快照。
+- [src/lib/ws-bridge.ts](/Users/Zhuanz/Documents/work_fox/src/lib/ws-bridge.ts) 已修正连接语义：
+  - 首次 connect 不再同时触发 `ws:connected` 和 `ws:reconnected`
+  - store 可以把“初次加载”和“断线恢复”都挂在这两个事件上，而不至于首次进入页面时重复 recovery / reload
+- workflow store 在 backend 模式下已开始在 `ws:connected/ws:reconnected` 后主动刷新 workflow/folder 列表，因此 Phase 10 的“连接成功后加载数据、断线后恢复列表数据”已经有了最小实现。
+- 当前还未收掉的 Phase 10 遗留点主要有两类：
+  - 部分前端消费方仍隐含“`startExecution()` 返回后马上有最终 `executionLog`”的旧本地执行假设，例如 [src/lib/agent/workflow-renderer-tools.ts](/Users/Zhuanz/Documents/work_fox/src/lib/agent/workflow-renderer-tools.ts)
+  - backend 模式虽然已不再依赖 store 级 engine，但整体仍保留 local fallback 分支，尚未彻底变成 backend-only execution path
