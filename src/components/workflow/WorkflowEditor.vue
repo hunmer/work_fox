@@ -12,6 +12,16 @@ import '@vue-flow/minimap/dist/style.css'
 import '@vue-flow/node-resizer/dist/style.css'
 
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable'
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty'
+import { Spinner } from '@/components/ui/spinner'
+import { Button } from '@/components/ui/button'
 import { provideWorkflowStore, type WorkflowStore } from '@/stores/workflow'
 import { useTabStore, type Tab } from '@/stores/tab'
 import CustomNodeWrapper from './CustomNodeWrapper.vue'
@@ -398,6 +408,21 @@ function onConnect(params: any) {
           <ExecutionBar v-model:expanded="executionBarExpanded" />
         </ResizablePanel>
       </ResizablePanelGroup>
+
+    <Empty v-else class="flex-1">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <Spinner class="size-8" />
+        </EmptyMedia>
+        <EmptyTitle>加载工作流中</EmptyTitle>
+        <EmptyDescription>正在加载工作流数据，请稍候...</EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button variant="outline" size="sm" @click="goHome">
+          返回主页
+        </Button>
+      </EmptyContent>
+    </Empty>
 
     <WorkflowListDialog
       :open="listDialogOpen"

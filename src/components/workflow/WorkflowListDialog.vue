@@ -118,6 +118,7 @@ function onSelectLocation() {
         <ResizablePanel>
           <WorkflowList
             :folder-id="selectedFolderId"
+            :selected-id="selectedWorkflow?.id ?? null"
             @select="onSelectWorkflow"
           />
         </ResizablePanel>

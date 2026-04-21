@@ -5,7 +5,10 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Trash2, Workflow } from 'lucide-vue-next'
 
-const props = defineProps<{ folderId: string | null }>()
+const props = defineProps<{
+  folderId: string | null
+  selectedId: string | null
+}>()
 const emit = defineEmits<{ select: [workflow: any] }>()
 const store = useWorkflowStore()
 
@@ -25,7 +28,10 @@ function formatDate(ts: number): string {
       <div
         v-for="wf in filteredWorkflows"
         :key="wf.id"
-        class="flex items-center gap-2 px-3 py-2 text-xs rounded cursor-pointer hover:bg-muted/50 group"
+        class="flex items-center gap-2 px-3 py-2 text-xs rounded cursor-pointer transition-colors group"
+        :class="wf.id === selectedId
+          ? 'bg-primary/10 text-primary ring-1 ring-primary/20'
+          : 'hover:bg-muted/50'"
         @click="emit('select', wf)"
       >
         <Workflow class="w-4 h-4 text-muted-foreground shrink-0" />
