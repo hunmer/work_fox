@@ -13,7 +13,6 @@
     "smoke:backend": "node scripts/backend-smoke-test.mjs",
     "build": "pnpm build:backend && electron-vite build",
     "preview": "electron-vite preview",
-    "pack": "node scripts/build-production.js local",
     "pack:release": "node scripts/build-production.js release",
     "pack:dir": "pnpm build:backend && npx electron-vite build && npx electron-builder --config electron-builder.json --dir"
   },
