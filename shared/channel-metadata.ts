@@ -83,6 +83,58 @@ export const backendChannelMetadata: Record<BackendChannel, ChannelMetadata> = {
   'plugin:get-agent-tools': plugin('plugin:get-agent-tools', 'Get plugin agent tool definitions'),
   'plugin:get-config': plugin('plugin:get-config', 'Get plugin config'),
   'plugin:save-config': pluginMutation('plugin:save-config', 'Save plugin config'),
+
+  // --- AI Provider ---
+  'aiProvider:list': crud('aiProvider:list', 'List AI providers'),
+  'aiProvider:create': mutation('aiProvider:create', 'Create AI provider'),
+  'aiProvider:update': mutation('aiProvider:update', 'Update AI provider'),
+  'aiProvider:delete': mutation('aiProvider:delete', 'Delete AI provider'),
+  'aiProvider:test': crud('aiProvider:test', 'Test AI provider connection'),
+
+  // --- Chat History ---
+  'chatHistory:listSessions': crud('chatHistory:listSessions', 'List chat sessions'),
+  'chatHistory:createSession': mutation('chatHistory:createSession', 'Create chat session'),
+  'chatHistory:updateSession': mutation('chatHistory:updateSession', 'Update chat session'),
+  'chatHistory:deleteSession': mutation('chatHistory:deleteSession', 'Delete chat session'),
+  'chatHistory:listMessages': crud('chatHistory:listMessages', 'List chat messages'),
+  'chatHistory:addMessage': mutation('chatHistory:addMessage', 'Add chat message'),
+  'chatHistory:updateMessage': mutation('chatHistory:updateMessage', 'Update chat message'),
+  'chatHistory:deleteMessage': mutation('chatHistory:deleteMessage', 'Delete chat message'),
+  'chatHistory:deleteMessages': mutation('chatHistory:deleteMessages', 'Delete multiple chat messages'),
+  'chatHistory:clearMessages': mutation('chatHistory:clearMessages', 'Clear all messages in session'),
+
+  // --- Agent Settings ---
+  'agentSettings:get': crud('agentSettings:get', 'Get agent settings'),
+  'agentSettings:set': mutation('agentSettings:set', 'Set agent settings'),
+
+  // --- Shortcut ---
+  'shortcut:list': crud('shortcut:list', 'List shortcuts'),
+  'shortcut:update': mutation('shortcut:update', 'Update shortcut'),
+  'shortcut:toggle': mutation('shortcut:toggle', 'Toggle shortcut'),
+  'shortcut:clear': mutation('shortcut:clear', 'Clear shortcut'),
+  'shortcut:reset': mutation('shortcut:reset', 'Reset all shortcuts'),
+
+  // --- Tabs ---
+  'tabs:load': crud('tabs:load', 'Load tabs'),
+  'tabs:save': mutation('tabs:save', 'Save tabs'),
+
+  // --- App ---
+  'app:getVersion': crud('app:getVersion', 'Get app version'),
+
+  // --- FS ---
+  'fs:listDir': crud('fs:listDir', 'List directory contents'),
+  'fs:delete': mutation('fs:delete', 'Delete file or directory'),
+  'fs:createFile': mutation('fs:createFile', 'Create empty file'),
+  'fs:createDir': mutation('fs:createDir', 'Create directory'),
+  'fs:rename': mutation('fs:rename', 'Rename file or directory'),
+
+  // --- Chat ---
+  'chat:completions': { channel: 'chat:completions', priority: 3, ordered: true, idempotent: false, timeoutMs: 5 * 60_000, streaming: true, description: 'Start chat completion stream' },
+  'chat:abort': { channel: 'chat:abort', priority: 2, ordered: false, idempotent: true, timeoutMs: 5_000, streaming: false, description: 'Abort chat completion' },
+
+  // --- Agent / Workflow Tool ---
+  'agent:execTool': mutation('agent:execTool', 'Execute agent tool'),
+  'workflowTool:respond': mutation('workflowTool:respond', 'Respond to workflow tool call'),
 }
 
 function crud(channel: BackendChannel, description: string): ChannelMetadata {

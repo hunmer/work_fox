@@ -27,6 +27,15 @@ export interface ChannelContract<Request, Response> {
 export type EmptyRequest = undefined
 export type EmptyResponse = undefined
 
+export interface AIProviderEntry {
+  id: string
+  name: string
+  apiBase: string
+  apiKey: string
+  models: Array<{ id: string; name: string }>
+  enabled?: boolean
+}
+
 export interface SystemPingRequest {
   timestamp?: number
 }
@@ -224,6 +233,58 @@ export interface BackendChannelMap {
   'plugin:get-agent-tools': ChannelContract<PluginAgentToolsRequest, AgentToolDefinition[]>
   'plugin:get-config': ChannelContract<PluginConfigRequest, Record<string, string>>
   'plugin:save-config': ChannelContract<PluginConfigSaveRequest, PluginConfigSaveResult>
+
+  // --- AI Provider ---
+  'aiProvider:list': ChannelContract<EmptyRequest, AIProviderEntry[]>
+  'aiProvider:create': ChannelContract<{ data: Omit<AIProviderEntry, 'id'> }, AIProviderEntry>
+  'aiProvider:update': ChannelContract<{ id: string; data: Partial<Omit<AIProviderEntry, 'id'>> }, EmptyResponse>
+  'aiProvider:delete': ChannelContract<{ id: string }, { success: boolean }>
+  'aiProvider:test': ChannelContract<{ id: string }, { success: boolean; error?: string }>
+
+  // --- Chat History ---
+  'chatHistory:listSessions': ChannelContract<{ workflowId: string }, any[]>
+  'chatHistory:createSession': ChannelContract<{ workflowId: string; session: any }, any>
+  'chatHistory:updateSession': ChannelContract<{ workflowId: string; sessionId: string; updates: any }, EmptyResponse>
+  'chatHistory:deleteSession': ChannelContract<{ workflowId: string; sessionId: string }, EmptyResponse>
+  'chatHistory:listMessages': ChannelContract<{ workflowId: string; sessionId: string }, any[]>
+  'chatHistory:addMessage': ChannelContract<{ workflowId: string; sessionId: string; message: any }, any>
+  'chatHistory:updateMessage': ChannelContract<{ workflowId: string; sessionId: string; messageId: string; updates: any }, EmptyResponse>
+  'chatHistory:deleteMessage': ChannelContract<{ workflowId: string; sessionId: string; messageId: string }, EmptyResponse>
+  'chatHistory:deleteMessages': ChannelContract<{ workflowId: string; sessionId: string; messageIds: string[] }, EmptyResponse>
+  'chatHistory:clearMessages': ChannelContract<{ workflowId: string; sessionId: string }, EmptyResponse>
+
+  // --- Agent Settings ---
+  'agentSettings:get': ChannelContract<EmptyRequest, any>
+  'agentSettings:set': ChannelContract<{ settings: any }, any>
+
+  // --- Shortcut ---
+  'shortcut:list': ChannelContract<EmptyRequest, { groups: any[]; shortcuts: any[] }>
+  'shortcut:update': ChannelContract<{ id: string; accelerator: string; isGlobal: boolean; enabled?: boolean }, EmptyResponse>
+  'shortcut:toggle': ChannelContract<{ id: string; enabled: boolean }, EmptyResponse>
+  'shortcut:clear': ChannelContract<{ id: string }, EmptyResponse>
+  'shortcut:reset': ChannelContract<EmptyRequest, EmptyResponse>
+
+  // --- Tabs ---
+  'tabs:load': ChannelContract<EmptyRequest, { tabs: any[]; activeTabId: string | null }>
+  'tabs:save': ChannelContract<{ tabs: any[]; activeTabId: string | null }, EmptyResponse>
+
+  // --- App ---
+  'app:getVersion': ChannelContract<EmptyRequest, { version: string }>
+
+  // --- FS ---
+  'fs:listDir': ChannelContract<{ dirPath: string }, Array<{ name: string; path: string; type: 'file' | 'directory'; modifiedAt: string }>>
+  'fs:delete': ChannelContract<{ targetPath: string }, { success: boolean; error?: string }>
+  'fs:createFile': ChannelContract<{ filePath: string }, { success: boolean; error?: string }>
+  'fs:createDir': ChannelContract<{ dirPath: string }, { success: boolean; error?: string }>
+  'fs:rename': ChannelContract<{ oldPath: string; newName: string }, { success: boolean; newPath?: string; error?: string }>
+
+  // --- Chat ---
+  'chat:completions': ChannelContract<any, { started: boolean; requestId?: string }>
+  'chat:abort': ChannelContract<{ requestId: string }, { aborted: boolean }>
+
+  // --- Agent / Workflow Tool ---
+  'agent:execTool': ChannelContract<{ toolType: string; params: Record<string, unknown>; targetTabId?: string }, any>
+  'workflowTool:respond': ChannelContract<{ requestId: string; result: unknown }, { resolved: boolean }>
 }
 
 export type BackendChannel = keyof BackendChannelMap
