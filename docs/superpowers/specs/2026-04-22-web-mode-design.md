@@ -114,7 +114,9 @@ on(channel: string, callback: (...args: any[]) => void): () => void {
 
 | 命名空间 | 方法 |
 |---------|------|
-| `plugin` | list, enable, disable, get-workflow-nodes, list-workflow-plugins, get-agent-tools |
+| `plugin` | list, enable, disable, install, uninstall |
+
+注意：`plugin.getWorkflowNodes`、`plugin.listWorkflowPlugins`、`plugin.getAgentTools` 不在 `preload/index.ts` 的 `api.plugin` 对象中，它们在渲染进程中直接通过 `wsBridge.invoke()` 调用，不经过 `window.api`，因此不需要 `BrowserAPIAdapter` 映射。
 
 **Electron 独有 → stub**：
 
@@ -124,7 +126,6 @@ on(channel: string, callback: (...args: any[]) => void): () => void {
 | `window` | isMaximized | `() => Promise.resolve(false)` |
 | `plugin` | importZip | 显示提示"请在桌面版中使用"或通过 HTTP 上传 |
 | `plugin` | openFolder | 显示提示"请在桌面版中使用" |
-| `plugin` | install, uninstall | 通过 WS channel `plugin:install`, `plugin:uninstall`（已有 channel） |
 | `plugin` | getView, getIcon | 通过 WS channel 返回资源 URL（P2） |
 | `workflow` | importOpenFile | `<input type="file">` 读取 JSON（P2） |
 | `workflow` | exportSaveFile | `<a download>` 触发下载（P2） |
@@ -161,6 +162,8 @@ const url = savedEndpoint ? JSON.parse(savedEndpoint).url : `ws://${location.hos
 const token = savedEndpoint ? JSON.parse(savedEndpoint).token : ''
 await wsBridge.connect(url, token)
 ```
+
+**重要约束**：Web 模式下 `wsBridge.connect()` **必须**显式传入 `url` 和 `token` 参数，不能依赖 `window.api.backend.getEndpoint()` 的回退逻辑（`ws-bridge.ts` 第50-51行），否则会产生循环依赖。`web-entry.ts` 在调用 `connect()` 前从 `localStorage` 读取配置，避免了这个问题。
 
 ## Backend WS 通道扩展
 
@@ -369,7 +372,15 @@ function loadSavedEndpoint() {
   }
 }
 
-bootstrap().catch(console.error)
+bootstrap().catch((error) => {
+  console.error('Web bootstrap failed:', error)
+  // 连接失败时仍挂载 Vue app，显示连接配置页
+  // App.vue 的 PluginStore/AIProviderStore init 会优雅处理 api 不可用的情况
+  const pinia = createPinia()
+  const app = createApp(App).use(pinia).use(router)
+  useThemeStore()
+  app.mount('#app')
+})
 ```
 
 ### TypeScript 配置
