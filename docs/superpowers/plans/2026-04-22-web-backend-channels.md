@@ -38,7 +38,9 @@
 
 - [ ] **Step 1: 在 BackendChannelMap 末尾添加新 channel 契约**
 
-在 `BackendChannelMap` 接口的 `}` 之前（即 `'plugin:save-config'` 行之后）添加：
+在 `BackendChannelMap` 接口的 `}` 之前（即 `'plugin:save-config'` 行之后）添加。
+
+**同时**需要更新 `shared/channel-metadata.ts`——`backendChannelMetadata` 是 `Record<BackendChannel, ChannelMetadata>` 类型，添加新 channel 后必须提供对应元数据，否则 TS 编译失败。
 
 ```typescript
   // --- AI Provider ---
@@ -94,7 +96,7 @@
   'workflowTool:respond': ChannelContract<{ requestId: string; result: unknown }, { resolved: boolean }>
 ```
 
-同时在文件顶部添加 `AIProviderEntry` 接口：
+同时在 `channel-contracts.ts` 文件顶部添加 `AIProviderEntry` 接口：
 
 ```typescript
 export interface AIProviderEntry {
@@ -106,6 +108,63 @@ export interface AIProviderEntry {
   enabled?: boolean
 }
 ```
+
+- [ ] **Step 1b: 同步更新 shared/channel-metadata.ts**
+
+在 `backendChannelMetadata` 对象末尾（`'plugin:save-config'` 行之后）添加新 channel 的元数据：
+
+```typescript
+  // --- AI Provider ---
+  'aiProvider:list': crud('aiProvider:list', 'List AI providers'),
+  'aiProvider:create': mutation('aiProvider:create', 'Create AI provider'),
+  'aiProvider:update': mutation('aiProvider:update', 'Update AI provider'),
+  'aiProvider:delete': mutation('aiProvider:delete', 'Delete AI provider'),
+  'aiProvider:test': crud('aiProvider:test', 'Test AI provider connection'),
+
+  // --- Chat History ---
+  'chatHistory:listSessions': crud('chatHistory:listSessions', 'List chat sessions'),
+  'chatHistory:createSession': mutation('chatHistory:createSession', 'Create chat session'),
+  'chatHistory:updateSession': mutation('chatHistory:updateSession', 'Update chat session'),
+  'chatHistory:deleteSession': mutation('chatHistory:deleteSession', 'Delete chat session'),
+  'chatHistory:listMessages': crud('chatHistory:listMessages', 'List chat messages'),
+  'chatHistory:addMessage': mutation('chatHistory:addMessage', 'Add chat message'),
+  'chatHistory:updateMessage': mutation('chatHistory:updateMessage', 'Update chat message'),
+  'chatHistory:deleteMessage': mutation('chatHistory:deleteMessage', 'Delete chat message'),
+  'chatHistory:deleteMessages': mutation('chatHistory:deleteMessages', 'Delete multiple chat messages'),
+  'chatHistory:clearMessages': mutation('chatHistory:clearMessages', 'Clear all messages in session'),
+
+  // --- Agent Settings ---
+  'agentSettings:get': crud('agentSettings:get', 'Get agent settings'),
+  'agentSettings:set': mutation('agentSettings:set', 'Set agent settings'),
+
+  // --- Shortcut ---
+  'shortcut:list': crud('shortcut:list', 'List shortcuts'),
+  'shortcut:update': mutation('shortcut:update', 'Update shortcut'),
+  'shortcut:toggle': mutation('shortcut:toggle', 'Toggle shortcut'),
+  'shortcut:clear': mutation('shortcut:clear', 'Clear shortcut'),
+  'shortcut:reset': mutation('shortcut:reset', 'Reset all shortcuts'),
+
+  // --- Tabs ---
+  'tabs:load': crud('tabs:load', 'Load tabs'),
+  'tabs:save': mutation('tabs:save', 'Save tabs'),
+
+  // --- App ---
+  'app:getVersion': crud('app:getVersion', 'Get app version'),
+
+  // --- FS ---
+  'fs:listDir': crud('fs:listDir', 'List directory contents'),
+  'fs:delete': mutation('fs:delete', 'Delete file or directory'),
+  'fs:createFile': mutation('fs:createFile', 'Create empty file'),
+  'fs:createDir': mutation('fs:createDir', 'Create directory'),
+  'fs:rename': mutation('fs:rename', 'Rename file or directory'),
+
+  // --- Chat ---
+  'chat:completions': { channel: 'chat:completions', priority: 3, ordered: true, idempotent: false, timeoutMs: 5 * 60_000, streaming: true, description: 'Start chat completion stream' },
+  'chat:abort': { channel: 'chat:abort', priority: 2, ordered: false, idempotent: true, timeoutMs: 5_000, streaming: false, description: 'Abort chat completion' },
+
+  // --- Agent / Workflow Tool ---
+  'agent:execTool': mutation('agent:execTool', 'Execute agent tool'),
+  'workflowTool:respond': mutation('workflowTool:respond', 'Respond to workflow tool call'),
 
 - [ ] **Step 2: 验证 backend 编译**
 
@@ -430,7 +489,6 @@ import type { WSRouter } from './router'
 import { BackendAIProviderStore } from '../storage/ai-provider-store'
 import { BackendChatHistoryStore } from '../storage/chat-history-store'
 import { BackendSettingsStore } from '../storage/settings-store'
-import { readdir, stat, mkdir, rename, unlink, writeFile as writeFileAsync } from 'node:fs/promises'
 import { join, dirname, basename } from 'node:path'
 
 export interface AppServices {
@@ -563,7 +621,7 @@ git commit -m "feat(backend): add app channel handlers for provider/chatHistory/
 ```typescript
 // backend/ws/fs-channels.ts
 import type { WSRouter } from './router'
-import { readdir, stat, mkdir, rename, unlink, writeFile } from 'node:fs/promises'
+import { readdir, stat, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join, dirname, basename } from 'node:path'
 
 export function registerFsChannels(router: WSRouter): void {
@@ -590,7 +648,7 @@ export function registerFsChannels(router: WSRouter): void {
 
   router.register('fs:delete', async ({ targetPath }) => {
     try {
-      await unlink(targetPath)
+      await rm(targetPath, { recursive: true, force: true })
       return { success: true }
     } catch (error: any) {
       return { success: false, error: error.message }
@@ -659,11 +717,11 @@ import { registerFsChannels } from './ws/fs-channels'
 在 `const plugins = new BackendPluginRegistry(...)` 行之后添加：
 
 ```typescript
-  const aiProviderStore = new BackendAIProviderStore(paths.dataDir)
-  const chatHistoryStore = new BackendChatHistoryStore(paths.dataDir)
-  const agentSettingsStore = new BackendSettingsStore(paths.dataDir, 'agent-settings.json')
-  const shortcutStore = new BackendSettingsStore(paths.dataDir, 'shortcuts.json')
-  const tabStore = new BackendSettingsStore(paths.dataDir, 'tabs.json')
+  const aiProviderStore = new BackendAIProviderStore(paths.userDataDir)
+  const chatHistoryStore = new BackendChatHistoryStore(paths.userDataDir)
+  const agentSettingsStore = new BackendSettingsStore(paths.userDataDir, 'agent-settings.json')
+  const shortcutStore = new BackendSettingsStore(paths.userDataDir, 'shortcuts.json')
+  const tabStore = new BackendSettingsStore(paths.userDataDir, 'tabs.json')
 ```
 
 - [ ] **Step 3: 注册新 channels**

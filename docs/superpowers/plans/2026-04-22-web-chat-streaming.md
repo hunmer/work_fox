@@ -22,7 +22,6 @@
 | Create | `backend/chat/chat-event-sender.ts` | WS 事件推送封装 |
 | Create | `backend/ws/chat-channels.ts` | chat:completions/abort channel 注册 |
 | Modify | `backend/main.ts` | 注册 chat channels |
-| Modify | `backend/app/config.ts` | 添加 chat 相关配置 |
 
 ---
 
@@ -123,9 +122,14 @@ git commit -m "feat(backend): add ChatEventSender for WS streaming events"
 
 这是核心——将 `claude-agent-runtime.ts` 的逻辑迁移为 backend 版本。
 
-- [ ] **Step 1: 先读取 Electron 版了解事件发送模式**
+> **注意：下方代码为骨架/伪代码。** `@anthropic-ai/claude-agent-sdk` 的 `query()` API 事件格式与下方假设不同。实施前必须先读取 `electron/services/claude-agent-runtime.ts` 中 `bridgePartialMessage` 等逻辑，理解 SDK 实际的 `stream_event` / `content_block_delta` 等事件类型，然后据此调整 `runStream` 中的事件映射。**初始版本仅支持纯文本流式（不包含工具调用）。**
 
-读取 `electron/services/claude-agent-runtime.ts` 中 `query()` 的使用方式和事件映射逻辑。
+- [ ] **Step 1: 读取 Electron 版了解 SDK 实际事件格式**
+
+读取 `electron/services/claude-agent-runtime.ts`，重点关注：
+- `query()` 的参数结构（`prompt` vs `messages`、`options` 嵌套结构）
+- 流式事件类型（`stream_event` 下的 `content_block_start/delta/stop`、`message_start/delta/stop`）
+- `bridgePartialMessage` 如何将 SDK 事件映射为 `chat:chunk`/`chat:thinking`/`chat:tool-call` 等 IPC 事件
 
 - [ ] **Step 2: 创建 backend chat runtime**
 
@@ -450,7 +454,12 @@ Expected: Chat 消息发送后，逐 token 收到流式回复。
 - [ ] `pnpm build:backend` 编译成功
 - [ ] `pnpm dev:web` 启动后浏览器能访问
 - [ ] 能创建 AI Provider 并保存
-- [ ] 能发送 Chat 消息并收到流式回复
+- [ ] 能发送 Chat 消息并收到流式回复（纯文本，不含工具调用）
 - [ ] Chat abort 能中止进行中的请求
 - [ ] Chat 历史能持久化和加载
 - [ ] 事件名与 Electron 版完全一致（chat:chunk, chat:done 等）
+
+## 已知限制（后续迭代）
+
+- **工具调用**: 初始版本仅支持纯文本流式。`claude-tool-adapter.ts` 和 `workflow-tool-dispatcher.ts` 的工具适配能力需要通过 interaction bridge 回到 renderer 执行，属于 P2 范围。
+- **SDK 事件映射**: `query()` 的实际事件格式需在实施时根据 `claude-agent-runtime.ts` 调整，计划中的代码为骨架。

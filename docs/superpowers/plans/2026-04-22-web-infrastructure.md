@@ -52,6 +52,8 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
       '@shared': resolve(__dirname, 'shared'),
       'vue': 'vue/dist/vue.esm-bundler.js',
+      // 确保 browser-api-adapter.ts 可以 import type from '../../preload/index'
+      '../../preload/index': resolve(__dirname, 'preload/index.ts'),
     },
   },
   plugins: [vue(), tailwindcss()],
