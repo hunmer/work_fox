@@ -6,6 +6,7 @@ import { resolve } from 'node:path'
 const cwd = process.cwd()
 const backendEntry = resolve(cwd, 'out/backend/main.js')
 const backendEndpointFile = resolve(cwd, 'public/workfox-backend-endpoint.json')
+const backendUserDataDir = resolve(cwd, 'backend/data')
 const tscArgs = ['exec', 'tsc', '-p', 'tsconfig.backend.json', '--watch', '--preserveWatchOutput']
 
 let backendProcess = null
@@ -51,8 +52,13 @@ function startBackend() {
 
   stopBackend()
   backendStarted = true
+  mkdirSync(backendUserDataDir, { recursive: true })
   backendProcess = spawn(process.execPath, ['--watch', backendEntry], {
     cwd,
+    env: {
+      ...process.env,
+      WORKFOX_USER_DATA_DIR: backendUserDataDir,
+    },
     stdio: ['inherit', 'pipe', 'pipe'],
   })
 

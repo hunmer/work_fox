@@ -22,6 +22,15 @@ type PendingRequest = {
 
 type EventHandler = (data: unknown) => void
 
+export interface WsMessageEntry {
+  direction: 'sent' | 'received'
+  raw: string
+  parsed: unknown
+  timestamp: number
+}
+
+type MessageObserver = (entry: WsMessageEntry) => void
+
 const CLIENT_ID_STORAGE_KEY = 'workfox.backendClientId'
 const BACKEND_ENDPOINT_STORAGE_KEY = 'workfox.backendEndpoint'
 
@@ -34,6 +43,7 @@ export class WSBridge {
   private ws: WebSocket | null = null
   private pending = new Map<string, PendingRequest>()
   private eventHandlers = new Map<string, Set<EventHandler>>()
+  private messageObservers = new Set<MessageObserver>()
   private interactionHandler?: (req: InteractionRequest) => Promise<InteractionResponse | { data: unknown; cancelled?: boolean }>
   private endpoint?: { url: string; token: string }
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -123,7 +133,7 @@ export class WSBridge {
       }, 35_000)
 
       this.pending.set(requestId, { resolve, reject, timeout })
-      this.ws!.send(JSON.stringify(payload))
+      this.sendAndNotify(payload)
     })
   }
 
@@ -144,18 +154,32 @@ export class WSBridge {
     this.interactionHandler = handler
   }
 
+  /** 订阅所有 WS 消息（发送 & 接收），返回取消订阅函数 */
+  onMessage(observer: MessageObserver): () => void {
+    this.messageObservers.add(observer)
+    return () => this.messageObservers.delete(observer)
+  }
+
+  private notifyMessageObservers(direction: 'sent' | 'received', raw: string, parsed: unknown): void {
+    if (this.messageObservers.size === 0) return
+    const entry: WsMessageEntry = { direction, raw, parsed, timestamp: Date.now() }
+    for (const obs of this.messageObservers) obs(entry)
+  }
+
   private sendHello(): void {
     if (!this.ws) return
     const hello: WSClientHello = {
       protocolVersion: 1,
       clientId: this.clientId || undefined,
     }
-    this.ws.send(JSON.stringify(hello))
+    this.sendAndNotify(hello)
   }
 
   private async handleMessage(raw: unknown): Promise<void> {
     const text = typeof raw === 'string' ? raw : String(raw)
     const message = JSON.parse(text) as WSResponse | WSEvent | WSError | InteractionRequest
+
+    this.notifyMessageObservers('received', text, message)
 
     if ('type' in message && message.type === 'response') {
       const pending = this.pending.get(message.id)
@@ -201,7 +225,7 @@ export class WSBridge {
     if (!this.ws) return
 
     if (!this.interactionHandler) {
-      this.ws.send(JSON.stringify({
+      this.sendAndNotify({
         id: request.id,
         channel: 'workflow:interaction',
         type: 'interaction_response',
@@ -210,7 +234,7 @@ export class WSBridge {
         nodeId: request.nodeId,
         data: null,
         error: createErrorShape('HANDLER_FAILED', `未注册 interaction handler: ${request.interactionType}`),
-      } satisfies InteractionResponse))
+      } satisfies InteractionResponse)
       return
     }
 
@@ -228,9 +252,9 @@ export class WSBridge {
             data: result.data,
             cancelled: result.cancelled,
           }
-      this.ws.send(JSON.stringify(response))
+      this.sendAndNotify(response)
     } catch (error) {
-      this.ws.send(JSON.stringify({
+      this.sendAndNotify({
         id: request.id,
         channel: 'workflow:interaction',
         type: 'interaction_response',
@@ -242,8 +266,15 @@ export class WSBridge {
           'HANDLER_FAILED',
           error instanceof Error ? error.message : String(error),
         ),
-      } satisfies InteractionResponse))
+      } satisfies InteractionResponse)
     }
+  }
+
+  /** 序列化并发送消息，同时通知观察者 */
+  private sendAndNotify(payload: unknown): void {
+    const raw = JSON.stringify(payload)
+    this.notifyMessageObservers('sent', raw, payload)
+    this.ws!.send(raw)
   }
 
   private emit(channel: string, data: unknown): void {

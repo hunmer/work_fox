@@ -18,8 +18,8 @@
       "type": "end",
       "label": "结束",
       "position": {
-        "x": 600,
-        "y": 250
+        "x": 669.1121265723663,
+        "y": 387.2903338737692
       },
       "data": {}
     },
@@ -51,7 +51,7 @@
     }
   ],
   "createdAt": 1776838819379,
-  "updatedAt": 1776838871843,
+  "updatedAt": 1776848198786,
   "agentConfig": {
     "workspaceDir": "",
     "dataDir": "",

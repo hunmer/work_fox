@@ -1,3 +1,5 @@
+import { resolve } from 'node:path'
+
 export interface BackendConfig {
   host: string
   port: number
@@ -20,10 +22,12 @@ function readNumber(name: string, fallback: number): number {
 }
 
 export function loadBackendConfig(): BackendConfig {
+  const defaultUserDataDir = resolve(process.cwd(), 'backend/data')
+
   return {
     host: process.env.WORKFOX_BACKEND_HOST || '127.0.0.1',
     port: readNumber('WORKFOX_BACKEND_PORT', 0),
-    userDataDir: process.env.WORKFOX_USER_DATA_DIR || '',
+    userDataDir: process.env.WORKFOX_USER_DATA_DIR || defaultUserDataDir,
     pluginDir: process.env.WORKFOX_PLUGIN_DIR || '',
     logLevel: (process.env.WORKFOX_LOG_LEVEL as BackendConfig['logLevel']) || (process.env.WORKFOX_DEV ? 'debug' : 'info'),
     dev: process.env.WORKFOX_DEV === '1' || process.env.NODE_ENV !== 'production',

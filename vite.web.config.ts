@@ -50,6 +50,18 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    watch: {
+      ignored: [
+        '**/backend/data/**',
+        '**/agent-workflows/**',
+        '**/tabs.json',
+        '**/shortcuts.json',
+        '**/agent-settings.json',
+        '**/ai-providers.json',
+        '**/workflow-folders.json',
+        '**/workfox-backend-endpoint.json',
+      ],
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:3001',

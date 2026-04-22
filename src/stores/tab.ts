@@ -12,6 +12,7 @@ export const useTabStore = defineStore('tabs', () => {
   const tabs = ref<Tab[]>([])
   const activeTabId = ref<string | null>(null)
   const storeMap = new Map<string, WorkflowStore>()
+  let lastPersistedSnapshot = ''
 
   const activeTab = computed(() => tabs.value.find(t => t.id === activeTabId.value) || null)
   const activeStore = computed(() => activeTabId.value ? storeMap.get(activeTabId.value) ?? null : null)
@@ -60,6 +61,10 @@ export const useTabStore = defineStore('tabs', () => {
     activeTabId.value = validTabs.some(t => t.id === data.activeTabId)
       ? data.activeTabId
       : validTabs[0]?.id || null
+    lastPersistedSnapshot = JSON.stringify({
+      tabs: validTabs.map(t => ({ id: t.id, workflowId: t.workflowId, name: t.name })),
+      activeTabId: activeTabId.value,
+    })
   }
 
   function addTab(workflowId: string | null = null, name: string = ''): string {
@@ -140,10 +145,15 @@ export const useTabStore = defineStore('tabs', () => {
   function persistTabs() {
     const persistedTabs = tabs.value.filter(tab => !isTransientEmptyTab(tab))
     const persistedActiveTabId = persistedTabs.some(tab => tab.id === activeTabId.value) ? activeTabId.value : null
-    ;(window as any).api.tabs.save({
+    const nextSnapshot = JSON.stringify({
       tabs: persistedTabs.map(t => ({ id: t.id, workflowId: t.workflowId, name: t.name })),
       activeTabId: persistedActiveTabId,
     })
+
+    if (nextSnapshot === lastPersistedSnapshot) return
+
+    lastPersistedSnapshot = nextSnapshot
+    ;(window as any).api.tabs.save(JSON.parse(nextSnapshot))
   }
 
   function updateTabWorkflow(tabId: string, workflowId: string | null, name: string) {
