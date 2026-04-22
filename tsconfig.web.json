@@ -19,5 +19,5 @@
       "@shared/*": ["shared/*"]
     }
   },
-  "include": ["src/**/*", "src/**/*.vue", "shared/**/*"]
+  "include": ["src/**/*", "src/**/*.vue", "shared/**/*", "preload/index.ts"]
 }
