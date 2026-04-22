@@ -31,12 +31,16 @@ export class WSRouter {
   ): Promise<ChannelResponse<C>> {
     const handler = this.handlers.get(channel)
     if (!handler) {
+      this.logger.debug('WS channel not found', { channel, requestId, clientId })
       throw createErrorShape('CHANNEL_NOT_FOUND', `Unknown channel: ${channel}`)
     }
 
     const metadata = backendChannelMetadata[channel]
     const timeoutMs = metadata?.timeoutMs ?? 30_000
     const context: RequestContext<C> = { channel, requestId, clientId }
+
+    const start = Date.now()
+    this.logger.debug('WS dispatch start', { channel, requestId, clientId, timeoutMs })
 
     try {
       const result = await Promise.race([
@@ -45,9 +49,10 @@ export class WSRouter {
           setTimeout(() => reject(createErrorShape('TIMEOUT', `Channel ${channel} timed out`, { timeoutMs }, true)), timeoutMs)
         }),
       ])
+      this.logger.debug('WS dispatch done', { channel, requestId, clientId, durationMs: Date.now() - start })
       return result as ChannelResponse<C>
     } catch (error) {
-      this.logger.warn(`WS channel failed: ${channel}`, error)
+      this.logger.warn(`WS channel failed: ${channel}`, { requestId, clientId, durationMs: Date.now() - start, error: error instanceof Error ? error.message : String(error) })
       throw normalizeRouterError(error)
     }
   }

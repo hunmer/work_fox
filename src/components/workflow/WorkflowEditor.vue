@@ -228,6 +228,10 @@ function openWorkflowList(createMode = false) {
 
 function onWorkflowListOpenChange(open: boolean) {
   listDialogOpen.value = open
+  if (!open && !store.currentWorkflow) {
+    tabStore.closeTab(props.tab.id)
+    router.push('/home')
+  }
 }
 
 function onWorkflowListCancel() {

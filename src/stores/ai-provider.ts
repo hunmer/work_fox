@@ -37,6 +37,24 @@ export const useAIProviderStore = defineStore('ai-provider', () => {
       if (first) {
         selectProvider(first.id)
       }
+      return
+    }
+
+    const provider = providers.value.find((p) => p.id === selectedProviderId.value)
+    if (!provider) return
+
+    if (!provider.models.length) {
+      selectedModelId.value = null
+      localStorage.removeItem(SELECTED_MODEL_KEY)
+      return
+    }
+
+    const hasSelectedModel = selectedModelId.value
+      ? provider.models.some((model) => model.id === selectedModelId.value)
+      : false
+
+    if (!hasSelectedModel) {
+      selectModel(provider.models[0].id)
     }
   }
 

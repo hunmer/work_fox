@@ -122,26 +122,37 @@ export class ConnectionManager {
   }
 
   private async handleMessage(session: ClientSession, raw: string): Promise<void> {
+    this.logger.debug('WS message received', { clientId: session.id, size: raw.length })
+
     let parsed: unknown
     try {
       parsed = JSON.parse(raw)
     } catch (error) {
+      this.logger.debug('WS message parse error', { clientId: session.id, error: String(error) })
       this.sendError(session.socket, undefined, undefined, createErrorShape('BAD_REQUEST', 'Invalid JSON payload', String(error)))
       return
     }
 
-    if (isClientHello(parsed)) return
+    if (isClientHello(parsed)) {
+      this.logger.debug('WS client hello', { clientId: session.id })
+      return
+    }
     if (isInteractionResponse(parsed)) {
+      this.logger.debug('WS interaction response', { clientId: session.id, requestId: (parsed as any).requestId })
       this.interactionResponseHandler?.(parsed, session.id)
       return
     }
     if (!isWSRequest(parsed)) {
+      this.logger.debug('WS unknown message type', { clientId: session.id, type: (parsed as any)?.type })
       this.sendError(session.socket, undefined, undefined, createErrorShape('BAD_REQUEST', 'Only request messages are supported'))
       return
     }
 
+    this.logger.debug('WS request', { clientId: session.id, channel: parsed.channel, requestId: parsed.id })
+
     try {
       const data = await this.router.dispatch(parsed.channel as any, parsed.id, session.id, parsed.data as any)
+      this.logger.debug('WS response', { clientId: session.id, channel: parsed.channel, requestId: parsed.id })
       this.send(session.socket, {
         id: parsed.id,
         channel: parsed.channel,
@@ -149,6 +160,7 @@ export class ConnectionManager {
         data,
       } satisfies WSResponse)
     } catch (error: any) {
+      this.logger.debug('WS request error', { clientId: session.id, channel: parsed.channel, requestId: parsed.id, error: error?.message })
       this.sendError(session.socket, parsed.id, parsed.channel, error)
     }
   }

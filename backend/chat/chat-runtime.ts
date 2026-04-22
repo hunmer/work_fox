@@ -239,6 +239,20 @@ export class ChatRuntime {
       return { started: false }
     }
 
+    const providerModels = Array.isArray(provider.models) ? provider.models : []
+    const modelExists = providerModels.some((model) => model?.id === modelId)
+    if (!modelExists) {
+      const availableModels = providerModels
+        .map((model) => model?.id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      const availableLabel = availableModels.length > 0 ? availableModels.join(', ') : '(none)'
+      eventSender.error(
+        _requestId,
+        `Model "${modelId}" is not configured for provider "${provider.name}". Available models: ${availableLabel}`,
+      )
+      return { started: false }
+    }
+
     // Fire-and-forget the stream processing
     this.runStream(request, provider, eventSender).catch((err) => {
       this.logger.error('[ChatRuntime] unhandled stream error', {
@@ -299,6 +313,16 @@ export class ChatRuntime {
         workflowId: params._workflowId,
         cwd,
         permissionMode,
+      })
+
+      this.logger.info('[ChatRuntime] sending request:', {
+        requestId: _requestId,
+        model: modelId,
+        apiBase: provider.apiBase,
+        prompt: buildPrompt(params.messages),
+        systemPrompt: buildSystemPrompt(params),
+        maxTokens: params.maxTokens,
+        stream: params.stream,
       })
 
       // Dynamic import required – SDK is ESM-only, backend is CJS

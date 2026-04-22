@@ -46,38 +46,38 @@ export class BrowserAPIAdapter implements IpcAPI {
   // ------------------------------------------------------------------
   chatHistory = {
     listSessions: (workflowId: string): Promise<any[]> =>
-      this.rpc('chatHistory:listSessions', workflowId),
+      this.rpc('chatHistory:listSessions', { workflowId }),
     createSession: (workflowId: string, session: any): Promise<any> =>
-      this.rpc('chatHistory:createSession', workflowId, session),
+      this.rpc('chatHistory:createSession', { workflowId, session }),
     updateSession: (workflowId: string, sessionId: string, updates: any): Promise<void> =>
-      this.rpc('chatHistory:updateSession', workflowId, sessionId, updates),
+      this.rpc('chatHistory:updateSession', { workflowId, sessionId, updates }),
     deleteSession: (workflowId: string, sessionId: string): Promise<void> =>
-      this.rpc('chatHistory:deleteSession', workflowId, sessionId),
+      this.rpc('chatHistory:deleteSession', { workflowId, sessionId }),
     listMessages: (workflowId: string, sessionId: string): Promise<any[]> =>
-      this.rpc('chatHistory:listMessages', workflowId, sessionId),
+      this.rpc('chatHistory:listMessages', { workflowId, sessionId }),
     addMessage: (workflowId: string, sessionId: string, message: any): Promise<any> =>
-      this.rpc('chatHistory:addMessage', workflowId, sessionId, message),
+      this.rpc('chatHistory:addMessage', { workflowId, sessionId, message }),
     updateMessage: (
       workflowId: string,
       sessionId: string,
       messageId: string,
       updates: any,
     ): Promise<void> =>
-      this.rpc('chatHistory:updateMessage', workflowId, sessionId, messageId, updates),
+      this.rpc('chatHistory:updateMessage', { workflowId, sessionId, messageId, updates }),
     deleteMessage: (
       workflowId: string,
       sessionId: string,
       messageId: string,
     ): Promise<void> =>
-      this.rpc('chatHistory:deleteMessage', workflowId, sessionId, messageId),
+      this.rpc('chatHistory:deleteMessage', { workflowId, sessionId, messageId }),
     deleteMessages: (
       workflowId: string,
       sessionId: string,
       messageIds: string[],
     ): Promise<void> =>
-      this.rpc('chatHistory:deleteMessages', workflowId, sessionId, messageIds),
+      this.rpc('chatHistory:deleteMessages', { workflowId, sessionId, messageIds }),
     clearMessages: (workflowId: string, sessionId: string): Promise<void> =>
-      this.rpc('chatHistory:clearMessages', workflowId, sessionId),
+      this.rpc('chatHistory:clearMessages', { workflowId, sessionId }),
   }
 
   // ------------------------------------------------------------------
@@ -85,7 +85,7 @@ export class BrowserAPIAdapter implements IpcAPI {
   // ------------------------------------------------------------------
   workflowTool = {
     respond: (requestId: string, result: unknown): Promise<{ resolved: boolean }> =>
-      this.rpc('workflow-tool:respond', requestId, result),
+      this.rpc('workflow-tool:respond', { requestId, result }),
   }
 
   // ------------------------------------------------------------------
@@ -96,7 +96,7 @@ export class BrowserAPIAdapter implements IpcAPI {
       toolType: string,
       params: Record<string, any>,
       targetTabId?: string,
-    ): Promise<any> => this.rpc('agent:execTool', toolType, params, targetTabId),
+    ): Promise<any> => this.rpc('agent:execTool', { toolType, params, targetTabId }),
   }
 
   // ------------------------------------------------------------------
@@ -133,10 +133,10 @@ export class BrowserAPIAdapter implements IpcAPI {
       accelerator: string,
       isGlobal: boolean,
       enabled?: boolean,
-    ): Promise<any> => this.rpc('shortcut:update', id, accelerator, isGlobal, enabled),
+    ): Promise<any> => this.rpc('shortcut:update', { id, accelerator, isGlobal, enabled }),
     toggle: (id: string, enabled: boolean): Promise<any> =>
-      this.rpc('shortcut:toggle', id, enabled),
-    clear: (id: string): Promise<any> => this.rpc('shortcut:clear', id),
+      this.rpc('shortcut:toggle', { id, enabled }),
+    clear: (id: string): Promise<any> => this.rpc('shortcut:clear', { id }),
     reset: (): Promise<any> => this.rpc('shortcut:reset'),
   }
 
@@ -160,7 +160,7 @@ export class BrowserAPIAdapter implements IpcAPI {
   // ------------------------------------------------------------------
   agentSettings = {
     get: (): Promise<any> => this.rpc('agentSettings:get'),
-    set: (settings: any): Promise<any> => this.rpc('agentSettings:set', settings),
+    set: (settings: any): Promise<any> => this.rpc('agentSettings:set', { settings }),
   }
 
   // ------------------------------------------------------------------
@@ -206,7 +206,7 @@ export class BrowserAPIAdapter implements IpcAPI {
       oldPath: string,
       newName: string,
     ): Promise<{ success: boolean; newPath?: string; error?: string }> =>
-      this.rpc('fs:rename', oldPath, newName),
+      this.rpc('fs:rename', { oldPath, newName }),
   }
 
   // ------------------------------------------------------------------

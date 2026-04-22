@@ -56,6 +56,7 @@ const emit = defineEmits<{
 
 const nameInput = ref<HTMLInputElement | null>(null)
 const isMaximized = ref(false)
+const isElectron = navigator.userAgent.includes('Electron')
 
 watch(() => props.isEditingName, (val) => {
   if (val) nextTick(() => nameInput.value?.focus())
@@ -237,7 +238,7 @@ refreshMaximized()
       </button>
     </div>
 
-    <div class="flex items-center no-drag">
+    <div v-if="isElectron" class="flex items-center no-drag">
       <button
         class="inline-flex items-center justify-center w-7 h-7 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
         @click="handleMinimize"

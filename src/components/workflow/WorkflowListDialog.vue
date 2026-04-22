@@ -44,11 +44,11 @@ watch(() => props.open, (open) => {
   if (!open) return
   isCreating.value = !!props.createMode
   selectedWorkflow.value = null
-  hasSelectedLocation.value = false
   if (selectedFolderId.value === null) {
     const first = store.workflowFolders.find((f) => f.parentId === null)
     if (first) selectedFolderId.value = first.id
   }
+  hasSelectedLocation.value = true
 })
 
 function onSelectWorkflow(wf: Workflow) {
@@ -81,6 +81,7 @@ async function createNew() {
 function startCreate() {
   isCreating.value = true
   selectedWorkflow.value = null
+  hasSelectedLocation.value = true
 }
 
 function onSelectLocation() {

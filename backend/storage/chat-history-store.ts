@@ -38,6 +38,8 @@ export class BackendChatHistoryStore {
     try {
       const raw = await readFile(this.filePath(workflowId), 'utf-8')
       const data = JSON.parse(raw) as ChatHistoryFile
+      data.sessions = (data.sessions ?? []).filter(Boolean)
+      data.messages = (data.messages ?? []).filter(Boolean)
       this.cache.set(workflowId, data)
       return data
     } catch {
