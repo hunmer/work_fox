@@ -17,6 +17,8 @@ import { BackendChatHistoryStore } from './storage/chat-history-store'
 import { BackendSettingsStore } from './storage/settings-store'
 import { registerAppChannels, type AppServices } from './ws/app-channels'
 import { registerFsChannels } from './ws/fs-channels'
+import { ChatRuntime } from './chat/chat-runtime'
+import { registerChatChannels } from './ws/chat-channels'
 
 async function main(): Promise<void> {
   const config = loadBackendConfig()
@@ -64,6 +66,11 @@ async function main(): Promise<void> {
     appVersion: '0.0.12',
   })
   registerFsChannels(backend.router)
+  const chatRuntime = new ChatRuntime(aiProviderStore, logger)
+  registerChatChannels(backend.router, {
+    chatRuntime,
+    connectionManager: backend.connections,
+  })
   const { port } = await backend.start()
 
   const ready = {
