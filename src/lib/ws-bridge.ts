@@ -92,6 +92,11 @@ export class WSBridge {
     this.ws = null
   }
 
+  /** 当前 WS 连接是否活跃 */
+  isConnected(): boolean {
+    return this.ws !== null && this.ws.readyState === WebSocket.OPEN
+  }
+
   async reconnect(): Promise<void> {
     this.disconnect()
     await this.connect()
