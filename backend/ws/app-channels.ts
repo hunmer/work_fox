@@ -2,6 +2,7 @@ import type { WSRouter } from './router'
 import { BackendAIProviderStore } from '../storage/ai-provider-store'
 import { BackendChatHistoryStore } from '../storage/chat-history-store'
 import { BackendSettingsStore } from '../storage/settings-store'
+import type { BackendPluginRegistry } from '../plugins/plugin-registry'
 
 export interface AppServices {
   aiProviderStore: BackendAIProviderStore
@@ -9,6 +10,7 @@ export interface AppServices {
   agentSettingsStore: BackendSettingsStore
   shortcutStore: BackendSettingsStore
   tabStore: BackendSettingsStore
+  pluginRegistry: BackendPluginRegistry
   appVersion: string
 }
 
@@ -19,6 +21,7 @@ export function registerAppChannels(router: WSRouter, services: AppServices): vo
     agentSettingsStore,
     shortcutStore,
     tabStore,
+    pluginRegistry,
     appVersion,
   } = services
 
@@ -155,4 +158,23 @@ export function registerAppChannels(router: WSRouter, services: AppServices): vo
 
   // --- App ---
   router.register('app:getVersion', () => ({ version: appVersion }))
+
+  // --- Agent / Tool Execution ---
+  router.register('agent:execTool', async ({ toolType, params }) => {
+    if (!toolType) {
+      throw new Error('缺少工具类型')
+    }
+
+    if (!pluginRegistry.canExecuteNode(toolType)) {
+      throw new Error(`Tool not available: ${toolType}`)
+    }
+
+    return pluginRegistry.executeWorkflowNode(toolType, params || {}, {
+      logger: {
+        info: () => undefined,
+        warning: () => undefined,
+        error: () => undefined,
+      },
+    })
+  })
 }

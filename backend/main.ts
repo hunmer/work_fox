@@ -63,6 +63,7 @@ async function main(): Promise<void> {
     agentSettingsStore,
     shortcutStore,
     tabStore,
+    pluginRegistry: plugins,
     appVersion: '0.0.12',
   })
   registerFsChannels(backend.router)

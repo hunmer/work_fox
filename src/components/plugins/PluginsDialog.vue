@@ -172,12 +172,14 @@ function handleOpenFolder() {
 async function handleInstall(plugin: RemotePlugin) {
   loadingPluginId.value = plugin.id
   try {
-    if (!isElectronRuntime && plugin.type === 'client') {
-      throw new Error('Web 端不支持安装纯 client 插件，请在 Electron 端导入')
-    }
-    const result = await window.api.plugin.install(resolveStoreUrl(plugin.downloadUrl))
+    const result = await pluginStore.installRemotePlugin(
+      {
+        ...plugin,
+        downloadUrl: resolveStoreUrl(plugin.downloadUrl),
+      },
+      plugin.manifestUrl ? resolveStoreUrl(plugin.manifestUrl) : undefined,
+    )
     if (result.success) {
-      await pluginStore.init()
     } else {
       console.error(result.error || '安装失败')
     }
@@ -191,9 +193,9 @@ async function handleInstall(plugin: RemotePlugin) {
 async function handleUninstall(pluginId: string) {
   loadingPluginId.value = pluginId
   try {
-    const result = await window.api.plugin.uninstall(pluginId)
+    const installed = pluginStore.plugins.find((plugin) => plugin.id === pluginId)
+    const result = await pluginStore.uninstallRemotePlugin(pluginId, installed?.runtimeTransport)
     if (result.success) {
-      await pluginStore.init()
     } else {
       console.error(result.error || '卸载失败')
     }

@@ -61,6 +61,11 @@ export interface PluginMeta {
   config?: PluginConfigField[]
   iconPath: string
   runtimeSource?: 'server' | 'client' | 'hybrid'
+  runtimeTransport?: 'local' | 'cdn'
+  manifestUrl?: string
+  clientUrl?: string
+  viewUrl?: string
+  runtimeTargets?: Array<'web' | 'electron'>
 }
 
 /** 在线插件商店条目 */
@@ -74,6 +79,8 @@ export interface RemotePlugin {
   hasView: boolean
   hasWorkflow?: boolean
   type?: PluginInfo['type']
+  manifestUrl?: string
+  runtimeTargets?: Array<'web' | 'electron'>
   downloadUrl: string
   iconUrl?: string
 }

@@ -3,8 +3,10 @@ import { ref, computed } from 'vue'
 import type { PluginMeta } from '@/types/plugin'
 import { createPluginDomainApi } from '@/lib/backend-api/plugin-domain'
 import { createWorkflowDomainApi } from '@/lib/backend-api/workflow-domain'
+import { webClientPluginRuntime } from '@/lib/plugins/web-client-runtime'
 
 export const usePluginStore = defineStore('plugin', () => {
+  const isElectronRuntime = navigator.userAgent.includes('Electron')
   const pluginApi = () => createPluginDomainApi()
   const workflowApi = () => createWorkflowDomainApi()
   const plugins = ref<PluginMeta[]>([])
@@ -21,7 +23,7 @@ export const usePluginStore = defineStore('plugin', () => {
       const api = pluginApi()
       const [serverPlugins, clientPlugins] = await Promise.all([
         api.list(),
-        api.listLocal(),
+        isElectronRuntime ? api.listLocal() : webClientPluginRuntime.loadInstalledPlugins(),
       ])
 
       const merged = new Map<string, PluginMeta>()
@@ -31,6 +33,7 @@ export const usePluginStore = defineStore('plugin', () => {
           ...plugin,
           iconPath: plugin.iconPath || '',
           runtimeSource: 'server',
+          runtimeTransport: 'local',
         })
       }
 
@@ -41,6 +44,7 @@ export const usePluginStore = defineStore('plugin', () => {
             ...plugin,
             iconPath: plugin.iconPath || '',
             runtimeSource: 'client',
+            runtimeTransport: plugin.runtimeTransport || (isElectronRuntime ? 'local' : 'cdn'),
           })
           continue
         }
@@ -55,10 +59,14 @@ export const usePluginStore = defineStore('plugin', () => {
           config: existing.config?.length ? existing.config : plugin.config,
           iconPath: plugin.iconPath || existing.iconPath || '',
           runtimeSource: 'hybrid',
+          runtimeTransport: existing.runtimeTransport || plugin.runtimeTransport || 'local',
         })
       }
 
       plugins.value = Array.from(merged.values())
+      if (!isElectronRuntime) {
+        await webClientPluginRuntime.sync(plugins.value)
+      }
     } finally {
       isLoading.value = false
     }
@@ -73,7 +81,12 @@ export const usePluginStore = defineStore('plugin', () => {
       await api.enable(pluginId)
     }
     if (plugin.runtimeSource === 'client' || plugin.runtimeSource === 'hybrid') {
+      if (!isElectronRuntime && plugin.runtimeTransport === 'cdn') {
+        await webClientPluginRuntime.enable(plugin)
+      }
+      else {
       await api.enableLocal(pluginId)
+      }
     }
     plugin.enabled = true
   }
@@ -87,7 +100,12 @@ export const usePluginStore = defineStore('plugin', () => {
       await api.disable(pluginId)
     }
     if (plugin.runtimeSource === 'client' || plugin.runtimeSource === 'hybrid') {
+      if (!isElectronRuntime && plugin.runtimeTransport === 'cdn') {
+        await webClientPluginRuntime.disable(pluginId)
+      }
+      else {
       await api.disableLocal(pluginId)
+      }
     }
     plugin.enabled = false
     if (activeViewPluginId.value === pluginId) {
@@ -97,7 +115,12 @@ export const usePluginStore = defineStore('plugin', () => {
 
   async function loadViewContent(pluginId: string): Promise<string | null> {
     if (viewContents.value[pluginId]) return viewContents.value[pluginId]
-    const content = await pluginApi().getView(pluginId)
+    const plugin = plugins.value.find((p) => p.id === pluginId)
+    if (!plugin) return null
+
+    const content = (!isElectronRuntime && plugin.runtimeTransport === 'cdn')
+      ? await webClientPluginRuntime.getViewContent(plugin)
+      : await pluginApi().getView(pluginId)
     if (content) {
       viewContents.value[pluginId] = content
     }
@@ -126,6 +149,38 @@ export const usePluginStore = defineStore('plugin', () => {
 
   async function openPluginsFolder(): Promise<void> {
     await pluginApi().openFolder()
+  }
+
+  async function installRemotePlugin(plugin: any, manifestUrl?: string): Promise<{ success: boolean; pluginName?: string; error?: string }> {
+    if (!isElectronRuntime && plugin.type === 'client') {
+      if (!manifestUrl) {
+        return { success: false, error: '缺少 Web client plugin manifestUrl' }
+      }
+      const result = await webClientPluginRuntime.install(plugin, manifestUrl)
+      if (result.success) {
+        await init()
+      }
+      return {
+        ...result,
+        pluginName: plugin.name,
+      }
+    }
+
+    const result = await pluginApi().install(plugin.downloadUrl)
+    if (result.success) {
+      await init()
+    }
+    return result
+  }
+
+  async function uninstallRemotePlugin(pluginId: string, runtimeTransport?: PluginMeta['runtimeTransport']): Promise<{ success: boolean; error?: string }> {
+    const result = (!isElectronRuntime && runtimeTransport === 'cdn')
+      ? await webClientPluginRuntime.uninstall(pluginId)
+      : await pluginApi().uninstall(pluginId)
+    if (result.success) {
+      await init()
+    }
+    return result
   }
 
   async function getWorkflowNodes(pluginId: string): Promise<any[]> {
@@ -185,6 +240,8 @@ export const usePluginStore = defineStore('plugin', () => {
     closeView,
     importPlugin,
     openPluginsFolder,
+    installRemotePlugin,
+    uninstallRemotePlugin,
     getWorkflowNodes,
     listWorkflowPlugins,
     getAgentTools,

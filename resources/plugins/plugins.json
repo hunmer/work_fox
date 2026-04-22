@@ -12,7 +12,9 @@
       "开发"
     ],
     "type": "client",
+    "runtimeTargets": ["web", "electron"],
     "hasView": true,
+    "manifestUrl": "test-plugin/web-plugin.json",
     "downloadUrl": "test-plugin.zip",
     "iconUrl": "test-plugin/icon.png"
   },
@@ -23,7 +25,8 @@
     "description": "提供独立浏览器窗口的创建、导航、关闭、截图等操作节点",
     "author": { "name": "workfox" },
     "tags": ["窗口", "浏览器", "管理"],
-    "type": "both",
+    "type": "client",
+    "runtimeTargets": ["electron"],
     "hasWorkflow": true,
     "hasView": false,
     "downloadUrl": "window-manager.zip",

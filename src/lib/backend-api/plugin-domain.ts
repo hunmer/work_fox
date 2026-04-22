@@ -51,6 +51,7 @@ export function createPluginDomainApi() {
     getWorkflowNodes: pluginBackendApi.getWorkflowNodes,
     listWorkflowPlugins: pluginBackendApi.listWorkflowPlugins,
     getAgentTools: pluginBackendApi.getAgentTools,
+    executeTool: pluginBackendApi.executeTool,
     getConfig: pluginBackendApi.getConfig,
     saveConfig: pluginBackendApi.saveConfig,
     getView: localPluginApi.getView,

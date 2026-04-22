@@ -5,7 +5,7 @@
   "description": "提供独立浏览器窗口的创建、导航、关闭、截图等操作节点",
   "author": { "name": "workfox" },
   "tags": ["窗口", "浏览器", "管理"],
-  "type": "both",
+  "type": "client",
   "hasWorkflow": true,
   "hasView": false,
   "entries": {

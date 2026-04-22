@@ -19,6 +19,9 @@ export const pluginBackendApi = {
   getAgentTools(pluginIds: string[]) {
     return wsBridge.invoke('plugin:get-agent-tools', { pluginIds })
   },
+  executeTool(toolType: string, params: Record<string, any>) {
+    return wsBridge.invoke('agent:execTool', { toolType, params })
+  },
   getConfig(pluginId: string) {
     return wsBridge.invoke('plugin:get-config', { pluginId })
   },

@@ -36,7 +36,7 @@ function pluginTypeLabel(type?: PluginMeta['type']) {
 function pluginSourceLabel(plugin: PluginMeta | RemotePlugin) {
   if ('runtimeSource' in plugin) {
     if (plugin.runtimeSource === 'server') return 'Backend'
-    if (plugin.runtimeSource === 'client') return 'Electron'
+    if (plugin.runtimeSource === 'client') return plugin.runtimeTransport === 'cdn' ? 'CDN' : 'Electron'
     if (plugin.runtimeSource === 'hybrid') return 'Shared'
   }
   return 'Store'

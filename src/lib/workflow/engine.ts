@@ -7,6 +7,7 @@ import { pluginBackendApi } from '../backend-api/plugin'
 import { workflowBackendApi } from '../backend-api/workflow'
 import type { ExecutionEventChannel, ExecutionEventMap } from '@shared/execution-events'
 import { createErrorShape } from '@shared/errors'
+import { isLocalBridgeWorkflowNode } from '@shared/workflow-local-bridge'
 
 export type EngineStatus = 'idle' | 'running' | 'paused' | 'completed' | 'error'
 
@@ -390,7 +391,7 @@ export class WorkflowEngine {
       case 'agent_run':
         return this.executeAgentRun(resolvedData)
       default:
-        return this.executeBrowserTool(node.type, resolvedData)
+        return this.executeCustomNode(node.type, resolvedData)
     }
   }
 
@@ -461,6 +462,13 @@ export class WorkflowEngine {
       if (this.isNodeReachable(edge.source, v)) return true
     }
     return false
+  }
+
+  private async executeCustomNode(toolType: string, params: Record<string, any>): Promise<any> {
+    if (!isLocalBridgeWorkflowNode(toolType)) {
+      return pluginBackendApi.executeTool(toolType, params)
+    }
+    return this.executeBrowserTool(toolType, params)
   }
 
   private async executeBrowserTool(toolType: string, params: Record<string, any>): Promise<any> {
