@@ -145,14 +145,26 @@ export class BrowserAPIAdapter implements IpcAPI {
   // ------------------------------------------------------------------
   plugin = {
     list: () => this.rpc('plugin:list'),
+    listLocal: async () => [],
     enable: (id: string) => this.rpc('plugin:enable', id),
+    enableLocal: notAvailable('plugin:enable-local'),
     disable: (id: string) => this.rpc('plugin:disable', id),
+    disableLocal: notAvailable('plugin:disable-local'),
     getView: (id: string) => this.rpc('plugin:get-view', id),
     getIcon: (id: string) => this.rpc('plugin:get-icon', id),
     importZip: notAvailable('plugin:import-zip'),
     openFolder: notAvailable('plugin:open-folder'),
-    install: (url: string) => this.rpc('plugin:install', url),
-    uninstall: (id: string) => this.rpc('plugin:uninstall', id),
+    install: async (url: string) => {
+      const plugin = await this.rpc<any>('plugin:install', { url })
+      return {
+        success: true,
+        pluginName: plugin?.name,
+      }
+    },
+    uninstall: async (id: string) => {
+      await this.rpc('plugin:uninstall', { id })
+      return { success: true }
+    },
   }
 
   // ------------------------------------------------------------------

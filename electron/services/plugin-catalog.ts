@@ -210,7 +210,10 @@ export class PluginCatalog {
 
     const raw = readFileSync(infoPath, 'utf-8')
     const info = JSON.parse(raw) as PluginInfo
-    const mainPath = join(pluginDir, resolvePluginEntryFile(info, 'main'))
+    if (info.type === 'server') return null
+
+    const entryKind = info.entries?.client ? 'client' : 'main'
+    const mainPath = join(pluginDir, resolvePluginEntryFile(info, entryKind))
     if (!existsSync(mainPath)) return null
     if (!info.id || !info.name || !info.version || !info.description || !info.author?.name) return null
 

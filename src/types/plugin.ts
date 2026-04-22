@@ -60,6 +60,7 @@ export interface PluginMeta {
   enabled: boolean
   config?: PluginConfigField[]
   iconPath: string
+  runtimeSource?: 'server' | 'client' | 'hybrid'
 }
 
 /** 在线插件商店条目 */
@@ -71,6 +72,8 @@ export interface RemotePlugin {
   author: { name: string; email?: string; url?: string }
   tags: string[]
   hasView: boolean
+  hasWorkflow?: boolean
+  type?: PluginInfo['type']
   downloadUrl: string
   iconUrl?: string
 }

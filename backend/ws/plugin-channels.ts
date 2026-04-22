@@ -11,6 +11,11 @@ export function registerPluginChannels(router: WSRouter, plugins: BackendPluginR
     plugins.disable(id)
     return undefined
   })
+  router.register('plugin:install', async ({ url }) => plugins.installFromUrl(url))
+  router.register('plugin:uninstall', ({ id }) => {
+    plugins.uninstall(id)
+    return undefined
+  })
   router.register('plugin:get-workflow-nodes', ({ pluginId }) => plugins.getWorkflowNodes(pluginId))
   router.register('plugin:list-workflow-plugins', () => plugins.listWorkflowPlugins())
   router.register('plugin:get-agent-tools', ({ pluginIds }) => plugins.getAgentTools(pluginIds))

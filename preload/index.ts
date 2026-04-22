@@ -104,8 +104,11 @@ const api = {
 
   plugin: {
     list: () => ipcRenderer.invoke('plugin:list'),
+    listLocal: () => ipcRenderer.invoke('plugin:list-local'),
     enable: (id: string) => ipcRenderer.invoke('plugin:enable', id),
+    enableLocal: (id: string) => ipcRenderer.invoke('plugin:enable-local', id),
     disable: (id: string) => ipcRenderer.invoke('plugin:disable', id),
+    disableLocal: (id: string) => ipcRenderer.invoke('plugin:disable-local', id),
     getView: (id: string) => ipcRenderer.invoke('plugin:get-view', id),
     getIcon: (id: string) => ipcRenderer.invoke('plugin:get-icon', id),
     importZip: () => ipcRenderer.invoke('plugin:import-zip'),

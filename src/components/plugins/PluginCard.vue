@@ -26,6 +26,22 @@ const configDialogOpen = ref(false)
 
 const isRemote = (p: PluginMeta | RemotePlugin): p is RemotePlugin => 'downloadUrl' in p
 
+function pluginTypeLabel(type?: PluginMeta['type']) {
+  if (type === 'server') return 'Server'
+  if (type === 'client') return 'Client'
+  if (type === 'both') return 'Both'
+  return 'Unknown'
+}
+
+function pluginSourceLabel(plugin: PluginMeta | RemotePlugin) {
+  if ('runtimeSource' in plugin) {
+    if (plugin.runtimeSource === 'server') return 'Backend'
+    if (plugin.runtimeSource === 'client') return 'Electron'
+    if (plugin.runtimeSource === 'hybrid') return 'Shared'
+  }
+  return 'Store'
+}
+
 onMounted(async () => {
   if (props.storeMode && isRemote(props.plugin) && props.plugin.iconUrl) {
     iconDataUrl.value = props.plugin.iconUrl
@@ -65,6 +81,20 @@ onMounted(async () => {
             {{ plugin.name }}
           </h3>
           <span class="text-xs text-muted-foreground">v{{ plugin.version }}</span>
+        </div>
+        <div class="flex flex-wrap gap-1 mt-2">
+          <Badge
+            variant="outline"
+            class="text-[10px] px-1.5 py-0"
+          >
+            {{ pluginTypeLabel(plugin.type) }}
+          </Badge>
+          <Badge
+            variant="outline"
+            class="text-[10px] px-1.5 py-0"
+          >
+            {{ pluginSourceLabel(plugin) }}
+          </Badge>
         </div>
         <p class="text-xs text-muted-foreground mt-1 line-clamp-2">
           {{ plugin.description }}

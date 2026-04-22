@@ -1,5 +1,7 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
+import AdmZip from 'adm-zip'
 import type { Logger } from '../app/logger'
 import type { BackendConfig } from '../app/config'
 import type { PluginInfo, PluginMeta, AgentToolDefinition } from '../../shared/plugin-types'
@@ -36,28 +38,101 @@ export class BackendPluginRegistry {
     this.plugins.clear()
     this.disabledIds = this.readDisabledIds()
 
-    if (!this.config.pluginDir || !existsSync(this.config.pluginDir)) {
-      this.logger.warn('Plugin directory not found', { pluginDir: this.config.pluginDir })
-      return
-    }
+    for (const baseDir of this.getPluginDirs()) {
+      if (!existsSync(baseDir)) {
+        if (baseDir === this.config.pluginDir || baseDir === resolve(this.config.userDataDir, 'plugins')) {
+          mkdirSync(baseDir, { recursive: true })
+        }
+        continue
+      }
 
-    const entries = readdirSync(this.config.pluginDir, { withFileTypes: true })
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue
-      const pluginDir = join(this.config.pluginDir, entry.name)
-      try {
-        this.loadPlugin(pluginDir)
-      } catch (error) {
-        this.logger.warn('Failed to load backend plugin metadata', {
-          pluginDir,
-          error: error instanceof Error ? error.message : String(error),
-        })
+      const entries = readdirSync(baseDir, { withFileTypes: true })
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue
+        const pluginDir = join(baseDir, entry.name)
+        try {
+          this.loadPlugin(pluginDir)
+        } catch (error) {
+          this.logger.warn('Failed to load backend plugin metadata', {
+            pluginDir,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
       }
     }
   }
 
   list(): PluginMeta[] {
     return Array.from(this.plugins.values()).map((plugin) => this.toPluginMeta(plugin))
+  }
+
+  async installFromUrl(url: string): Promise<PluginMeta> {
+    const pluginsDir = resolve(this.config.userDataDir, 'plugins')
+    this.ensureDir(pluginsDir)
+
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`下载失败: HTTP ${response.status}`)
+    }
+
+    const zipPath = join(tmpdir(), `workfox-plugin-${Date.now()}.zip`)
+    writeFileSync(zipPath, Buffer.from(await response.arrayBuffer()))
+
+    try {
+      const zip = new AdmZip(zipPath)
+      const entries = zip.getEntries()
+      const infoEntry = entries.find((entry) => !entry.isDirectory && entry.entryName.endsWith('info.json'))
+      if (!infoEntry) {
+        throw new Error('ZIP 中未找到 info.json，不是有效的插件包')
+      }
+
+      const relativePath = infoEntry.entryName
+      const topDir = relativePath.split('/')[0]
+      const extractedDir = join(pluginsDir, relativePath.includes('/') ? topDir : `plugin-${Date.now()}`)
+      if (existsSync(extractedDir)) {
+        rmSync(extractedDir, { recursive: true, force: true })
+      }
+      zip.extractAllTo(extractedDir, true)
+
+      const info = this.readPluginInfo(extractedDir)
+      if (!info) {
+        rmSync(extractedDir, { recursive: true, force: true })
+        throw new Error('插件缺少有效的 info.json')
+      }
+      if (info.type === 'client') {
+        rmSync(extractedDir, { recursive: true, force: true })
+        throw new Error('当前运行时仅支持安装 server 类型插件')
+      }
+
+      const finalDir = join(pluginsDir, info.id)
+      if (extractedDir !== finalDir) {
+        if (existsSync(finalDir)) {
+          rmSync(finalDir, { recursive: true, force: true })
+        }
+        renameSync(extractedDir, finalDir)
+      }
+
+      this.loadPlugin(finalDir)
+      const plugin = this.plugins.get(info.id)
+      if (!plugin) {
+        throw new Error('插件加载失败')
+      }
+      return this.toPluginMeta(plugin)
+    } finally {
+      rmSync(zipPath, { force: true })
+    }
+  }
+
+  uninstall(id: string): void {
+    const plugin = this.plugins.get(id)
+    if (!plugin) return
+
+    if (plugin.dir.startsWith(resolve(this.config.userDataDir, 'plugins'))) {
+      rmSync(plugin.dir, { recursive: true, force: true })
+    }
+    this.plugins.delete(id)
+    this.disabledIds.delete(id)
+    this.saveDisabledIds()
   }
 
   enable(id: string): void {
@@ -181,14 +256,9 @@ export class BackendPluginRegistry {
   }
 
   private loadPlugin(pluginDir: string): void {
-    const infoPath = join(pluginDir, 'info.json')
-    if (!existsSync(infoPath)) return
-
-    const raw = readFileSync(infoPath, 'utf-8')
-    const info = JSON.parse(raw) as PluginInfo
-    if (!info.id || !info.name || !info.version || !info.description || !info.author?.name) {
-      throw new Error(`Invalid info.json in ${pluginDir}`)
-    }
+    const info = this.readPluginInfo(pluginDir)
+    if (!info) return
+    if (info.type === 'client') return
 
     const { nodes: workflowNodes, handlers: workflowHandlers } = this.loadWorkflowNodes(pluginDir, info)
     const agentTools = this.loadAgentTools(pluginDir, info)
@@ -201,6 +271,28 @@ export class BackendPluginRegistry {
       agentTools,
       workflowHandlers,
     })
+  }
+
+  private getPluginDirs(): string[] {
+    const dirs = [
+      this.config.pluginDir,
+      resolve(this.config.userDataDir, 'plugins'),
+      resolve(process.cwd(), 'resources/plugins'),
+    ].filter((dir): dir is string => Boolean(dir))
+
+    return Array.from(new Set(dirs))
+  }
+
+  private readPluginInfo(pluginDir: string): PluginInfo | null {
+    const infoPath = join(pluginDir, 'info.json')
+    if (!existsSync(infoPath)) return null
+
+    const raw = readFileSync(infoPath, 'utf-8')
+    const info = JSON.parse(raw) as PluginInfo
+    if (!info.id || !info.name || !info.version || !info.description || !info.author?.name) {
+      throw new Error(`Invalid info.json in ${pluginDir}`)
+    }
+    return info
   }
 
   private loadWorkflowNodes(pluginDir: string, info: PluginInfo): { nodes: NodeTypeDefinition[]; handlers: Map<string, WorkflowNodeHandler> } {

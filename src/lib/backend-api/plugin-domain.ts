@@ -1,6 +1,9 @@
 import { pluginBackendApi } from './plugin'
 
 type LocalPluginApi = {
+  listLocal: () => Promise<any[]>
+  enableLocal: (pluginId: string) => Promise<void>
+  disableLocal: (pluginId: string) => Promise<void>
   getView: (pluginId: string) => Promise<string | null>
   getIcon: (pluginId: string) => Promise<string | null>
   importZip: () => Promise<{ success: boolean; pluginName?: string; error?: string }>
@@ -18,6 +21,9 @@ function notAvailable<T>(message: string, fallback: T): () => Promise<T> {
 
 export function createPluginDomainApi() {
   const localPluginApi: LocalPluginApi = (window as any).api?.plugin ?? {
+    listLocal: notAvailable('plugin.listLocal is not available in current runtime', []),
+    enableLocal: notAvailable('plugin.enableLocal is not available in current runtime', undefined),
+    disableLocal: notAvailable('plugin.disableLocal is not available in current runtime', undefined),
     getView: notAvailable('plugin.getView is not available in current runtime', null),
     getIcon: notAvailable('plugin.getIcon is not available in current runtime', null),
     importZip: notAvailable('plugin.importZip is not available in current runtime', {
@@ -37,8 +43,11 @@ export function createPluginDomainApi() {
 
   return {
     list: pluginBackendApi.list,
+    listLocal: localPluginApi.listLocal,
     enable: pluginBackendApi.enable,
+    enableLocal: localPluginApi.enableLocal,
     disable: pluginBackendApi.disable,
+    disableLocal: localPluginApi.disableLocal,
     getWorkflowNodes: pluginBackendApi.getWorkflowNodes,
     listWorkflowPlugins: pluginBackendApi.listWorkflowPlugins,
     getAgentTools: pluginBackendApi.getAgentTools,

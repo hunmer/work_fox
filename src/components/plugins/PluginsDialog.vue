@@ -44,6 +44,7 @@ const STORE_BASE_URL = import.meta.env.DEV
   ? 'http://127.0.0.1:8000'
   : 'https://raw.githubusercontent.com/hunmer/work-fox/refs/heads/master/plugins'
 const STORE_URL = `${STORE_BASE_URL}/plugins.json`
+const isElectronRuntime = navigator.userAgent.includes('Electron')
 
 function resolveStoreUrl(relativePath: string): string {
   if (!relativePath) return ''
@@ -171,6 +172,9 @@ function handleOpenFolder() {
 async function handleInstall(plugin: RemotePlugin) {
   loadingPluginId.value = plugin.id
   try {
+    if (!isElectronRuntime && plugin.type === 'client') {
+      throw new Error('Web 端不支持安装纯 client 插件，请在 Electron 端导入')
+    }
     const result = await window.api.plugin.install(resolveStoreUrl(plugin.downloadUrl))
     if (result.success) {
       await pluginStore.init()

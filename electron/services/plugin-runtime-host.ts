@@ -30,7 +30,8 @@ export class PluginRuntimeHost {
 
   load(manifest: PluginManifestRecord): PluginInstance | null {
     const { dir, info, enabled } = manifest
-    const mainPath = join(dir, resolvePluginEntryFile(info, 'main'))
+    const entryKind = info.entries?.client ? 'client' : 'main'
+    const mainPath = join(dir, resolvePluginEntryFile(info, entryKind))
     if (!existsSync(mainPath)) return null
 
     const storage = new PluginStorage(info.id, this.userDataPath)

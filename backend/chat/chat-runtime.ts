@@ -314,17 +314,7 @@ export class ChatRuntime {
         cwd,
         permissionMode,
       })
-
-      this.logger.info('[ChatRuntime] sending request:', {
-        requestId: _requestId,
-        model: modelId,
-        apiBase: provider.apiBase,
-        prompt: buildPrompt(params.messages),
-        systemPrompt: buildSystemPrompt(params),
-        maxTokens: params.maxTokens,
-        stream: params.stream,
-      })
-
+      
       // Dynamic import required – SDK is ESM-only, backend is CJS
       const sdk = await loadSdk()
 

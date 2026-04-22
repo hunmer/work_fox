@@ -2,8 +2,20 @@ import { ipcMain } from 'electron'
 import { pluginManager } from '../services/plugin-manager'
 
 export function registerPluginIpcHandlers(): void {
+  ipcMain.handle('plugin:list-local', () => {
+    return pluginManager.list()
+  })
+
   ipcMain.handle('plugin:list', () => {
     return pluginManager.list()
+  })
+
+  ipcMain.handle('plugin:enable-local', (_e, pluginId: string) => {
+    pluginManager.enable(pluginId)
+  })
+
+  ipcMain.handle('plugin:disable-local', (_e, pluginId: string) => {
+    pluginManager.disable(pluginId)
   })
 
   ipcMain.handle('plugin:enable', (_e, pluginId: string) => {

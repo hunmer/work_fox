@@ -18,25 +18,78 @@ export const usePluginStore = defineStore('plugin', () => {
   async function init(): Promise<void> {
     isLoading.value = true
     try {
-      plugins.value = (await pluginApi().list()).map((plugin) => ({
-        ...plugin,
-        iconPath: plugin.iconPath || '',
-      }))
+      const api = pluginApi()
+      const [serverPlugins, clientPlugins] = await Promise.all([
+        api.list(),
+        api.listLocal(),
+      ])
+
+      const merged = new Map<string, PluginMeta>()
+
+      for (const plugin of serverPlugins as PluginMeta[]) {
+        merged.set(plugin.id, {
+          ...plugin,
+          iconPath: plugin.iconPath || '',
+          runtimeSource: 'server',
+        })
+      }
+
+      for (const plugin of clientPlugins as PluginMeta[]) {
+        const existing = merged.get(plugin.id)
+        if (!existing) {
+          merged.set(plugin.id, {
+            ...plugin,
+            iconPath: plugin.iconPath || '',
+            runtimeSource: 'client',
+          })
+          continue
+        }
+
+        merged.set(plugin.id, {
+          ...existing,
+          ...plugin,
+          tags: Array.from(new Set([...(existing.tags || []), ...(plugin.tags || [])])),
+          hasView: existing.hasView || plugin.hasView,
+          hasWorkflow: existing.hasWorkflow || plugin.hasWorkflow,
+          enabled: existing.enabled && plugin.enabled,
+          config: existing.config?.length ? existing.config : plugin.config,
+          iconPath: plugin.iconPath || existing.iconPath || '',
+          runtimeSource: 'hybrid',
+        })
+      }
+
+      plugins.value = Array.from(merged.values())
     } finally {
       isLoading.value = false
     }
   }
 
   async function enablePlugin(pluginId: string): Promise<void> {
-    await pluginApi().enable(pluginId)
     const plugin = plugins.value.find((p) => p.id === pluginId)
-    if (plugin) plugin.enabled = true
+    if (!plugin) return
+
+    const api = pluginApi()
+    if (plugin.runtimeSource === 'server' || plugin.runtimeSource === 'hybrid') {
+      await api.enable(pluginId)
+    }
+    if (plugin.runtimeSource === 'client' || plugin.runtimeSource === 'hybrid') {
+      await api.enableLocal(pluginId)
+    }
+    plugin.enabled = true
   }
 
   async function disablePlugin(pluginId: string): Promise<void> {
-    await pluginApi().disable(pluginId)
     const plugin = plugins.value.find((p) => p.id === pluginId)
-    if (plugin) plugin.enabled = false
+    if (!plugin) return
+
+    const api = pluginApi()
+    if (plugin.runtimeSource === 'server' || plugin.runtimeSource === 'hybrid') {
+      await api.disable(pluginId)
+    }
+    if (plugin.runtimeSource === 'client' || plugin.runtimeSource === 'hybrid') {
+      await api.disableLocal(pluginId)
+    }
+    plugin.enabled = false
     if (activeViewPluginId.value === pluginId) {
       activeViewPluginId.value = null
     }
