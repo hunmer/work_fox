@@ -10,7 +10,7 @@
 2. **WS 消息协议**：`ws-protocol.ts` 定义 WS 消息格式（request/response/event/error/interaction）
 3. **执行事件协议**：`execution-events.ts` 定义工作流执行全生命周期事件类型和 recovery 协议
 4. **工作流类型**：`workflow-types.ts` 定义工作流核心数据模型（Workflow/Node/Edge/ExecutionLog 等）
-5. **插件类型**：`plugin-types.ts` 定义插件元信息、配置、工具、节点类型
+5. **插件类型**：`plugin-types.ts` 定义插件元信息、配置、工具、节点类型，以及 `server/client/both` 运行时语义
 6. **错误处理**：`errors.ts` 定义统一的 `BackendErrorShape` 和错误码
 7. **通道元数据**：`channel-metadata.ts` 定义所有 WS 通道的超时、优先级、幂等性、流式标记
 8. **插件加载**：`plugin-entry.ts` 和 `plugin-capability-loader.ts` 定义插件入口文件解析和能力模块加载
@@ -31,7 +31,7 @@
 | `ws-protocol.ts` | `WSRequest`, `WSResponse`, `WSEvent`, `WSError`, `InteractionRequest`, `InteractionResponse`, `WSClientHello` | backend/ws/connection-manager.ts, src/lib/ws-bridge.ts |
 | `execution-events.ts` | `ExecutionEventChannel`, `ExecutionEventMap`, `ExecutionRecoveryState`, `WorkflowExecuteRequest` | backend/workflow/*, src/stores/workflow.ts, src/lib/workflow/engine.ts |
 | `workflow-types.ts` | `Workflow`, `WorkflowNode`, `WorkflowEdge`, `ExecutionLog`, `NodeTypeDefinition` | 全项目 |
-| `plugin-types.ts` | `PluginInfo`, `PluginMeta`, `AgentToolDefinition`, `PluginConfigField` | electron/services/*, backend/plugins/* |
+| `plugin-types.ts` | `PluginInfo`, `PluginMeta`, `AgentToolDefinition`, `PluginConfigField` | electron/services/*, backend/plugins/*, src/types/plugin.ts |
 | `errors.ts` | `BackendErrorShape`, `BackendErrorCode`, `createErrorShape` | backend/*, shared/workflow-local-bridge.ts |
 | `plugin-entry.ts` | `PluginEntryKind`, `resolvePluginEntryFile` | shared/plugin-capability-loader.ts |
 | `plugin-capability-loader.ts` | `loadPluginWorkflowModule`, `loadPluginToolsModule`, `loadPluginApiModule`, `isMainProcessBridgePlugin` | electron/services/*, backend/plugins/* |
@@ -57,6 +57,21 @@
 - **文件系统**: `fs:listDir/delete/createFile/createDir/rename`
 - **Chat**: `chat:completions`, `chat:abort`
 - **工具**: `agent:execTool`, `workflowTool:respond`
+
+### 插件相关共享约定
+
+- `PluginInfo.type`
+  - `server`
+  - `client`
+  - `both`
+- `plugin-entry.ts`
+  - 支持 `main/server/client/workflow/tools/api/view`
+- `agent:execTool`
+  - 当前不是 Electron 独占概念
+  - 同时存在：
+    - Electron IPC 版本
+    - backend WS 版本
+  - 在渲染层语义上更接近统一工具执行入口
 
 ### 执行事件列表（`ExecutionEventChannel`）
 
@@ -99,6 +114,9 @@ A: 1) `channel-contracts.ts` 添加 `ChannelContract`；2) `channel-metadata.ts`
 **Q: plugin-entry.ts 和 plugin-capability-loader.ts 的区别？**
 A: `plugin-entry.ts` 解析插件的入口文件路径（如 `main.js` / `workflow.js`）；`plugin-capability-loader.ts` 实际加载这些入口模块并导出结构化结果。
 
+**Q: `agent:execTool` 现在是 Electron IPC 还是 backend WS？**
+A: 两者都有。Electron 下可用于本地桥接节点执行；backend 下也提供同名 WS channel，用于执行 backend 可运行的插件节点。
+
 **Q: LocalBridge 节点是什么？**
 A: `workflow-local-bridge.ts` 定义必须在 Electron 主进程执行的节点（如 `delay`）。Backend 执行到这类节点时通过 InteractionManager 发起 WS 交互请求，回到客户端执行。
 
@@ -123,4 +141,5 @@ shared/
 
 | 日期 | 操作 | 说明 |
 |---|---|---|
+| 2026-04-23 | 增量更新 | 同步插件运行时约定、插件入口类型、`agent:execTool` 双实现 |
 | 2026-04-22 | 初始化 | 首次生成 shared 模块文档 |

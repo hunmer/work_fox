@@ -10,7 +10,7 @@
 2. **工作流执行**：`ExecutionManager` 管理工作流的生命周期（start/pause/resume/stop），支持 execution recovery
 3. **交互式操作**：`InteractionManager` 处理需要客户端参与的执行步骤（agent_chat、node_execution 等），支持断线重连
 4. **数据持久化**：JSON 文件存储（workflow / version / execution-log / operation-history / ai-provider / chat-history / settings）
-5. **插件注册**：`BackendPluginRegistry` 扫描和加载插件，执行 server 类型插件的 workflow handler
+5. **插件注册**：`BackendPluginRegistry` 扫描和加载 server 类型插件，执行 workflow handler，并提供 `plugin:install/uninstall` 与 backend `agent:execTool`
 6. **Chat 运行时**：`ChatRuntime` 封装 Claude Agent SDK，支持 Web 模式下的流式对话
 7. **连接管理**：`ConnectionManager` 管理 WS 客户端会话、心跳、token 验证、重连处理
 
@@ -35,7 +35,7 @@ interface BackendConfig {
   host: string           // WORKFOX_BACKEND_HOST，默认 127.0.0.1
   port: number           // WORKFOX_BACKEND_PORT，默认 0（随机）
   userDataDir: string    // 用户数据目录
-  pluginDir: string      // 插件目录
+  pluginDir: string      // 插件目录，默认 {userDataDir}/plugins
   logLevel: string       // 日志级别
   dev: boolean           // 开发模式
   requestTimeoutMs: number      // 请求超时，默认 30s
@@ -63,7 +63,7 @@ interface BackendConfig {
 | `storage-channels.ts` | `workflow:*`, `workflowFolder:*`, `workflowVersion:*`, `executionLog:*`, `operationHistory:*` | 数据 CRUD |
 | `execution-channels.ts` | `workflow:execute`, `workflow:pause/resume/stop`, `workflow:get-execution-recovery` | 工作流执行控制 |
 | `plugin-channels.ts` | `plugin:*`, `workflow:*-plugin-scheme` | 插件管理与配置 |
-| `app-channels.ts` | `aiProvider:*`, `chatHistory:*`, `agentSettings:*`, `shortcut:*`, `tabs:*`, `app:getVersion` | 应用全局通道 |
+| `app-channels.ts` | `aiProvider:*`, `chatHistory:*`, `agentSettings:*`, `shortcut:*`, `tabs:*`, `app:getVersion`, `agent:execTool` | 应用全局通道与 backend 工具执行 |
 | `fs-channels.ts` | `fs:*` | 文件系统操作 |
 | `chat-channels.ts` | `chat:completions`, `chat:abort` | Chat 流式对话 |
 
@@ -135,7 +135,12 @@ interface BackendConfig {
 ### BackendPluginRegistry（`plugins/plugin-registry.ts`）
 
 - 职责：扫描和加载 server 类型插件
+- 默认扫描目录：
+  - `{userDataDir}/plugins`
+  - `resources/plugins`（兼容内置插件）
+- 会忽略 `type: 'client'`
 - 功能：加载 `info.json` 元数据、`workflow.js` 节点定义和 handler、`tools.js` Agent 工具定义
+- 支持在线安装 / 卸载 server 插件（ZIP 下载到 backend 插件目录）
 - 插件禁用状态持久化到 `disabled.json`
 - 内置能力：`builtin-fs-api`（文件系统）、`builtin-fetch-api`（HTTP 请求）
 
@@ -160,7 +165,7 @@ A: 主进程通过 `fork()` 启动 backend，监听 stdout 的 `WORKFOX_BACKEND_
 A: 1) 在 `shared/channel-contracts.ts` 添加类型；2) 在 `shared/channel-metadata.ts` 添加元数据；3) 在 `backend/ws/` 创建 handler 注册函数；4) 在 `backend/main.ts` 调用注册。
 
 **Q: 插件在 backend 如何执行？**
-A: `type: 'server'` 的插件在 `BackendPluginRegistry` 中加载。执行时 `ExecutionManager` 调用 `pluginRegistry.executeWorkflowNode()` 运行 handler。
+A: `type: 'server'` 的插件在 `BackendPluginRegistry` 中加载。执行时既可以由 `ExecutionManager` 调用 `pluginRegistry.executeWorkflowNode()`，也可以通过 backend WS `agent:execTool` 直接调用。
 
 **Q: ChatRuntime 和 Electron 的 claude-agent-runtime 有什么区别？**
 A: 两者都封装 Claude Agent SDK。Electron 版本通过 IPC 流式推送事件，Backend 版本通过 WS `ChatEventSender` 推送。Backend 版本使用动态 `import()` 因为 ESM/CJS 兼容性。

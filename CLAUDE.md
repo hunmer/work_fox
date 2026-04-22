@@ -8,7 +8,7 @@ WorkFox 是一款桌面端工作流自动化工具，核心定位：
 
 - **可视化工作流编辑器**：基于 Vue Flow 的拖拽式 DAG 编辑器，支持多种节点类型（流程控制、AI 执行、浏览器交互、展示等）
 - **AI Agent 集成**：通过 Claude Agent SDK（@anthropic-ai/claude-agent-sdk）在主进程中运行 AI Agent，支持流式输出、工具调用、thinking blocks
-- **插件系统**：支持第三方插件扩展，可注册自定义工作流节点、工具和视图
+- **插件系统**：支持 `server` / `client` / Web CDN manifest 三类插件扩展，可注册自定义工作流节点、工具和视图
 - **多标签页**：多工作流并行编辑，每个标签页独立维护工作流状态和 Chat 会话
 - **Web 模式**：支持脱离 Electron 在纯浏览器中运行，通过 WebSocket 连接 backend 服务
 
@@ -44,9 +44,9 @@ Main (Electron)
           |-- claude-agent-runtime.ts   Claude Agent SDK 运行时（流式桥接、工具适配）
           |-- backend-process.ts        Backend 子进程生命周期管理
           |-- workflow-store.ts         工作流持久化（每工作流独立 JSON 文件）
-          |-- plugin-manager.ts         插件生命周期管理（扫描/加载/启用/禁用）
-          |-- plugin-runtime-host.ts    插件运行时宿主
-          |-- plugin-catalog.ts         插件目录扫描与元数据
+          |-- plugin-manager.ts         Electron 本地 client 插件生命周期管理（扫描/加载/启用/禁用）
+          |-- plugin-runtime-host.ts    Electron client 插件运行时宿主
+          |-- plugin-catalog.ts         Electron 本地插件目录扫描与元数据
           |-- store.ts                  electron-store 全局配置（AI providers / shortcuts / tabs）
           |-- chat-history-store.ts     Chat 历史（IndexedDB 跨进程代理或文件存储）
           |-- workflow-tool-dispatcher.ts 工作流工具调度（主进程 <-> 渲染进程协作）
@@ -168,7 +168,7 @@ graph TD
 | `backend/plugins/` | 后端插件注册表 | TypeScript | `plugin-registry.ts` |
 | `backend/chat/` | Chat 运行时（web 模式） | TypeScript | `chat-runtime.ts` |
 | `shared/` | 前后端共享协议、类型与工具 | TypeScript | `shared/index.ts` |
-| `resources/plugins/` | 内置插件（window-manager / file-system / fetch / jimeng / fish-audio） | JavaScript | 各 `main.js` |
+| `resources/plugins/` | 内置插件与商店元数据（含 Web client manifest 示例） | JavaScript / JSON | 各 `main.js` / `web-plugin.json` |
 
 ## 运行与开发
 
@@ -219,6 +219,29 @@ WorkFox 支持两种运行模式：
 
 1. **Electron 桌面模式**：`pnpm dev` -- 完整桌面应用，Electron 主进程通过 `backend-process.ts` fork 后端子进程
 2. **Web 浏览器模式**：`pnpm dev:web` -- 纯浏览器 SPA，通过 `BrowserAPIAdapter` 将所有 `window.api` 调用桥接到 backend WS
+
+## 插件系统状态
+
+- 插件来源不是单一目录，而是三路聚合：
+  - backend `plugin:list` -> `server` 插件
+  - Electron `plugin:list-local` -> 本地 `client` 插件
+  - Web `web-client-runtime` -> 已安装 CDN `client` 插件
+- `server` 插件默认扫描：
+  - `backend/data/plugins`
+  - `resources/plugins`（兼容内置插件）
+- Electron 本地插件默认扫描：
+  - 开发态 `resources/plugins`
+  - 打包后 `process.resourcesPath/plugins`
+- Web 不扫描本地插件目录；Web client 插件只能通过 `manifestUrl` + CDN 方式安装
+- 当前内置插件按运行时建议理解：
+  - `workfox.window-manager` -> `client`（Electron only）
+  - `workfox.file-system` -> `server`
+  - `workfox.fetch` -> `server`
+  - `workfox.jimeng` -> `server`
+  - `workfox.fish-audio` -> `server`
+- 工作流节点执行分流：
+  - backend 可执行插件节点通过 backend `agent:execTool` / `pluginRegistry.executeWorkflowNode()`
+  - 本地桥接节点（如 `delay`）通过 Electron `window.api.agent.execTool(...)`
 
 ## Backend Migration Status
 

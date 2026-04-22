@@ -133,7 +133,15 @@ export const backendChannelMetadata: Record<BackendChannel, ChannelMetadata> = {
   'chat:abort': { channel: 'chat:abort', priority: 2, ordered: false, idempotent: true, timeoutMs: 5_000, streaming: false, description: 'Abort chat completion' },
 
   // --- Agent / Workflow Tool ---
-  'agent:execTool': mutation('agent:execTool', 'Execute agent tool'),
+  'agent:execTool': {
+    channel: 'agent:execTool',
+    priority: 2,
+    ordered: true,
+    idempotent: false,
+    timeoutMs: 10 * 60_000,
+    streaming: false,
+    description: 'Execute agent tool',
+  },
   'workflowTool:respond': mutation('workflowTool:respond', 'Respond to workflow tool call'),
 }
 
