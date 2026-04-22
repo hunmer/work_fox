@@ -12,6 +12,11 @@ import { registerPluginChannels } from './ws/plugin-channels'
 import { BackendWorkflowExecutionManager } from './workflow/execution-manager'
 import { BackendInteractionManager } from './workflow/interaction-manager'
 import { registerExecutionChannels } from './ws/execution-channels'
+import { BackendAIProviderStore } from './storage/ai-provider-store'
+import { BackendChatHistoryStore } from './storage/chat-history-store'
+import { BackendSettingsStore } from './storage/settings-store'
+import { registerAppChannels, type AppServices } from './ws/app-channels'
+import { registerFsChannels } from './ws/fs-channels'
 
 async function main(): Promise<void> {
   const config = loadBackendConfig()
@@ -22,6 +27,11 @@ async function main(): Promise<void> {
   const workflowVersionStore = new BackendWorkflowVersionStore(paths)
   const executionLogStore = new BackendExecutionLogStore(paths)
   const operationHistoryStore = new BackendOperationHistoryStore(paths)
+  const aiProviderStore = new BackendAIProviderStore(paths.userDataDir)
+  const chatHistoryStore = new BackendChatHistoryStore(paths.userDataDir)
+  const agentSettingsStore = new BackendSettingsStore(paths.userDataDir, 'agent-settings.json')
+  const shortcutStore = new BackendSettingsStore(paths.userDataDir, 'shortcuts.json')
+  const tabStore = new BackendSettingsStore(paths.userDataDir, 'tabs.json')
   const plugins = new BackendPluginRegistry(config, logger)
   plugins.loadAll()
   const interactionManager = new BackendInteractionManager({
@@ -45,6 +55,15 @@ async function main(): Promise<void> {
   })
   registerPluginChannels(backend.router, plugins)
   registerExecutionChannels(backend.router, executionManager)
+  registerAppChannels(backend.router, {
+    aiProviderStore,
+    chatHistoryStore,
+    agentSettingsStore,
+    shortcutStore,
+    tabStore,
+    appVersion: '0.0.12',
+  })
+  registerFsChannels(backend.router)
   const { port } = await backend.start()
 
   const ready = {
