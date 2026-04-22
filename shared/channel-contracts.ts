@@ -237,7 +237,7 @@ export interface BackendChannelMap {
   // --- AI Provider ---
   'aiProvider:list': ChannelContract<EmptyRequest, AIProviderEntry[]>
   'aiProvider:create': ChannelContract<{ data: Omit<AIProviderEntry, 'id'> }, AIProviderEntry>
-  'aiProvider:update': ChannelContract<{ id: string; data: Partial<Omit<AIProviderEntry, 'id'>> }, EmptyResponse>
+    'aiProvider:update': ChannelContract<{ id: string; data: Partial<Omit<AIProviderEntry, 'id'>> }, AIProviderEntry>
   'aiProvider:delete': ChannelContract<{ id: string }, { success: boolean }>
   'aiProvider:test': ChannelContract<{ id: string }, { success: boolean; error?: string }>
 

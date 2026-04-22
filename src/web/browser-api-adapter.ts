@@ -104,12 +104,14 @@ export class BrowserAPIAdapter implements IpcAPI {
   // ------------------------------------------------------------------
   aiProvider = {
     list: (): Promise<any[]> => this.rpc('aiProvider:list'),
-    create: (data: any): Promise<any> => this.rpc('aiProvider:create', data),
-    update: (data: { id: string; [key: string]: any }): Promise<any> =>
-      this.rpc('aiProvider:update', data),
-    delete: (id: string): Promise<boolean> => this.rpc('aiProvider:delete', id),
+    create: (data: any): Promise<any> => this.rpc('aiProvider:create', { data }),
+    update: (data: { id: string; [key: string]: any }): Promise<any> => {
+      const { id, ...rest } = data
+      return this.rpc('aiProvider:update', { id, data: rest })
+    },
+    delete: (id: string): Promise<boolean> => this.rpc('aiProvider:delete', { id }),
     test: (id: string): Promise<{ success: boolean; error?: string }> =>
-      this.rpc('aiProvider:test', id),
+      this.rpc('aiProvider:test', { id }),
   }
 
   // ------------------------------------------------------------------

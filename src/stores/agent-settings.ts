@@ -39,7 +39,14 @@ export const useAgentSettingsStore = defineStore('agent-settings', () => {
 
   async function init() {
     if (initialized.value) return
-    globalSettings.value = await window.api.agentSettings.get()
+    const loaded = await window.api.agentSettings.get()
+    const defaults = createEmptyGlobalSettings()
+    globalSettings.value = {
+      ...defaults,
+      ...loaded,
+      skills: Array.isArray(loaded?.skills) ? loaded.skills : defaults.skills,
+      mcps: Array.isArray(loaded?.mcps) ? loaded.mcps : defaults.mcps,
+    }
     initialized.value = true
   }
 
