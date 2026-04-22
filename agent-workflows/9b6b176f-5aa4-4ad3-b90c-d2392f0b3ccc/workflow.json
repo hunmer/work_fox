@@ -1,0 +1,61 @@
+{
+  "id": "9b6b176f-5aa4-4ad3-b90c-d2392f0b3ccc",
+  "name": "新工作流test",
+  "folderId": null,
+  "nodes": [
+    {
+      "id": "a2851f3d-7035-4eea-bc0d-374af423ce2e",
+      "type": "start",
+      "label": "开始",
+      "position": {
+        "x": 100,
+        "y": 250
+      },
+      "data": {}
+    },
+    {
+      "id": "de8b77a2-a291-4848-b50b-dd32a0372439",
+      "type": "end",
+      "label": "结束",
+      "position": {
+        "x": 600,
+        "y": 250
+      },
+      "data": {}
+    },
+    {
+      "id": "7cf90180-a7de-45d2-b495-4c38efd607c0",
+      "type": "run_code",
+      "label": "运行 JS 代码",
+      "position": {
+        "x": 342.5689084895259,
+        "y": 296.848401323043
+      },
+      "data": {}
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-a2851f3d-7035-4eea-bc0d-374af423ce2e-source-7cf90180-a7de-45d2-b495-4c38efd607c0-default",
+      "source": "a2851f3d-7035-4eea-bc0d-374af423ce2e",
+      "target": "7cf90180-a7de-45d2-b495-4c38efd607c0",
+      "sourceHandle": "source",
+      "targetHandle": null
+    },
+    {
+      "id": "e-7cf90180-a7de-45d2-b495-4c38efd607c0-source-de8b77a2-a291-4848-b50b-dd32a0372439-target",
+      "source": "7cf90180-a7de-45d2-b495-4c38efd607c0",
+      "target": "de8b77a2-a291-4848-b50b-dd32a0372439",
+      "sourceHandle": "source",
+      "targetHandle": "target"
+    }
+  ],
+  "createdAt": 1776838819379,
+  "updatedAt": 1776838871843,
+  "agentConfig": {
+    "workspaceDir": "",
+    "dataDir": "",
+    "skills": [],
+    "mcps": []
+  }
+}

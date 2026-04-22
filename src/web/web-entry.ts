@@ -1,4 +1,3 @@
-// src/web/web-entry.ts
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from '../App.vue'
@@ -9,21 +8,47 @@ import { BrowserAPIAdapter } from './browser-api-adapter'
 import '../styles/globals.css'
 import { useThemeStore } from '../stores/theme'
 
-function loadSavedEndpoint() {
-  try {
-    const saved = localStorage.getItem('workfox.backendEndpoint')
-    if (saved) return JSON.parse(saved) as { url: string; token: string }
-  } catch { /* ignore */ }
+const BACKEND_ENDPOINT_STORAGE_KEY = 'workfox.backendEndpoint'
+
+function defaultEndpoint() {
   return {
-    url: `ws://${location.hostname}:3001`,
+    url: `ws://${location.hostname}:3001/ws`,
     token: '',
   }
 }
 
-// 关键：在任何 store 初始化之前就注入 window.api，
-// 因为部分 store（如 shortcut.ts）在模块顶层访问了 window.api
-const endpoint = loadSavedEndpoint()
-;(window as any).api = new BrowserAPIAdapter(wsBridge, endpoint)
+function loadSavedEndpoint() {
+  try {
+    const saved = localStorage.getItem(BACKEND_ENDPOINT_STORAGE_KEY)
+    if (saved) return JSON.parse(saved) as { url: string; token: string }
+  } catch {
+    // ignore invalid localStorage payload
+  }
+  return defaultEndpoint()
+}
+
+async function resolveEndpoint() {
+  try {
+    const response = await fetch(`/workfox-backend-endpoint.json?t=${Date.now()}`, {
+      cache: 'no-store',
+    })
+    if (response.ok) {
+      const endpoint = await response.json() as { url: string; token?: string }
+      if (endpoint.url) {
+        const normalized = {
+          url: endpoint.url,
+          token: endpoint.token ?? '',
+        }
+        localStorage.setItem(BACKEND_ENDPOINT_STORAGE_KEY, JSON.stringify(normalized))
+        return normalized
+      }
+    }
+  } catch {
+    // ignore fetch failure and fallback to local settings
+  }
+
+  return loadSavedEndpoint()
+}
 
 function mountApp() {
   const pinia = createPinia()
@@ -33,12 +58,15 @@ function mountApp() {
 }
 
 async function bootstrap() {
-  // window.api 已在模块顶层注入，这里只需连接 backend
+  const endpoint = await resolveEndpoint()
+  ;(window as any).api = new BrowserAPIAdapter(wsBridge, endpoint)
+
   try {
     await wsBridge.connect(endpoint.url, endpoint.token)
   } catch (error) {
     console.warn('Backend connection failed, app will work in offline mode:', error)
   }
+
   mountApp()
 }
 

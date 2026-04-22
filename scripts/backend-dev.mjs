@@ -1,10 +1,11 @@
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { watch } from 'node:fs'
 import { resolve } from 'node:path'
 
 const cwd = process.cwd()
 const backendEntry = resolve(cwd, 'out/backend/main.js')
+const backendEndpointFile = resolve(cwd, 'public/workfox-backend-endpoint.json')
 const tscArgs = ['exec', 'tsc', '-p', 'tsconfig.backend.json', '--watch', '--preserveWatchOutput']
 
 let backendProcess = null
@@ -15,6 +16,27 @@ let backendStarted = false
 
 function log(scope, message) {
   process.stdout.write(`[backend-dev][${scope}] ${message}\n`)
+}
+
+function persistBackendEndpointFromOutput(text) {
+  for (const line of text.split('\n')) {
+    if (!line.startsWith('WORKFOX_BACKEND_READY ')) continue
+    try {
+      const ready = JSON.parse(line.slice('WORKFOX_BACKEND_READY '.length))
+      mkdirSync(resolve(cwd, 'public'), { recursive: true })
+      writeFileSync(backendEndpointFile, JSON.stringify({
+        url: ready.url,
+        token: '',
+        healthUrl: ready.healthUrl,
+        versionUrl: ready.versionUrl,
+        port: ready.port,
+        pid: ready.pid,
+      }, null, 2))
+      log('endpoint', `wrote ${backendEndpointFile}`)
+    } catch (error) {
+      log('endpoint', `failed to persist backend endpoint: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
 }
 
 function stopBackend() {
@@ -31,7 +53,17 @@ function startBackend() {
   backendStarted = true
   backendProcess = spawn(process.execPath, ['--watch', backendEntry], {
     cwd,
-    stdio: 'inherit',
+    stdio: ['inherit', 'pipe', 'pipe'],
+  })
+
+  backendProcess.stdout.on('data', (chunk) => {
+    const text = chunk.toString()
+    process.stdout.write(text)
+    persistBackendEndpointFromOutput(text)
+  })
+
+  backendProcess.stderr.on('data', (chunk) => {
+    process.stderr.write(chunk.toString())
   })
 
   backendProcess.on('exit', (code, signal) => {
@@ -118,4 +150,3 @@ if (existsSync(backendEntry)) {
 } else {
   log('node', 'waiting for initial backend build')
 }
-

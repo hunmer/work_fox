@@ -23,6 +23,7 @@ type PendingRequest = {
 type EventHandler = (data: unknown) => void
 
 const CLIENT_ID_STORAGE_KEY = 'workfox.backendClientId'
+const BACKEND_ENDPOINT_STORAGE_KEY = 'workfox.backendEndpoint'
 
 interface WSReconnectState {
   attempt: number
@@ -48,7 +49,7 @@ export class WSBridge {
     }
     this.manualClose = false
     if (!url || !token) {
-      this.endpoint = await window.api.backend.getEndpoint()
+      this.endpoint = await this.resolveEndpoint()
     } else {
       this.endpoint = { url, token }
     }
@@ -281,6 +282,33 @@ export class WSBridge {
       return window.localStorage.getItem(CLIENT_ID_STORAGE_KEY) || crypto.randomUUID()
     } catch {
       return crypto.randomUUID()
+    }
+  }
+
+  private async resolveEndpoint(): Promise<{ url: string; token: string }> {
+    const backendApi = (window as any).api?.backend
+    if (backendApi?.getEndpoint) {
+      return backendApi.getEndpoint()
+    }
+
+    try {
+      const saved = window.localStorage.getItem(BACKEND_ENDPOINT_STORAGE_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved) as Partial<{ url: string; token: string }>
+        if (parsed.url) {
+          return {
+            url: parsed.url,
+            token: parsed.token ?? '',
+          }
+        }
+      }
+    } catch {
+      // ignore invalid localStorage value
+    }
+
+    return {
+      url: `ws://${window.location.hostname}:3001`,
+      token: '',
     }
   }
 

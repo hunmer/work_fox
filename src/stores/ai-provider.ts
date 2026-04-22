@@ -6,6 +6,7 @@ const SELECTED_PROVIDER_KEY = 'workfox-selected-provider'
 const SELECTED_MODEL_KEY = 'workfox-selected-model'
 
 export const useAIProviderStore = defineStore('ai-provider', () => {
+  const api = (window as any).api?.aiProvider
   const providers = ref<AIProvider[]>([])
   const selectedProviderId = ref<string | null>(localStorage.getItem(SELECTED_PROVIDER_KEY))
   const selectedModelId = ref<string | null>(localStorage.getItem(SELECTED_MODEL_KEY))
@@ -26,7 +27,11 @@ export const useAIProviderStore = defineStore('ai-provider', () => {
   )
 
   async function loadProviders() {
-    providers.value = await window.api.aiProvider.list()
+    if (!api) {
+      providers.value = []
+      return
+    }
+    providers.value = await api.list()
     if (!selectedProviderId.value || !providers.value.find((p) => p.id === selectedProviderId.value)) {
       const first = providers.value.find((p) => p.enabled)
       if (first) {
@@ -53,13 +58,19 @@ export const useAIProviderStore = defineStore('ai-provider', () => {
   }
 
   async function createProvider(data: Omit<AIProvider, 'id' | 'createdAt'>) {
-    const provider = await window.api.aiProvider.create(data)
+    if (!api) {
+      throw new Error('AI provider API is not available in current runtime')
+    }
+    const provider = await api.create(data)
     providers.value.push(provider)
     return provider
   }
 
   async function updateProvider(id: string, updates: Partial<AIProvider>) {
-    const updated = await window.api.aiProvider.update({ id, ...updates })
+    if (!api) {
+      throw new Error('AI provider API is not available in current runtime')
+    }
+    const updated = await api.update({ id, ...updates })
     const index = providers.value.findIndex((p) => p.id === id)
     if (index !== -1) {
       providers.value[index] = updated
@@ -68,7 +79,10 @@ export const useAIProviderStore = defineStore('ai-provider', () => {
   }
 
   async function deleteProvider(id: string) {
-    const success = await window.api.aiProvider.delete(id)
+    if (!api) {
+      throw new Error('AI provider API is not available in current runtime')
+    }
+    const success = await api.delete(id)
     if (success) {
       providers.value = providers.value.filter((p) => p.id !== id)
       if (selectedProviderId.value === id) {
@@ -82,7 +96,10 @@ export const useAIProviderStore = defineStore('ai-provider', () => {
   }
 
   async function testConnection(id: string) {
-    return window.api.aiProvider.test(id)
+    if (!api) {
+      throw new Error('AI provider API is not available in current runtime')
+    }
+    return api.test(id)
   }
 
   async function init() {

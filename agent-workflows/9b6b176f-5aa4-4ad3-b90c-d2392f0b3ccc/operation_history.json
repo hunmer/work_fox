@@ -1,0 +1,42 @@
+[
+  {
+    "description": "添加连线",
+    "timestamp": 1776838863951,
+    "snapshot": "{\"nodes\":[{\"id\":\"a2851f3d-7035-4eea-bc0d-374af423ce2e\",\"type\":\"start\",\"label\":\"开始\",\"position\":{\"x\":100,\"y\":250},\"data\":{}},{\"id\":\"de8b77a2-a291-4848-b50b-dd32a0372439\",\"type\":\"end\",\"label\":\"结束\",\"position\":{\"x\":600,\"y\":250},\"data\":{}},{\"id\":\"7cf90180-a7de-45d2-b495-4c38efd607c0\",\"type\":\"run_code\",\"label\":\"运行 JS 代码\",\"position\":{\"x\":342.5689084895259,\"y\":296.848401323043},\"data\":{}}],\"edges\":[{\"id\":\"e-a2851f3d-7035-4eea-bc0d-374af423ce2e-source-7cf90180-a7de-45d2-b495-4c38efd607c0-default\",\"source\":\"a2851f3d-7035-4eea-bc0d-374af423ce2e\",\"target\":\"7cf90180-a7de-45d2-b495-4c38efd607c0\",\"sourceHandle\":\"source\",\"targetHandle\":null}]}"
+  },
+  {
+    "description": "添加连线",
+    "timestamp": 1776838858215,
+    "snapshot": "{\"nodes\":[{\"id\":\"a2851f3d-7035-4eea-bc0d-374af423ce2e\",\"type\":\"start\",\"label\":\"开始\",\"position\":{\"x\":100,\"y\":250},\"data\":{}},{\"id\":\"de8b77a2-a291-4848-b50b-dd32a0372439\",\"type\":\"end\",\"label\":\"结束\",\"position\":{\"x\":600,\"y\":250},\"data\":{}},{\"id\":\"7cf90180-a7de-45d2-b495-4c38efd607c0\",\"type\":\"run_code\",\"label\":\"运行 JS 代码\",\"position\":{\"x\":342.5689084895259,\"y\":296.848401323043},\"data\":{}}],\"edges\":[{\"id\":\"e-a2851f3d-7035-4eea-bc0d-374af423ce2e-source-7cf90180-a7de-45d2-b495-4c38efd607c0-default\",\"source\":\"a2851f3d-7035-4eea-bc0d-374af423ce2e\",\"target\":\"7cf90180-a7de-45d2-b495-4c38efd607c0\",\"sourceHandle\":\"source\",\"targetHandle\":null}]}"
+  },
+  {
+    "description": "添加连线",
+    "timestamp": 1776838850044,
+    "snapshot": "{\"nodes\":[{\"id\":\"a2851f3d-7035-4eea-bc0d-374af423ce2e\",\"type\":\"start\",\"label\":\"开始\",\"position\":{\"x\":100,\"y\":250},\"data\":{}},{\"id\":\"de8b77a2-a291-4848-b50b-dd32a0372439\",\"type\":\"end\",\"label\":\"结束\",\"position\":{\"x\":600,\"y\":250},\"data\":{}},{\"id\":\"7cf90180-a7de-45d2-b495-4c38efd607c0\",\"type\":\"run_code\",\"label\":\"运行 JS 代码\",\"position\":{\"x\":342.5689084895259,\"y\":296.848401323043},\"data\":{}}],\"edges\":[{\"id\":\"e-a2851f3d-7035-4eea-bc0d-374af423ce2e-source-7cf90180-a7de-45d2-b495-4c38efd607c0-default\",\"source\":\"a2851f3d-7035-4eea-bc0d-374af423ce2e\",\"target\":\"7cf90180-a7de-45d2-b495-4c38efd607c0\",\"sourceHandle\":\"source\",\"targetHandle\":null}]}"
+  },
+  {
+    "description": "添加连线",
+    "timestamp": 1776838848414,
+    "snapshot": "{\"nodes\":[{\"id\":\"a2851f3d-7035-4eea-bc0d-374af423ce2e\",\"type\":\"start\",\"label\":\"开始\",\"position\":{\"x\":100,\"y\":250},\"data\":{}},{\"id\":\"de8b77a2-a291-4848-b50b-dd32a0372439\",\"type\":\"end\",\"label\":\"结束\",\"position\":{\"x\":600,\"y\":250},\"data\":{}},{\"id\":\"7cf90180-a7de-45d2-b495-4c38efd607c0\",\"type\":\"run_code\",\"label\":\"运行 JS 代码\",\"position\":{\"x\":342.5689084895259,\"y\":296.848401323043},\"data\":{}}],\"edges\":[]}"
+  },
+  {
+    "description": "添加节点: run_code",
+    "timestamp": 1776838848414,
+    "snapshot": "{\"nodes\":[{\"id\":\"a2851f3d-7035-4eea-bc0d-374af423ce2e\",\"type\":\"start\",\"label\":\"开始\",\"position\":{\"x\":100,\"y\":250},\"data\":{}},{\"id\":\"de8b77a2-a291-4848-b50b-dd32a0372439\",\"type\":\"end\",\"label\":\"结束\",\"position\":{\"x\":600,\"y\":250},\"data\":{}}],\"edges\":[]}"
+  },
+  {
+    "description": "添加连线",
+    "timestamp": 1776838826485,
+    "snapshot": "{\"nodes\":[{\"id\":\"a2851f3d-7035-4eea-bc0d-374af423ce2e\",\"type\":\"start\",\"label\":\"开始\",\"position\":{\"x\":100,\"y\":250},\"data\":{}},{\"id\":\"de8b77a2-a291-4848-b50b-dd32a0372439\",\"type\":\"end\",\"label\":\"结束\",\"position\":{\"x\":600,\"y\":250},\"data\":{}},{\"id\":\"0386a5cf-afad-4d3f-b223-39664283ca61\",\"type\":\"gallery_preview\",\"label\":\"资源预览\",\"position\":{\"x\":352.4476295479603,\"y\":269.32910694597575},\"data\":{}}],\"edges\":[{\"id\":\"e-a2851f3d-7035-4eea-bc0d-374af423ce2e-source-0386a5cf-afad-4d3f-b223-39664283ca61-default\",\"source\":\"a2851f3d-7035-4eea-bc0d-374af423ce2e\",\"target\":\"0386a5cf-afad-4d3f-b223-39664283ca61\",\"sourceHandle\":\"source\",\"targetHandle\":null}]}"
+  },
+  {
+    "description": "添加连线",
+    "timestamp": 1776838824933,
+    "snapshot": "{\"nodes\":[{\"id\":\"a2851f3d-7035-4eea-bc0d-374af423ce2e\",\"type\":\"start\",\"label\":\"开始\",\"position\":{\"x\":100,\"y\":250},\"data\":{}},{\"id\":\"de8b77a2-a291-4848-b50b-dd32a0372439\",\"type\":\"end\",\"label\":\"结束\",\"position\":{\"x\":600,\"y\":250},\"data\":{}},{\"id\":\"0386a5cf-afad-4d3f-b223-39664283ca61\",\"type\":\"gallery_preview\",\"label\":\"资源预览\",\"position\":{\"x\":352.4476295479603,\"y\":269.32910694597575},\"data\":{}}],\"edges\":[]}"
+  },
+  {
+    "description": "添加节点: gallery_preview",
+    "timestamp": 1776838824933,
+    "snapshot": "{\"nodes\":[{\"id\":\"a2851f3d-7035-4eea-bc0d-374af423ce2e\",\"type\":\"start\",\"label\":\"开始\",\"position\":{\"x\":100,\"y\":250},\"data\":{}},{\"id\":\"de8b77a2-a291-4848-b50b-dd32a0372439\",\"type\":\"end\",\"label\":\"结束\",\"position\":{\"x\":600,\"y\":250},\"data\":{}}],\"edges\":[]}"
+  }
+]
