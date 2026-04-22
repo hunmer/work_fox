@@ -20,6 +20,11 @@ function loadSavedEndpoint() {
   }
 }
 
+// 关键：在任何 store 初始化之前就注入 window.api，
+// 因为部分 store（如 shortcut.ts）在模块顶层访问了 window.api
+const endpoint = loadSavedEndpoint()
+;(window as any).api = new BrowserAPIAdapter(wsBridge, endpoint)
+
 function mountApp() {
   const pinia = createPinia()
   const app = createApp(App).use(pinia).use(router)
@@ -28,22 +33,13 @@ function mountApp() {
 }
 
 async function bootstrap() {
-  // 1. 注入 window.api（替代 Electron preload 的 contextBridge）
-  const endpoint = loadSavedEndpoint()
-  const adapter = new BrowserAPIAdapter(wsBridge, endpoint)
-  ;(window as any).api = adapter
-
-  // 2. 连接 backend（必须显式传参，避免循环依赖）
-  await wsBridge.connect(endpoint.url, endpoint.token)
-
-  // 3. 启动 Vue app
+  // window.api 已在模块顶层注入，这里只需连接 backend
+  try {
+    await wsBridge.connect(endpoint.url, endpoint.token)
+  } catch (error) {
+    console.warn('Backend connection failed, app will work in offline mode:', error)
+  }
   mountApp()
 }
 
-bootstrap().catch((error) => {
-  console.error('Web bootstrap failed:', error)
-  // 连接失败仍挂载 app，让 UI 显示连接状态
-  const endpoint = loadSavedEndpoint()
-  ;(window as any).api = new BrowserAPIAdapter(wsBridge, endpoint)
-  mountApp()
-})
+bootstrap()
