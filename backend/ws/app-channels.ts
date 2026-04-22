@@ -27,7 +27,9 @@ export function registerAppChannels(router: WSRouter, services: AppServices): vo
   router.register('aiProvider:create', ({ data }) => aiProviderStore.create(data))
   router.register('aiProvider:update', async ({ id, data }) => {
     await aiProviderStore.update(id, data)
-    return aiProviderStore.get(id)
+    const updated = await aiProviderStore.get(id)
+    if (!updated) throw new Error(`Provider not found after update: ${id}`)
+    return updated
   })
   router.register('aiProvider:delete', async ({ id }) => {
     const success = await aiProviderStore.delete(id)

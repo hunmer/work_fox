@@ -45,6 +45,10 @@ watch(() => props.open, (open) => {
   isCreating.value = !!props.createMode
   selectedWorkflow.value = null
   hasSelectedLocation.value = false
+  if (selectedFolderId.value === null) {
+    const first = store.workflowFolders.find((f) => f.parentId === null)
+    if (first) selectedFolderId.value = first.id
+  }
 })
 
 function onSelectWorkflow(wf: Workflow) {

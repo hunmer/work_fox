@@ -2,6 +2,7 @@ import { resolve } from 'path'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
+import vueDevTools from 'vite-plugin-vue-devtools'
 import { readFileSync } from 'fs'
 
 function serveWebIndex() {
@@ -39,7 +40,7 @@ export default defineConfig({
       '../../preload/index': resolve(__dirname, 'preload/index.ts'),
     },
   },
-  plugins: [vue(), tailwindcss(), serveWebIndex()],
+  plugins: [vue(), tailwindcss(), vueDevTools(), serveWebIndex()],
   build: {
     outDir: 'dist-web',
     rollupOptions: {

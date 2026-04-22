@@ -36,7 +36,7 @@ function selectFolder(folderId: string | null) {
     <div class="p-2 space-y-0.5">
       <div
         class="flex items-center gap-1.5 px-2 py-1 text-xs rounded cursor-pointer hover:bg-muted/50"
-        :class="selectedFolderId === null ? 'bg-muted' : ''"
+        :class="selectedFolderId === null ? 'bg-primary/10 text-primary font-medium' : ''"
         @click="selectFolder(null)"
       >
         <Folder class="w-3.5 h-3.5 text-muted-foreground" />
@@ -49,7 +49,7 @@ function selectFolder(folderId: string | null) {
       >
         <div
           class="flex items-center gap-1.5 px-2 py-1 text-xs rounded cursor-pointer hover:bg-muted/50"
-          :class="selectedFolderId === folder.id ? 'bg-muted' : ''"
+          :class="selectedFolderId === folder.id ? 'bg-primary/10 text-primary font-medium' : ''"
           @click="selectFolder(folder.id)"
         >
           <component
@@ -65,7 +65,7 @@ function selectFolder(folderId: string | null) {
         >
           <div
             class="flex items-center gap-1.5 px-2 py-1 text-xs rounded cursor-pointer hover:bg-muted/50"
-            :class="selectedFolderId === child.id ? 'bg-muted' : ''"
+            :class="selectedFolderId === child.id ? 'bg-primary/10 text-primary font-medium' : ''"
             @click="selectFolder(child.id)"
           >
             <component
