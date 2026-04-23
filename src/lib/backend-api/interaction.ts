@@ -3,7 +3,9 @@ import type {
   AgentChatInteractionSchema,
   InteractionRequest,
   NodeExecutionInteractionSchema,
+  TableConfirmInteractionSchema,
 } from '@shared/ws-protocol'
+import { useWorkflowStore } from '@/stores/workflow'
 import { wsBridge } from '../ws-bridge'
 import { executeAgentRunTask } from '../workflow/agent-run'
 
@@ -25,6 +27,10 @@ async function handleWorkflowInteraction(request: InteractionRequest): Promise<{
       return {
         data: await executeMainProcessNode(request.schema as NodeExecutionInteractionSchema),
       }
+    case 'table_confirm':
+      return {
+        data: await handleTableConfirm(request),
+      }
     default:
       throw new Error(createErrorShape('BAD_REQUEST', `未知交互类型: ${request.interactionType}`).message)
   }
@@ -44,4 +50,24 @@ async function executeMainProcessNode(schema: NodeExecutionInteractionSchema): P
     throw new Error('缺少本地节点类型')
   }
   return window.api.agent.execTool(schema.toolType, JSON.parse(JSON.stringify(schema.params || {})))
+}
+
+async function handleTableConfirm(request: InteractionRequest): Promise<unknown> {
+  const schema = request.schema as TableConfirmInteractionSchema
+  const store = useWorkflowStore()
+
+  return new Promise((resolve, reject) => {
+    store.pendingTableConfirm = {
+      request: {
+        executionId: request.executionId,
+        workflowId: request.workflowId,
+        nodeId: request.nodeId,
+        headers: schema.headers,
+        cells: schema.cells,
+        selectionMode: schema.selectionMode,
+      },
+      resolve,
+      reject,
+    }
+  })
 }

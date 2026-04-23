@@ -772,6 +772,35 @@ export function createWorkflowStore(tabId: string) {
     const executionLog = ref<ExecutionLog | null>(null)
     const executionContext = ref<Record<string, any>>({})
 
+    // table_confirm 交互状态
+    const pendingTableConfirm = ref<{
+      request: {
+        executionId: string
+        workflowId: string
+        nodeId: string
+        headers: Array<{ id: string; title: string; type: 'string' | 'number' | 'boolean' }>
+        cells: Array<{ id: string; data: Record<string, any> }>
+        selectionMode: 'none' | 'single' | 'multi'
+      }
+      resolve: (data: { selectedRows: Array<{ id: string; data: Record<string, any> }>; selectedCount: number }) => void
+      reject: (error: Error) => void
+    } | null>(null)
+
+    function resolveTableConfirm(selectedRows: Array<{ id: string; data: Record<string, any> }>) {
+      if (pendingTableConfirm.value) {
+        const count = selectedRows.length
+        pendingTableConfirm.value.resolve({ selectedRows, selectedCount: count })
+        pendingTableConfirm.value = null
+      }
+    }
+
+    function rejectTableConfirm(error: Error) {
+      if (pendingTableConfirm.value) {
+        pendingTableConfirm.value.reject(error)
+        pendingTableConfirm.value = null
+      }
+    }
+
     const undoRedo = createUndoRedoManager(currentWorkflow, api)
     const execLogMgr = createExecutionLogManager(currentWorkflow, api)
     const versionMgr = createVersionManager(currentWorkflow, api)
@@ -879,6 +908,9 @@ export function createWorkflowStore(tabId: string) {
       restoreVersion: (versionId: string) => versionMgr.restoreVersion(versionId, undoRedo.pushUndo),
       isDirty: dirtyTracker.isDirty,
       markDirty: dirtyTracker.markDirty,
+      pendingTableConfirm,
+      resolveTableConfirm,
+      rejectTableConfirm,
       ...aiActions,
     }
   })
