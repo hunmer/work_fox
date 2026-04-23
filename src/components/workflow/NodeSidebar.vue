@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Search, Plus, Trash2, ChevronDown, Settings } from 'lucide-vue-next'
 import PluginConfigDialog from '@/components/plugins/PluginConfigDialog.vue'
+import { WORKFLOW_NODE_DRAG_MIME } from './dragDrop'
 
 const props = defineProps<{
   enabledPlugins?: string[]
@@ -188,7 +189,7 @@ const categories = computed(() => {
 
 function onDragStart(event: DragEvent, nodeType: string) {
   if (event.dataTransfer) {
-    event.dataTransfer.setData('application/vueflow', nodeType)
+    event.dataTransfer.setData(WORKFLOW_NODE_DRAG_MIME, nodeType)
     event.dataTransfer.effectAllowed = 'move'
   }
 }

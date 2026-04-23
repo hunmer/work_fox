@@ -46,6 +46,7 @@ import EditorToolbar from './EditorToolbar.vue'
 import PluginsDialog from '@/components/plugins/PluginsDialog.vue'
 import SettingsDialog from '@/components/settings/SettingsDialog.vue'
 import PluginPickerDialog from './PluginPickerDialog.vue'
+import { WORKFLOW_NODE_DRAG_MIME } from './dragDrop'
 
 import { useConnectionDrop } from '@/composables/workflow/useConnectionDrop'
 import { useEdgeInsert } from '@/composables/workflow/useEdgeInsert'
@@ -313,7 +314,41 @@ function onDragOver(event: DragEvent) {
 
 function onDrop(event: DragEvent) {
   if (store.isPreview) return
-  const type = event.dataTransfer?.getData('application/vueflow')
+  addNodeFromDropEvent(event)
+}
+
+function hasWorkflowNodeDrag(event: DragEvent) {
+  return Array.from(event.dataTransfer?.types ?? []).includes(WORKFLOW_NODE_DRAG_MIME)
+}
+
+function isDropInsideCanvas(event: DragEvent) {
+  const bounds = vueFlowRef.value?.getBoundingClientRect()
+  if (!bounds) return false
+  return (
+    event.clientX >= bounds.left
+    && event.clientX <= bounds.right
+    && event.clientY >= bounds.top
+    && event.clientY <= bounds.bottom
+  )
+}
+
+function onLayoutDragOver(event: DragEvent) {
+  if (store.isPreview || !hasWorkflowNodeDrag(event) || !isDropInsideCanvas(event)) return
+  event.preventDefault()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+}
+
+function onLayoutDrop(event: DragEvent) {
+  if (store.isPreview || !hasWorkflowNodeDrag(event) || !isDropInsideCanvas(event)) return
+  event.preventDefault()
+  event.stopPropagation()
+  addNodeFromDropEvent(event)
+}
+
+function addNodeFromDropEvent(event: DragEvent) {
+  const type = event.dataTransfer?.getData(WORKFLOW_NODE_DRAG_MIME)
   if (!type) return
   const bounds = vueFlowRef.value?.getBoundingClientRect()
   if (!bounds) return
@@ -445,7 +480,12 @@ function onConnect(params: any) {
       @delete-preset="handleDeletePreset"
     />
 
-    <div v-if="store.currentWorkflow" class="relative flex-1 min-h-0">
+    <div
+      v-if="store.currentWorkflow"
+      class="relative flex-1 min-h-0"
+      @dragover.capture="onLayoutDragOver"
+      @drop.capture="onLayoutDrop"
+    >
       <!-- Golden Layout：画布作为真实面板挂载，避免透明覆盖层拦截事件 -->
       <GoldenLayout
         :key="layoutKey"
