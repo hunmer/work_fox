@@ -43,6 +43,7 @@
     "electron-store": "^11.0.2",
     "eventemitter2": "^6.4.9",
     "express": "^5.2.1",
+    "golden-layout": "^2.6.0",
     "json-editor-vue": "^0.18.1",
     "katex": "^0.16.45",
     "lightgallery": "^2.9.0",
