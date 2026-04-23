@@ -119,8 +119,8 @@ module.exports = {
       properties: [
         { key: 'apiKey', label: 'API Key', type: 'text', required: true, tooltip: 'FishAudio API Key（默认从插件配置读取）', default: '{{ __config__["workfox.fish-audio"]["apiKey"] }}' },
         { key: 'filePath', label: '音频文件路径', type: 'text', required: true, tooltip: '本地音频文件路径（支持 WAV/MP3/FLAC）' },
-        { key: 'language', label: '语言', type: 'select', default: '', options: [
-          { label: '自动检测', value: '' },
+        { key: 'language', label: '语言', type: 'select', default: 'auto', options: [
+          { label: '自动检测', value: 'auto' },
           { label: '中文', value: 'zh' },
           { label: '英文', value: 'en' },
           { label: '日文', value: 'ja' },
@@ -157,7 +157,7 @@ module.exports = {
         const result = await postFormData(`${baseUrl}/v1/asr`, {
           headers,
           file: { buffer: audioBuffer, mimeType },
-          language: args.language || null,
+          language: (args.language && args.language !== 'auto') ? args.language : null,
           timeout: 120000,
           proxy,
         })
