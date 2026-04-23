@@ -47,8 +47,7 @@ import PluginsDialog from '@/components/plugins/PluginsDialog.vue'
 import SettingsDialog from '@/components/settings/SettingsDialog.vue'
 import PluginPickerDialog from './PluginPickerDialog.vue'
 import TableConfirmDialog from './TableConfirmDialog.vue'
-import { wsBridge } from '@/lib/ws-bridge'
-import { resolveTableConfirm, rejectTableConfirm } from '@/lib/backend-api/interaction'
+import { resolveInteraction, rejectInteraction } from '@/lib/backend-api/interaction'
 import { WORKFLOW_NODE_DRAG_MIME } from './dragDrop'
 
 import { useConnectionDrop } from '@/composables/workflow/useConnectionDrop'
@@ -432,7 +431,7 @@ onMounted(() => {
   agentSettings.init()
   cleanupFileUpdates = store.listenForFileUpdates()
   cleanupWorkflowToolRequests = store.listenForWorkflowToolRequests()
-  cleanupTableConfirm = store.listenForTableConfirm()
+  cleanupTableConfirm = store.listenForUIInteractions()
   if (!store.currentWorkflow) {
     openWorkflowList(route.query.create === '1')
   }
@@ -579,12 +578,12 @@ function onConnect(params: any) {
     </Dialog>
 
     <TableConfirmDialog
-      :open="!!store.pendingTableConfirm"
-      :headers="store.pendingTableConfirm?.request.headers ?? []"
-      :cells="store.pendingTableConfirm?.request.cells ?? []"
-      :selection-mode="store.pendingTableConfirm?.request.selectionMode ?? 'none'"
-      @submit="resolveTableConfirm($event)"
-      @cancel="rejectTableConfirm(new Error('用户取消选择'))"
+      :open="store.pendingInteraction?.interactionType === 'table_confirm'"
+      :headers="(store.pendingInteraction?.schema as any)?.headers ?? []"
+      :cells="(store.pendingInteraction?.schema as any)?.cells ?? []"
+      :selection-mode="(store.pendingInteraction?.schema as any)?.selectionMode ?? 'none'"
+      @submit="resolveInteraction({ selectedRows: $event, selectedCount: $event.length })"
+      @cancel="rejectInteraction(new Error('用户取消选择'))"
     />
   </div>
 </template>

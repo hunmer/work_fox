@@ -772,25 +772,22 @@ export function createWorkflowStore(tabId: string) {
     const executionLog = ref<ExecutionLog | null>(null)
     const executionContext = ref<Record<string, any>>({})
 
-    // table_confirm 交互状态（通过 ws-bridge 事件从 interaction.ts 注入）
-    const pendingTableConfirm = ref<{
-      request: {
-        executionId: string
-        workflowId: string
-        nodeId: string
-        headers: Array<{ id: string; title: string; type: 'string' | 'number' | 'boolean' }>
-        cells: Array<{ id: string; data: Record<string, any> }>
-        selectionMode: 'none' | 'single' | 'multi'
-      }
+    // 通用前端 UI interaction 状态（通过 ws-bridge 事件从 interaction.ts 注入）
+    const pendingInteraction = ref<{
+      interactionType: string
+      executionId: string
+      workflowId: string
+      nodeId: string
+      schema: unknown
     } | null>(null)
 
-    function listenForTableConfirm(): () => void {
+    function listenForUIInteractions(): () => void {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const handler = (data: any) => {
-        pendingTableConfirm.value = { request: data }
+        pendingInteraction.value = data
       }
-      wsBridge.on('interaction:table_confirm', handler)
-      return () => wsBridge.off('interaction:table_confirm', handler)
+      wsBridge.on('interaction:ui_required', handler)
+      return () => wsBridge.off('interaction:ui_required', handler)
     }
 
     const undoRedo = createUndoRedoManager(currentWorkflow, api)
@@ -900,8 +897,8 @@ export function createWorkflowStore(tabId: string) {
       restoreVersion: (versionId: string) => versionMgr.restoreVersion(versionId, undoRedo.pushUndo),
       isDirty: dirtyTracker.isDirty,
       markDirty: dirtyTracker.markDirty,
-      pendingTableConfirm,
-      listenForTableConfirm,
+      pendingInteraction,
+      listenForUIInteractions,
       ...aiActions,
     }
   })

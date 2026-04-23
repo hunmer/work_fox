@@ -2,6 +2,7 @@ import { createErrorShape } from '@shared/errors'
 import type {
   AgentChatInteractionSchema,
   InteractionRequest,
+  InteractionType,
   NodeExecutionInteractionSchema,
   TableConfirmInteractionSchema,
 } from '@shared/ws-protocol'
@@ -16,6 +17,15 @@ export function ensureWorkflowInteractionHandler(): void {
   initialized = true
 }
 
+// 需要前端 UI 参与的 interaction 类型集合
+// 后续新增需要用户确认的节点（含插件节点）只需在此添加即可
+const UI_INTERACTION_TYPES: Set<InteractionType> = new Set([
+  'table_confirm',
+  // 'form',
+  // 'confirm',
+  // ...future plugin interaction types
+])
+
 async function handleWorkflowInteraction(request: InteractionRequest): Promise<{ data: unknown }> {
   switch (request.interactionType) {
     case 'agent_chat':
@@ -26,11 +36,10 @@ async function handleWorkflowInteraction(request: InteractionRequest): Promise<{
       return {
         data: await executeMainProcessNode(request.schema as NodeExecutionInteractionSchema),
       }
-    case 'table_confirm':
-      return {
-        data: await handleTableConfirm(request),
-      }
     default:
+      if (UI_INTERACTION_TYPES.has(request.interactionType)) {
+        return { data: await delegateToUI(request) }
+      }
       throw new Error(createErrorShape('BAD_REQUEST', `未知交互类型: ${request.interactionType}`).message)
   }
 }
@@ -51,42 +60,40 @@ async function executeMainProcessNode(schema: NodeExecutionInteractionSchema): P
   return window.api.agent.execTool(schema.toolType, JSON.parse(JSON.stringify(schema.params || {})))
 }
 
-// table_confirm 通过 ws-bridge 事件通知组件树内的 store，
-// 避免 useWorkflowStore() 必须在组件树内调用的限制
-let pendingTableConfirmResolve: ((data: { selectedRows: Array<{ id: string; data: Record<string, any> }>; selectedCount: number }) => void) | null = null
-let pendingTableConfirmReject: ((error: Error) => void) | null = null
+// ---- 通用 UI interaction 委托 ----
+// 不直接调用 store（store 依赖 Vue inject），改为通过 ws-bridge 事件通知组件树
 
-async function handleTableConfirm(request: InteractionRequest): Promise<unknown> {
-  const schema = request.schema as TableConfirmInteractionSchema
+let pendingResolve: ((data: unknown) => void) | null = null
+let pendingReject: ((error: Error) => void) | null = null
 
+async function delegateToUI(request: InteractionRequest): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    pendingTableConfirmResolve = resolve
-    pendingTableConfirmReject = reject
-    wsBridge.emit('interaction:table_confirm', {
+    pendingResolve = resolve
+    pendingReject = reject
+    wsBridge.emit('interaction:ui_required', {
+      interactionType: request.interactionType,
       executionId: request.executionId,
       workflowId: request.workflowId,
       nodeId: request.nodeId,
-      headers: schema.headers,
-      cells: schema.cells,
-      selectionMode: schema.selectionMode,
+      schema: request.schema,
     })
   })
 }
 
-export function resolveTableConfirm(selectedRows: Array<{ id: string; data: Record<string, any> }>) {
-  if (pendingTableConfirmResolve) {
-    const resolve = pendingTableConfirmResolve
-    pendingTableConfirmResolve = null
-    pendingTableConfirmReject = null
-    resolve({ selectedRows, selectedCount: selectedRows.length })
+export function resolveInteraction(data: unknown) {
+  if (pendingResolve) {
+    const resolve = pendingResolve
+    pendingResolve = null
+    pendingReject = null
+    resolve(data)
   }
 }
 
-export function rejectTableConfirm(error: Error) {
-  if (pendingTableConfirmReject) {
-    const reject = pendingTableConfirmReject
-    pendingTableConfirmResolve = null
-    pendingTableConfirmReject = null
+export function rejectInteraction(error: Error) {
+  if (pendingReject) {
+    const reject = pendingReject
+    pendingResolve = null
+    pendingReject = null
     reject(error)
   }
 }
