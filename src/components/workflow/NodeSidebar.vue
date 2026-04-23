@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, inject } from 'vue'
 import { allNodeDefinitions, searchNodeDefinitions, registerPluginNodeDefinitions, type NodeTypeDefinition } from '@/lib/workflow/nodeRegistry'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
 import { stringToHsl } from '@/lib/utils'
@@ -42,18 +42,15 @@ import {
 import { Search, Plus, Trash2, ChevronDown, Settings } from 'lucide-vue-next'
 import PluginConfigDialog from '@/components/plugins/PluginConfigDialog.vue'
 import { WORKFLOW_NODE_DRAG_MIME } from './dragDrop'
+import { NODE_SIDEBAR_CONTEXT_KEY } from './nodeSidebarContext'
 
-const props = defineProps<{
-  enabledPlugins?: string[]
-}>()
-
-const emit = defineEmits<{
-  (e: 'openPluginPicker'): void
-}>()
+const sidebarContext = inject(NODE_SIDEBAR_CONTEXT_KEY, null)
 
 const pluginStore = usePluginStore()
 const workflowStore = useWorkflowStore()
 const pluginNodes = ref<any[]>([])
+
+const enabledPlugins = computed(() => workflowStore.currentWorkflow?.enabledPlugins || [])
 const categoryPluginMap = ref<Record<string, string>>({})
 const configPluginId = ref<string | null>(null)
 const configPluginName = ref('')
@@ -73,7 +70,7 @@ let pluginLoadSeq = 0
 
 async function loadPluginNodes() {
   const seq = ++pluginLoadSeq
-  if (!props.enabledPlugins?.length) {
+  if (!enabledPlugins.value.length) {
     pluginNodes.value = []
     categoryPluginMap.value = {}
     registerPluginNodeDefinitions([])
@@ -82,7 +79,7 @@ async function loadPluginNodes() {
   try {
     const allNodes: any[] = []
     const catMap: Record<string, string> = {}
-    for (const pluginId of props.enabledPlugins) {
+    for (const pluginId of enabledPlugins.value) {
       const nodes = await pluginStore.getWorkflowNodes(pluginId)
       if (seq !== pluginLoadSeq) return
       allNodes.push(...nodes)
@@ -169,7 +166,7 @@ async function deleteCurrentScheme(pluginId: string) {
   }
 }
 
-watch(() => props.enabledPlugins, async () => {
+watch(enabledPlugins, async () => {
   await loadPluginNodes()
   await loadSchemes()
 }, { immediate: true, deep: true })
@@ -207,7 +204,7 @@ function getIcon(name: string) {
           <Search class="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input v-model="searchQuery" placeholder="搜索节点..." class="pl-7 h-7 text-xs" />
         </div>
-        <Button variant="ghost" size="icon" class="h-7 w-7 shrink-0" @click="emit('openPluginPicker')">
+        <Button variant="ghost" size="icon" class="h-7 w-7 shrink-0" @click="sidebarContext?.openPluginPicker()">
           <Plus class="h-3.5 w-3.5" />
         </Button>
       </div>

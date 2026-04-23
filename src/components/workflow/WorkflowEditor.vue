@@ -60,6 +60,7 @@ import {
   type WorkflowCanvasContext,
 } from './workflowCanvasContext'
 import { WORKFLOW_EXEC_BAR_LAYOUT_KEY, type WorkflowExecBarLayout } from './workflowLayoutContext'
+import { NODE_SIDEBAR_CONTEXT_KEY, type NodeSidebarContext } from './nodeSidebarContext'
 
 const props = defineProps<{
   tab: Tab
@@ -233,10 +234,15 @@ const canvasContext: WorkflowCanvasContext = {
   onEdgeInsertNode,
 }
 
+const nodeSidebarContext: NodeSidebarContext = {
+  openPluginPicker: () => { pluginPickerOpen.value = true },
+}
+
 const parentProvides: ProvideMap = [
   { key: WORKFLOW_STORE_KEY, value: props.store },
   { key: WORKFLOW_CANVAS_CONTEXT_KEY, value: canvasContext },
   { key: WORKFLOW_EXEC_BAR_LAYOUT_KEY, value: execBarLayout },
+  { key: NODE_SIDEBAR_CONTEXT_KEY, value: nodeSidebarContext },
 ]
 
 function onLayoutChange(config: LayoutConfig) {
@@ -358,8 +364,6 @@ function addNodeFromDropEvent(event: DragEvent) {
   })
   store.addNode(type, position)
 }
-
-const enabledPlugins = computed(() => store.currentWorkflow?.enabledPlugins || [])
 
 const recentWorkflows = computed(() =>
   [...store.workflows]
