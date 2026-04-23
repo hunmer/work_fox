@@ -52,6 +52,7 @@ export interface Workflow {
   enabledPlugins?: string[]
   agentConfig?: WorkflowAgentConfig
   pluginConfigSchemes?: Record<string, string>
+  layoutSnapshot?: Record<string, unknown>  // golden-layout 布局快照
 }
 
 export interface AgentResourceItem {
