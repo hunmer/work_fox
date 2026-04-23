@@ -210,9 +210,16 @@ const customViewProps = computed(() => {
     const output = executionStep.value?.output
     // pending interaction 时用 schema 中的数据（后端解析变量后的实际值）
     const schema = isPending ? (pending.schema as any) : null
+    // 静态数据：执行完成后才显示
+    const resolvedHeaders = isStaticHeaders
+      ? (nodeStatus.value === 'completed' ? headers : [])
+      : (Array.isArray(output?.headers) ? output.headers : [])
+    const resolvedCells = isStaticCells
+      ? (nodeStatus.value === 'completed' ? cells : [])
+      : (Array.isArray(output?.selectedRows) ? output.selectedRows : (Array.isArray(output?.cells) ? output.cells : []))
     return {
-      headers: schema?.headers ?? (isStaticHeaders ? headers : (Array.isArray(output?.headers) ? output.headers : [])),
-      cells: schema?.cells ?? (isStaticCells ? cells : (Array.isArray(output?.selectedRows) ? output.selectedRows : [])),
+      headers: schema?.headers ?? resolvedHeaders,
+      cells: schema?.cells ?? resolvedCells,
       selectionMode: schema?.selectionMode ?? selectionMode,
       interactive: !!isPending,
       onSubmit: isPending
@@ -298,7 +305,7 @@ async function copyNodeInfo() {
   <ContextMenu>
     <ContextMenuTrigger as-child>
       <div
-        class="group/node border-2 rounded-lg shadow-sm w-full h-full cursor-pointer transition-colors relative"
+        class="group/node border-2 rounded-lg shadow-sm w-full h-full cursor-pointer transition-colors relative flex flex-col"
         :class="[statusColor, stateBackground, props.selected ? 'ring-2 ring-primary' : '']"
       >
         <!-- 输入连接点 -->
@@ -389,7 +396,7 @@ async function copyNodeInfo() {
         </div>
 
         <!-- 自定义视图内容区 -->
-        <div v-if="hasCustomView" class="px-2 pb-2 custom-view-area" @click.stop>
+        <div v-if="hasCustomView" class="px-2 pb-2 custom-view-area flex-1 min-h-0 overflow-hidden" @click.stop>
           <component
             :is="CustomViewComponent"
             v-bind="customViewProps"
@@ -482,7 +489,6 @@ async function copyNodeInfo() {
 <style scoped>
 .custom-view-area {
   overflow: hidden;
-  max-height: 280px;
 }
 .custom-view-area :deep(.gallery-grid) {
   gap: 4px;

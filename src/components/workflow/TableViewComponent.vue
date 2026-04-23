@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, reactive } from 'vue'
 import {
   Table,
   TableBody,
@@ -35,24 +35,21 @@ const props = withDefaults(defineProps<{
   interactive: false,
 })
 
-const selectedIds = ref<Set<string>>(new Set())
+const selectedMap = reactive<Record<string, boolean>>({})
 
 const canSubmit = computed(() => {
   if (props.selectionMode === 'none') return true
-  return selectedIds.value.size > 0
+  return Object.values(selectedMap).some(Boolean)
 })
 
 function toggleRow(id: string) {
   if (props.selectionMode === 'single') {
-    selectedIds.value = new Set(selectedIds.value.has(id) ? [] : [id])
+    const wasSelected = selectedMap[id]
+    Object.keys(selectedMap).forEach(k => delete selectedMap[k])
+    if (!wasSelected) selectedMap[id] = true
   } else {
-    const next = new Set(selectedIds.value)
-    if (next.has(id)) {
-      next.delete(id)
-    } else {
-      next.add(id)
-    }
-    selectedIds.value = next
+    selectedMap[id] = !selectedMap[id]
+    if (!selectedMap[id]) delete selectedMap[id]
   }
 }
 
@@ -60,14 +57,14 @@ function handleSubmit() {
   if (!canSubmit.value) return
   const selected = props.selectionMode === 'none'
     ? props.cells
-    : props.cells.filter((c) => selectedIds.value.has(c.id))
+    : props.cells.filter((c) => selectedMap[c.id])
   props.onSubmit?.(selected)
 }
 </script>
 
 <template>
-  <div class="flex flex-col gap-2 w-full">
-    <div class="overflow-auto max-h-[200px] overscroll-contain" @wheel.stop>
+  <div class="flex flex-col gap-2 w-full h-full min-h-0">
+    <div class="overflow-auto overscroll-contain flex-1 min-h-0" @wheel.stop>
       <Table class="text-xs w-full table-fixed">
         <TableHeader>
           <TableRow>
@@ -94,10 +91,11 @@ function handleSubmit() {
             <TableCell
               v-if="selectionMode !== 'none'"
               class="w-8 px-1"
+              @click.stop="toggleRow(cell.id)"
             >
               <Checkbox
-                :checked="selectedIds.has(cell.id)"
-                class="size-3.5"
+                :model-value="!!selectedMap[cell.id]"
+                class="size-3.5 pointer-events-none"
               />
             </TableCell>
             <TableCell
