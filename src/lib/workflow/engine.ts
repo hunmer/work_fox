@@ -147,6 +147,7 @@ export class WorkflowEngine {
   ): Promise<{ status: 'completed' | 'error'; output?: any; error?: string; duration: number }> {
     this.context = { ...existingContext }
     if (!this.context.__data__) this.context.__data__ = {}
+    this.context.__config__ = await this.loadPluginConfigs()
     const startTime = Date.now()
     try {
       const resolvedData = this.resolveContextVariables(node.data)
@@ -172,9 +173,9 @@ export class WorkflowEngine {
 
   /** 加载已启用插件的配置到 __config__ */
   private async loadPluginConfigs(): Promise<Record<string, Record<string, string>>> {
-    const plugins = this.runtimeConfig?.enabledPlugins
+    const plugins = this.getReferencedPluginIds()
     const schemes = this.runtimeConfig?.pluginConfigSchemes
-    if (!plugins?.length) return {}
+    if (!plugins.length) return {}
 
     const config: Record<string, Record<string, string>> = {}
     for (const pluginId of plugins) {
@@ -197,6 +198,26 @@ export class WorkflowEngine {
       }
     }
     return config
+  }
+
+  private getReferencedPluginIds(): string[] {
+    const pluginIds = new Set(this.runtimeConfig?.enabledPlugins || [])
+    const collect = (value: any) => {
+      if (typeof value === 'string') {
+        const matches = value.matchAll(/__config__\["([^"]+)"\]/g)
+        for (const match of matches) pluginIds.add(match[1])
+        return
+      }
+      if (Array.isArray(value)) {
+        value.forEach(collect)
+        return
+      }
+      if (value && typeof value === 'object') {
+        Object.values(value).forEach(collect)
+      }
+    }
+    this.nodes.forEach((node) => collect(node.data))
+    return [...pluginIds]
   }
 
   private async runFromIndex(startIndex: number): Promise<void> {

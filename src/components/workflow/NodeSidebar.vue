@@ -227,7 +227,7 @@ function getIcon(name: string) {
                 <template v-if="categoryPluginMap[category as string]">
                   <Popover>
                     <PopoverTrigger as-child>
-                      <Button variant="ghost" size="sm" class="h-5 px-1.5 text-[10px] gap-0.5">
+                      <Button variant="ghost" size="sm" class="h-5 px-1.5 text-[10px] gap-0.5" @click.stop>
                         <span class="truncate max-w-[60px]">
                           {{ getSelectedScheme(categoryPluginMap[category as string]) || '默认配置' }}
                         </span>

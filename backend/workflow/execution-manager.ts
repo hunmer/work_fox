@@ -548,7 +548,7 @@ export class BackendWorkflowExecutionManager {
   }
 
   private async loadPluginConfigs(workflow: Workflow): Promise<Record<string, Record<string, string>>> {
-    const plugins = workflow.enabledPlugins || []
+    const plugins = this.getReferencedPluginIds(workflow)
     const schemes = workflow.pluginConfigSchemes || {}
     const config: Record<string, Record<string, string>> = {}
 
@@ -565,6 +565,26 @@ export class BackendWorkflowExecutionManager {
     }
 
     return config
+  }
+
+  private getReferencedPluginIds(workflow: Workflow): string[] {
+    const pluginIds = new Set(workflow.enabledPlugins || [])
+    const collect = (value: any) => {
+      if (typeof value === 'string') {
+        const matches = value.matchAll(/__config__\["([^"]+)"\]/g)
+        for (const match of matches) pluginIds.add(match[1])
+        return
+      }
+      if (Array.isArray(value)) {
+        value.forEach(collect)
+        return
+      }
+      if (value && typeof value === 'object') {
+        Object.values(value).forEach(collect)
+      }
+    }
+    workflow.nodes.forEach((node) => collect(node.data))
+    return [...pluginIds]
   }
 
   private buildExecutionOrder(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowNode[] {
