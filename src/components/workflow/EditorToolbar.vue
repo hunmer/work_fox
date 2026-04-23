@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { Minus, Square, X, Maximize2, ChevronDown, Plus, Home, Save } from 'lucide-vue-next'
+import { Minus, Square, X, Maximize2, ChevronDown, Plus, Home, Save, LayoutDashboard } from 'lucide-vue-next'
 import {
   Menubar,
   MenubarMenu,
@@ -35,6 +35,7 @@ const props = defineProps<{
   workflowName: string
   hideTabSwitcher?: boolean
   isDirty?: boolean
+  hasCustomLayout?: boolean
   recentWorkflows: { id: string; name: string; updatedAt: number }[]
 }>()
 
@@ -52,6 +53,7 @@ const emit = defineEmits<{
   openSettings: []
   goHome: []
   openRecent: [id: string]
+  'reset-layout': []
 }>()
 
 const nameInput = ref<HTMLInputElement | null>(null)
@@ -228,6 +230,14 @@ refreshMaximized()
     <div class="flex-1" />
 
     <div class="flex items-center no-drag">
+      <button
+        v-if="hasCustomLayout"
+        class="inline-flex items-center justify-center w-7 h-7 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+        title="重置布局"
+        @click="emit('reset-layout')"
+      >
+        <LayoutDashboard class="w-4 h-4" />
+      </button>
       <button
         v-if="isDirty"
         class="inline-flex items-center justify-center w-7 h-7 rounded hover:bg-muted text-orange-400 hover:text-orange-500 transition-colors"
