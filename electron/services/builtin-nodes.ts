@@ -164,4 +164,57 @@ export const builtinNodeDefinitions: PluginWorkflowNode[] = [
       },
     ],
   },
+  {
+    type: 'table_display',
+    label: '表格展示',
+    category: '展示',
+    icon: 'Table',
+    description: '展示数据表格，支持单选/多选确认',
+    properties: [
+      {
+        key: 'headers',
+        label: '表头',
+        type: 'array',
+        required: true,
+        tooltip: '定义表格列',
+        itemTemplate: { id: '', title: '', type: 'string' },
+        fields: [
+          { key: 'id', label: '字段ID', type: 'text', required: true, placeholder: 'header1' },
+          { key: 'title', label: '显示名称', type: 'text', required: true, placeholder: '列名' },
+          {
+            key: 'type', label: '数据类型', type: 'select', default: 'string',
+            options: [
+              { label: '字符串', value: 'string' },
+              { label: '数字', value: 'number' },
+              { label: '布尔', value: 'boolean' },
+            ],
+          },
+        ],
+      },
+      {
+        key: 'cells',
+        label: '数据行',
+        type: 'array',
+        required: true,
+        tooltip: '表格数据行',
+        itemTemplate: { id: '', data: '{}' },
+        fields: [
+          { key: 'id', label: '行ID', type: 'text', required: true, placeholder: 'row1' },
+          { key: 'data', label: '行数据 (JSON)', type: 'text', required: true, placeholder: '{"header1": "value"}' },
+        ],
+      },
+      {
+        key: 'selectionMode',
+        label: '选择模式',
+        type: 'select',
+        default: 'none',
+        required: true,
+        options: [
+          { label: '无选择', value: 'none' },
+          { label: '单选', value: 'single' },
+          { label: '多选', value: 'multi' },
+        ],
+      },
+    ],
+  },
 ]
