@@ -8,8 +8,8 @@ import {
   getCurrentInstance,
   type App,
 } from 'vue'
-import { GoldenLayout } from 'golden-layout'
-import type { LayoutConfig } from 'golden-layout'
+import { GoldenLayout, LayoutConfig as GLLayoutConfig } from 'golden-layout'
+import type { LayoutConfig, ResolvedLayoutConfig } from 'golden-layout'
 import type { ComponentRegistry, ProvideMap } from './types'
 
 // ── Props & Emits ──────────────────────────────────
@@ -33,6 +33,26 @@ let resizeObserver: ResizeObserver | null = null
 
 // 获取当前应用的 Pinia 实例
 const pinia = getCurrentInstance()?.appContext.app.config.globalProperties.$pinia
+
+// ── 工具函数 ────────────────────────────────────────
+
+/**
+ * 确保配置是 LayoutConfig 格式（size 为 string），
+ * 而非 ResolvedLayoutConfig 格式（size 为 number）。
+ * 如果检测到 size 为 number，尝试用 LayoutConfig.fromResolved() 转换。
+ */
+function ensureLayoutConfig(config: LayoutConfig): LayoutConfig {
+  try {
+    // 粗略检测：检查 root 子项是否有 size 且为 number
+    const root = config.root as any
+    if (root?.content?.[0]?.size !== undefined && typeof root.content[0].size === 'number') {
+      return GLLayoutConfig.fromResolved(config as unknown as ResolvedLayoutConfig)
+    }
+  } catch {
+    // 转换失败，原样返回
+  }
+  return config
+}
 
 // ── 初始化 ─────────────────────────────────────────
 
@@ -117,7 +137,12 @@ function initLayout(config: LayoutConfig) {
     debounceTimer = setTimeout(() => {
       if (layout) {
         try {
-          emit('layout-change', layout.saveLayout())
+          // saveLayout() 返回 ResolvedLayoutConfig（size 是 number），
+          // loadLayout() 需要 LayoutConfig（size 是 string）。
+          // 用 LayoutConfig.fromResolved() 做类型转换。
+          const resolved = layout.saveLayout()
+          const serializable = GLLayoutConfig.fromResolved(resolved)
+          emit('layout-change', serializable)
         } catch {
           // saveLayout 可能在布局未完全初始化时失败
         }
@@ -141,8 +166,9 @@ watch(
       initLayout(newConfig)
       return
     }
-    // 仅完整对象替换时重新加载
-    layout.loadLayout(newConfig)
+    // 防护：如果传入的是 ResolvedLayoutConfig（size 为 number），先转换
+    const safeConfig = ensureLayoutConfig(newConfig)
+    layout.loadLayout(safeConfig)
   },
   { deep: false }
 )
