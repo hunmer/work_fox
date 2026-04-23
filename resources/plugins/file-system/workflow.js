@@ -1,14 +1,14 @@
 module.exports = {
   nodes: [
     {
-      type: 'write_file',
-      label: '写入文件',
+      type: '写入文本文件',
+      label: '写入文本文件',
       category: '文件操作',
       icon: 'FilePen',
-      description: '将内容写入文件（不存在则创建）',
+      description: '将文本内容写入文件（不存在则创建）',
       properties: [
         { key: 'path', label: '文件路径', type: 'text', required: true, tooltip: '目标文件路径' },
-        { key: 'content', label: '文件内容', type: 'textarea', required: true, tooltip: '要写入的内容' },
+        { key: 'content', label: '文件内容', type: 'textarea', required: true, tooltip: '要写入的文本内容' },
         { key: 'encoding', label: '编码', type: 'text', default: 'utf-8', tooltip: '文件编码，默认 utf-8' },
       ],
       outputs: [
@@ -17,6 +17,24 @@ module.exports = {
       handler: async (ctx, args) => {
         await ctx.api.writeFile(args.path, args.content, args.encoding)
         return { success: true, message: `文件已写入: ${args.path}`, data: { path: args.path } }
+      },
+    },
+    {
+      type: '写入二进制文件',
+      label: '写入二进制文件',
+      category: '文件操作',
+      icon: 'Binary',
+      description: '将 Base64 编码的数据写入文件，适用于图片、音频等非文本文件',
+      properties: [
+        { key: 'path', label: '文件路径', type: 'text', required: true, tooltip: '目标文件路径' },
+        { key: 'base64', label: 'Base64 数据', type: 'textarea', required: true, tooltip: 'Base64 编码的二进制数据' },
+      ],
+      outputs: [
+        { key: 'path', type: 'string' },
+      ],
+      handler: async (ctx, args) => {
+        await ctx.api.writeBinaryFile(args.path, args.base64)
+        return { success: true, message: `二进制文件已写入: ${args.path}`, data: { path: args.path } }
       },
     },
     {
