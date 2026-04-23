@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, inject, ref } from 'vue'
 import { useWorkflowStore } from '@/stores/workflow'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import JsonEditor from '@/components/ui/json-editor/JsonEditor.vue'
 import { Play, Pause, Square, ChevronDown, ChevronUp, CheckCircle, XCircle, Loader2, Circle, Trash2, AlertTriangle, Info, AlertCircle as AlertCircleIcon } from 'lucide-vue-next'
 import type { ExecutionLog } from '@/lib/workflow/types'
+import { WORKFLOW_EXEC_BAR_LAYOUT_KEY } from './workflowLayoutContext'
 
 const stepTabs = ref<Record<string, string>>({})
 
@@ -20,7 +21,8 @@ function handleExecBarPanelResize(sizes: number[]) {
 }
 
 const store = useWorkflowStore()
-const expanded = defineModel<boolean>('expanded', { default: false })
+const execBarLayout = inject(WORKFLOW_EXEC_BAR_LAYOUT_KEY, null)
+const expanded = computed(() => execBarLayout?.getExpanded() ?? false)
 
 const isRunning = computed(() => store.executionStatus === 'running')
 const isPaused = computed(() => store.executionStatus === 'paused')
@@ -83,6 +85,9 @@ const backendStatusText = computed(() => {
   }
   return store.backendLastError ? `后端异常: ${store.backendLastError}` : '后端连接异常'
 })
+function setExpanded(nextExpanded: boolean) {
+  execBarLayout?.setExpanded(nextExpanded)
+}
 </script>
 
 <template>
@@ -104,7 +109,7 @@ const backendStatusText = computed(() => {
         size="sm"
         class="h-6 text-xs gap-1 px-2"
         :disabled="!canStart"
-        @click="store.startExecution(); expanded = true"
+        @click="store.startExecution(); setExpanded(true)"
       >
         <Play class="w-3 h-3" /> 执行
       </Button>
@@ -154,7 +159,7 @@ const backendStatusText = computed(() => {
         variant="ghost"
         size="sm"
         class="h-5 w-5 p-0"
-        @click="expanded = !expanded"
+        @click="setExpanded(!expanded)"
       >
         <ChevronDown
           v-if="!expanded"
@@ -168,10 +173,7 @@ const backendStatusText = computed(() => {
     </div>
 
     <!-- 展开区域：左右分栏 -->
-    <div
-      v-if="expanded"
-      class="border-t border-border flex-1 min-h-0"
-    >
+    <div class="border-t border-border flex-1 min-h-0">
       <ResizablePanelGroup
         direction="horizontal"
         class="h-full"

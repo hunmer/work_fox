@@ -1,9 +1,25 @@
 import { resolve } from 'path'
+import { existsSync } from 'node:fs'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import { readFileSync } from 'fs'
+
+function getEditor() {
+  const editor = process.env.VUE_EDITOR || 'code'
+  if (process.platform === 'win32' && (editor === 'code' || editor === 'vscode')) {
+    const possiblePaths = [
+      resolve(process.env.USERPROFILE || '', 'AppData/Local/Programs/Microsoft VS Code/bin/code.cmd'),
+      resolve('C:/Program Files/Microsoft VS Code/bin/code.cmd'),
+      resolve('C:/Program Files (x86)/Microsoft VS Code/bin/code.cmd')
+    ]
+    for (const p of possiblePaths) {
+      if (existsSync(p)) return p
+    }
+  }
+  return editor
+}
 
 function serveWebIndex() {
   const webIndexPath = resolve(__dirname, 'index-web.html')
@@ -40,7 +56,7 @@ export default defineConfig({
       '../../preload/index': resolve(__dirname, 'preload/index.ts'),
     },
   },
-  plugins: [vue(), tailwindcss(), vueDevTools(), serveWebIndex()],
+  plugins: [vue(), tailwindcss(), vueDevTools({ launchEditor: getEditor() }), serveWebIndex()],
   build: {
     outDir: 'dist-web',
     rollupOptions: {

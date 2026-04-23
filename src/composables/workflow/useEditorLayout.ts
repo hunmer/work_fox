@@ -22,7 +22,7 @@ export interface LayoutPreset {
  *       node-sidebar (左, ~18%)
  *       flow-canvas   (中, ~52%)  ← VueFlow 画布面板
  *       right-panel   (右, ~30%)
- *     exec-bar      (底, ~25%)    ← 执行栏
+ *     exec-bar      (底, ~7%)    ← 执行栏
  */
 const DEFAULT_LAYOUT: LayoutConfig = {
   root: {
@@ -38,8 +38,9 @@ const DEFAULT_LAYOUT: LayoutConfig = {
       },
       {
         type: 'stack',
+        size: '7%',
         content: [
-          { type: 'component', componentType: 'exec-bar', title: '执行', size: '25%' },
+          { type: 'component', componentType: 'exec-bar', title: '执行' },
         ],
       },
     ],

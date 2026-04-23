@@ -49,7 +49,6 @@ import PluginPickerDialog from './PluginPickerDialog.vue'
 
 import { useConnectionDrop } from '@/composables/workflow/useConnectionDrop'
 import { useEdgeInsert } from '@/composables/workflow/useEdgeInsert'
-import { useExecutionPanel } from '@/composables/workflow/useExecutionPanel'
 import { useFlowCanvas } from '@/composables/workflow/useFlowCanvas'
 import { useWorkflowFileActions } from '@/composables/workflow/useWorkflowFileActions'
 import { useClipboard } from '@/composables/workflow/useClipboard'
@@ -59,6 +58,7 @@ import {
   WORKFLOW_CANVAS_CONTEXT_KEY,
   type WorkflowCanvasContext,
 } from './workflowCanvasContext'
+import { WORKFLOW_EXEC_BAR_LAYOUT_KEY, type WorkflowExecBarLayout } from './workflowLayoutContext'
 
 const props = defineProps<{
   tab: Tab
@@ -105,10 +105,6 @@ const {
   resetEdgeInsert,
   hasInsertContext,
 } = useEdgeInsert(store, nodeSelectOpen)
-
-const {
-  executionBarExpanded,
-} = useExecutionPanel()
 
 const {
   nodes,
@@ -170,6 +166,7 @@ const {
 } = useEditorLayout(store)
 
 const editorLayout = ref<LayoutConfig>(loadLayout())
+const execBarExpanded = ref(false)
 const layoutKey = ref(0) // 递增时强制重建 GoldenLayout，确保尺寸完全重置
 
 const componentRegistry: ComponentRegistry = {
@@ -177,6 +174,40 @@ const componentRegistry: ComponentRegistry = {
   'flow-canvas': WorkflowCanvas,
   'right-panel': RightPanel,
   'exec-bar': ExecutionBar,
+}
+
+function updateExecBarSize(size: '7%' | '45%') {
+  function cloneItem(item: any): any {
+    if (!item || typeof item !== 'object') return item
+
+    const nextItem: Record<string, unknown> = { ...item }
+    if (Array.isArray(item.content)) {
+      nextItem.content = item.content.map(cloneItem)
+    }
+    if (
+      item.type === 'stack'
+      && Array.isArray(item.content)
+      && item.content.some((child: any) => child?.type === 'component' && child.componentType === 'exec-bar')
+    ) {
+      nextItem.size = size
+    }
+    return nextItem
+  }
+
+  editorLayout.value = {
+    ...editorLayout.value,
+    root: cloneItem(editorLayout.value.root),
+  }
+}
+
+const execBarLayout: WorkflowExecBarLayout = {
+  getExpanded() {
+    return execBarExpanded.value
+  },
+  setExpanded(expanded) {
+    execBarExpanded.value = expanded
+    updateExecBarSize(expanded ? '45%' : '7%')
+  },
 }
 
 const canvasContext: WorkflowCanvasContext = {
@@ -204,6 +235,7 @@ const canvasContext: WorkflowCanvasContext = {
 const parentProvides: ProvideMap = [
   { key: WORKFLOW_STORE_KEY, value: props.store },
   { key: WORKFLOW_CANVAS_CONTEXT_KEY, value: canvasContext },
+  { key: WORKFLOW_EXEC_BAR_LAYOUT_KEY, value: execBarLayout },
 ]
 
 function onLayoutChange(config: LayoutConfig) {
