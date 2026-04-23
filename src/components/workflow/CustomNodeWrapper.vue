@@ -198,6 +198,20 @@ const customViewProps = computed(() => {
     }
     return { tracks: [], volume, loop }
   }
+  if (definition.value?.type === 'table_display') {
+    const headers = props.data?.headers
+    const cells = props.data?.cells
+    const selectionMode = props.data?.selectionMode ?? 'none'
+    const isStaticHeaders = Array.isArray(headers)
+    const isStaticCells = Array.isArray(cells)
+    const output = executionStep.value?.output
+    return {
+      headers: isStaticHeaders ? headers : (Array.isArray(output?.headers) ? output.headers : []),
+      cells: isStaticCells ? cells : (Array.isArray(output?.selectedRows) ? output.selectedRows : []),
+      selectionMode,
+      interactive: false,
+    }
+  }
   return props.data || {}
 })
 
