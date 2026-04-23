@@ -42,6 +42,7 @@ export type InteractionType =
   | 'confirm'
   | 'agent_chat'
   | 'node_execution'
+  | 'table_confirm'
   | 'custom'
 
 export interface AgentChatInteractionSchema {
@@ -62,6 +63,12 @@ export interface AgentChatInteractionSchema {
 export interface NodeExecutionInteractionSchema {
   toolType: string
   params: Record<string, unknown>
+}
+
+export interface TableConfirmInteractionSchema {
+  headers: Array<{ id: string; title: string; type: 'string' | 'number' | 'boolean' }>
+  cells: Array<{ id: string; data: Record<string, any> }>
+  selectionMode: 'none' | 'single' | 'multi'
 }
 
 export interface InteractionRequest<Data = unknown> {
