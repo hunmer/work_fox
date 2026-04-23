@@ -7,6 +7,7 @@ import { X, CircleSlash, SkipForward, FileText, Info, Copy } from 'lucide-vue-ne
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
 import { useWorkflowStore } from '@/stores/workflow'
+import { resolveInteraction, rejectInteraction } from '@/lib/backend-api/interaction'
 import type { NodeRunState } from '@/lib/workflow/types'
 import {
   ContextMenu,
@@ -202,14 +203,24 @@ const customViewProps = computed(() => {
     const headers = props.data?.headers
     const cells = props.data?.cells
     const selectionMode = props.data?.selectionMode ?? 'none'
+    const pending = store.pendingInteraction
+    const isPending = pending?.nodeId === props.id && pending?.interactionType === 'table_confirm'
     const isStaticHeaders = Array.isArray(headers)
     const isStaticCells = Array.isArray(cells)
     const output = executionStep.value?.output
+    // pending interaction 时用 schema 中的数据（后端解析变量后的实际值）
+    const schema = isPending ? (pending.schema as any) : null
     return {
-      headers: isStaticHeaders ? headers : (Array.isArray(output?.headers) ? output.headers : []),
-      cells: isStaticCells ? cells : (Array.isArray(output?.selectedRows) ? output.selectedRows : []),
-      selectionMode,
-      interactive: false,
+      headers: schema?.headers ?? (isStaticHeaders ? headers : (Array.isArray(output?.headers) ? output.headers : [])),
+      cells: schema?.cells ?? (isStaticCells ? cells : (Array.isArray(output?.selectedRows) ? output.selectedRows : [])),
+      selectionMode: schema?.selectionMode ?? selectionMode,
+      interactive: !!isPending,
+      onSubmit: isPending
+        ? (rows: Array<{ id: string; data: Record<string, any> }>) => {
+            store.pendingInteraction = null
+            resolveInteraction({ selectedRows: rows, selectedCount: rows.length })
+          }
+        : undefined,
     }
   }
   return props.data || {}
