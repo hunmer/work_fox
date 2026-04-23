@@ -23,6 +23,15 @@ import {
 } from '@/components/ui/empty'
 import { Spinner } from '@/components/ui/spinner'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { provideWorkflowStore, type WorkflowStore } from '@/stores/workflow'
 import { useTabStore, type Tab } from '@/stores/tab'
 import CustomNodeWrapper from './CustomNodeWrapper.vue'
@@ -161,6 +170,7 @@ const {
 } = useEditorLayout(store)
 
 const editorLayout = ref<LayoutConfig>(loadLayout())
+const layoutKey = ref(0) // 递增时强制重建 GoldenLayout，确保尺寸完全重置
 
 const componentRegistry: ComponentRegistry = {
   'node-sidebar': NodeSidebar,
@@ -202,12 +212,22 @@ function onLayoutChange(config: LayoutConfig) {
 
 function handleResetLayout() {
   editorLayout.value = resetToDefault()
+  layoutKey.value++
 }
 
+const savePresetDialogOpen = ref(false)
+const savePresetName = ref('')
+
 function handleSavePreset() {
-  const name = window.prompt('输入预设名称：')
-  if (!name?.trim()) return
-  addPreset(name.trim(), editorLayout.value)
+  savePresetName.value = ''
+  savePresetDialogOpen.value = true
+}
+
+function confirmSavePreset() {
+  const name = savePresetName.value.trim()
+  if (!name) return
+  addPreset(name, editorLayout.value)
+  savePresetDialogOpen.value = false
 }
 
 function handleApplyPreset(id: string) {
@@ -396,6 +416,7 @@ function onConnect(params: any) {
     <div v-if="store.currentWorkflow" class="relative flex-1 min-h-0">
       <!-- Golden Layout：画布作为真实面板挂载，避免透明覆盖层拦截事件 -->
       <GoldenLayout
+        :key="layoutKey"
         :config="editorLayout"
         :registry="componentRegistry"
         :provides="parentProvides"
@@ -449,5 +470,30 @@ function onConnect(params: any) {
       @update:open="pluginPickerOpen = $event"
       @update:enabled-plugins="handlePluginUpdate($event)"
     />
+
+    <!-- 保存布局预设 Dialog -->
+    <Dialog :open="savePresetDialogOpen" @update:open="savePresetDialogOpen = $event">
+      <DialogContent class="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>保存布局预设</DialogTitle>
+        </DialogHeader>
+        <div class="py-2">
+          <Input
+            v-model="savePresetName"
+            placeholder="输入预设名称"
+            autofocus
+            @keydown.enter="confirmSavePreset"
+          />
+        </div>
+        <DialogFooter class="gap-2">
+          <DialogClose as-child>
+            <Button variant="outline" size="sm">取消</Button>
+          </DialogClose>
+          <Button size="sm" :disabled="!savePresetName.trim()" @click="confirmSavePreset">
+            保存
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
