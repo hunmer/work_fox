@@ -171,3 +171,8 @@ defineExpose({
 <template>
   <div ref="containerEl" class="h-full w-full" data-slot="golden-layout" />
 </template>
+
+<style>
+@import 'golden-layout/dist/css/goldenlayout-base.css';
+@import './golden-layout.css';
+</style>
