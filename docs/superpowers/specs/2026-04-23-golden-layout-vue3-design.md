@@ -358,9 +358,9 @@ export function useEditorLayout(workflowStore: WorkflowStore) {
 
   function saveLayout(layoutConfig: LayoutConfig) {
     if (hasCustomLayout.value) {
-      // 工作流级：写入 workflow 数据，随自动保存持久化
-      // 注意：不调用 markDirty()，布局变更不应触发工作流内容自动保存
-      // 布局变更通过独立的 300ms 节流保存到 workflow.layoutSnapshot
+      // 工作流级：写入 workflow 数据
+      // 由于 WorkflowEditor 中有 deep watcher 监听 currentWorkflow，
+      // 此赋值会触发 markDirty()，布局变更随 10 秒自动保存持久化
       workflowStore.currentWorkflow!.layoutSnapshot = layoutConfig
     } else {
       saveToLocalStorage(layoutConfig)
@@ -459,13 +459,15 @@ VueFlow（画布）是核心交互组件，面板重排时重建会导致缩放/
 通过 `:provides` prop 将父组件的 provide 传递到子面板。由于 `createApp` 创建的子应用不继承父应用的 provide 链，需要**显式列出所有子面板可能 inject 的依赖**：
 
 ```typescript
-import { workflowStoreKey } from '@/stores/workflow'
+import { WORKFLOW_STORE_KEY } from '@/stores/workflow'
 import { useAgentSettingsStore } from '@/stores/agent-settings'
 // 其他子面板可能需要的 key ...
 
 // WorkflowEditor.vue
+// 注意：需确保 WORKFLOW_STORE_KEY 从 stores/workflow 中 export
+// 当前该 symbol 未被导出，实施时需新增导出
 const parentProvides: ProvideMap = [
-  { key: workflowStoreKey, value: props.store },
+  { key: WORKFLOW_STORE_KEY, value: props.store },
   // 如有其他需要 inject 的 key，在此补充
 ]
 ```
