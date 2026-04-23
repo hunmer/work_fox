@@ -1,0 +1,35 @@
+{
+  "id": "workfox.openai",
+  "name": "OpenAI 图片生成",
+  "version": "1.0.0",
+  "description": "OpenAI 图片生成与编辑，支持文生图（gpt-image-1/dall-e-3）、图片编辑",
+  "author": { "name": "workfox" },
+  "tags": ["AI", "图片生成", "OpenAI", "GPT"],
+  "type": "server",
+  "hasWorkflow": true,
+  "hasView": false,
+  "entries": {
+    "server": "main.js",
+    "workflow": "workflow.js",
+    "tools": "tools.js"
+  },
+  "config": [
+    {
+      "key": "apiKey",
+      "label": "API Key",
+      "desc": "OpenAI API Key",
+      "type": "string",
+      "value": "",
+      "placeholder": "sk-...",
+      "required": true
+    },
+    {
+      "key": "baseUrl",
+      "label": "API 地址",
+      "desc": "OpenAI API 基础地址，支持代理",
+      "type": "string",
+      "value": "https://api.openai.com",
+      "placeholder": "https://api.openai.com"
+    }
+  ]
+}
