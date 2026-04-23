@@ -24,16 +24,16 @@ module.exports = {
       label: '写入二进制文件',
       category: '文件操作',
       icon: 'Binary',
-      description: '将 Base64 编码的数据写入文件，适用于图片、音频等非文本文件',
+      description: '将二进制数据写入文件，适用于图片、音频等非文本文件',
       properties: [
         { key: 'path', label: '文件路径', type: 'text', required: true, tooltip: '目标文件路径' },
-        { key: 'base64', label: 'Base64 数据', type: 'textarea', required: true, tooltip: 'Base64 编码的二进制数据' },
+        { key: 'data', label: '二进制数据', type: 'buffer', required: true, tooltip: '要写入的二进制数据' },
       ],
       outputs: [
         { key: 'path', type: 'string' },
       ],
       handler: async (ctx, args) => {
-        await ctx.api.writeBinaryFile(args.path, args.base64)
+        await ctx.api.writeBinaryFile(args.path, args.data)
         return { success: true, message: `二进制文件已写入: ${args.path}`, data: { path: args.path } }
       },
     },

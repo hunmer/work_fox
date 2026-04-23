@@ -12,8 +12,8 @@ export function createBuiltinFsApi() {
       return fs.writeFile(filePath, content, encoding as BufferEncoding)
     },
 
-    writeBinaryFile(filePath: string, base64: string) {
-      const buffer = Buffer.from(base64, 'base64')
+    writeBinaryFile(filePath: string, data: Buffer) {
+      const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data)
       return fs.writeFile(filePath, buffer)
     },
 

@@ -15,14 +15,14 @@ module.exports = {
     },
     {
       name: '写入二进制文件',
-      description: '将 Base64 编码的二进制数据写入文件，适用于图片、音频等非文本文件。',
+      description: '将二进制数据写入文件，适用于图片、音频等非文本文件。',
       input_schema: {
         type: 'object',
         properties: {
           path: { type: 'string', description: '目标文件路径' },
-          base64: { type: 'string', description: 'Base64 编码的二进制数据' },
+          data: { type: 'buffer', description: '要写入的二进制数据' },
         },
-        required: ['path', 'base64'],
+        required: ['path', 'data'],
       },
     },
     {
@@ -142,7 +142,7 @@ module.exports = {
         await api.writeFile(args.path, args.content, args.encoding)
         return { success: true, message: `文件已写入: ${args.path}`, data: { path: args.path } }
       case '写入二进制文件':
-        await api.writeBinaryFile(args.path, args.base64)
+        await api.writeBinaryFile(args.path, args.data)
         return { success: true, message: `二进制文件已写入: ${args.path}`, data: { path: args.path } }
       case 'read_file': {
         const content = await api.readFile(args.path, args.encoding)
