@@ -1,8 +1,8 @@
 {
-  "url": "ws://127.0.0.1:58340/ws",
+  "url": "ws://127.0.0.1:26139/ws",
   "token": "",
-  "healthUrl": "http://127.0.0.1:58340/health",
-  "versionUrl": "http://127.0.0.1:58340/version",
-  "port": 58340,
-  "pid": 18663
+  "healthUrl": "http://127.0.0.1:26139/health",
+  "versionUrl": "http://127.0.0.1:26139/version",
+  "port": 26139,
+  "pid": 11236
 }

@@ -2,6 +2,45 @@ import type { IpcAPI } from '../../preload/index'
 import type { WSBridge } from '../lib/ws-bridge'
 import { syncNoop, asyncNoop, notAvailable } from './stubs'
 
+/** 打开文件选择对话框，读取文件文本内容 */
+function pickFileAndRead(accept: string): Promise<{ json: string } | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = accept
+    input.style.display = 'none'
+    document.body.appendChild(input)
+
+    input.onchange = async () => {
+      const file = input.files?.[0]
+      document.body.removeChild(input)
+      if (!file) { resolve(null); return }
+      const text = await file.text()
+      resolve({ json: text })
+    }
+    input.oncancel = () => {
+      document.body.removeChild(input)
+      resolve(null)
+    }
+    input.click()
+  })
+}
+
+/** 触发浏览器下载保存文件 */
+function downloadFile(json: string, defaultName: string): Promise<{ success: boolean }> {
+  const blob = new Blob([json], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = defaultName
+  a.style.display = 'none'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+  return Promise.resolve({ success: true })
+}
+
 interface EndpointConfig {
   url: string
   token: string
@@ -115,11 +154,13 @@ export class BrowserAPIAdapter implements IpcAPI {
   }
 
   // ------------------------------------------------------------------
-  // workflow (import/export only — CRUD lives on backend channels)
+  // workflow (import/export — browser file picker / download)
   // ------------------------------------------------------------------
   workflow = {
-    importOpenFile: notAvailable('workflow:importOpenFile'),
-    exportSaveFile: notAvailable('workflow:exportSaveFile'),
+    importOpenFile: (): Promise<any> =>
+      pickFileAndRead('.workflow,.json'),
+    exportSaveFile: (json: string): Promise<{ success: boolean }> =>
+      downloadFile(json, 'workflow.workflow'),
   }
 
   // ------------------------------------------------------------------

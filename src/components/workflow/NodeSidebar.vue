@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { allNodeDefinitions, searchNodeDefinitions, registerPluginNodeDefinitions, type NodeTypeDefinition } from '@/lib/workflow/nodeRegistry'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
+import { stringToHsl } from '@/lib/utils'
 import { usePluginStore } from '@/stores/plugin'
 import { useWorkflowStore } from '@/stores/workflow'
 import { Input } from '@/components/ui/input'
@@ -12,6 +13,11 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@/components/ui/hover-card'
 import {
   Popover,
   PopoverContent,
@@ -282,30 +288,96 @@ function getIcon(name: string) {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <div class="space-y-0.5 mt-0.5">
-                <div
+                <HoverCard
                   v-for="node in nodes"
                   :key="node.type"
-                  draggable="true"
-                  class="flex items-center gap-2 px-2 py-1.5 text-xs rounded cursor-grab hover:bg-muted/50 active:cursor-grabbing"
-                  @dragstart="onDragStart($event, node.type)"
+                  :open-delay="400"
+                  :close-delay="100"
                 >
-                  <component
-                    :is="getIcon(node.icon)"
-                    v-if="getIcon(node.icon)"
-                    class="w-3.5 h-3.5 text-muted-foreground shrink-0"
-                  />
-                  <div class="min-w-0">
-                    <div class="truncate">
-                      {{ node.label }}
-                    </div>
+                  <HoverCardTrigger as-child>
                     <div
-                      v-if="node.description"
-                      class="text-[10px] text-muted-foreground truncate"
+                      draggable="true"
+                      class="flex items-center gap-2 px-2 py-1.5 text-xs rounded cursor-grab hover:bg-muted/50 active:cursor-grabbing"
+                      @dragstart="onDragStart($event, node.type)"
                     >
-                      {{ node.description }}
+                      <component
+                        :is="getIcon(node.icon)"
+                        v-if="getIcon(node.icon)"
+                        class="w-3.5 h-3.5 text-muted-foreground shrink-0"
+                      />
+                      <div class="min-w-0">
+                        <div class="truncate">
+                          {{ node.label }}
+                        </div>
+                        <div
+                          v-if="node.description"
+                          class="text-[10px] text-muted-foreground truncate"
+                        >
+                          {{ node.description }}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  </HoverCardTrigger>
+                  <HoverCardContent class="w-72 p-3" side="right">
+                    <div class="space-y-2">
+                      <div class="flex items-center gap-2">
+                        <component
+                          :is="getIcon(node.icon)"
+                          v-if="getIcon(node.icon)"
+                          class="w-4 h-4 text-muted-foreground shrink-0"
+                        />
+                        <span class="text-sm font-semibold">{{ node.label }}</span>
+                        <span class="text-[10px] text-muted-foreground font-mono ml-auto">{{ node.type }}</span>
+                      </div>
+                      <p v-if="node.description" class="text-xs text-muted-foreground">
+                        {{ node.description }}
+                      </p>
+                      <div v-if="node.properties?.length" class="space-y-1">
+                        <div class="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                          参数
+                        </div>
+                        <div class="space-y-0.5">
+                          <div
+                            v-for="prop in node.properties"
+                            :key="prop.key"
+                            class="flex items-center gap-1.5 text-xs"
+                          >
+                            <span class="font-mono text-muted-foreground">{{ prop.key }}</span>
+                            <span
+                              class="text-[10px] px-1 rounded font-medium"
+                              :style="{
+                                backgroundColor: stringToHsl(prop.type, 45, 90),
+                                color: stringToHsl(prop.type, 55, 35),
+                              }"
+                            >{{ prop.type }}</span>
+                            <span v-if="prop.required" class="text-[10px] text-destructive">*</span>
+                            <span v-if="prop.tooltip" class="text-[10px] text-muted-foreground truncate">
+                              {{ prop.tooltip }}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div v-if="node.outputs?.length" class="space-y-1">
+                        <div class="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                          输出
+                        </div>
+                        <div class="flex flex-wrap gap-1">
+                          <span
+                            v-for="output in node.outputs"
+                            :key="output.key"
+                            class="text-[10px] px-1.5 py-0.5 rounded font-mono"
+                            :style="{
+                              backgroundColor: stringToHsl(output.key, 45, 90),
+                              color: stringToHsl(output.key, 55, 35),
+                            }"
+                          >
+                            {{ output.key }}<span v-if="output.type !== 'any'" class="opacity-60">: {{ output.type }}</span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </HoverCardContent>
+                </HoverCard>
               </div>
             </CollapsibleContent>
           </Collapsible>
