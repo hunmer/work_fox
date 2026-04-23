@@ -13,4 +13,7 @@ export const executionLogBackendApi = {
   clear(workflowId: string) {
     return wsBridge.invoke('executionLog:clear', { workflowId })
   },
+  getPath(workflowId: string, id: string): Promise<string> {
+    return wsBridge.invoke('executionLog:getPath', { workflowId, id })
+  },
 }

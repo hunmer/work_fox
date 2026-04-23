@@ -277,7 +277,7 @@ export class WSBridge {
     this.ws!.send(raw)
   }
 
-  private emit(channel: string, data: unknown): void {
+  emit(channel: string, data: unknown): void {
     const set = this.eventHandlers.get(channel)
     if (!set) return
     for (const handler of set) handler(data)

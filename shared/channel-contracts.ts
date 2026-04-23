@@ -130,6 +130,11 @@ export interface ExecutionLogClearRequest {
   workflowId: string
 }
 
+export interface ExecutionLogGetPathRequest {
+  workflowId: string
+  id: string
+}
+
 export interface OperationHistoryLoadRequest {
   workflowId: string
 }
@@ -212,6 +217,7 @@ export interface BackendChannelMap {
   'executionLog:save': ChannelContract<ExecutionLogSaveRequest, ExecutionLog>
   'executionLog:delete': ChannelContract<ExecutionLogDeleteRequest, EmptyResponse>
   'executionLog:clear': ChannelContract<ExecutionLogClearRequest, EmptyResponse>
+  'executionLog:getPath': ChannelContract<ExecutionLogGetPathRequest, string>
 
   'operationHistory:load': ChannelContract<OperationHistoryLoadRequest, OperationEntry[]>
   'operationHistory:save': ChannelContract<OperationHistorySaveRequest, EmptyResponse>

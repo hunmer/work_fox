@@ -36,8 +36,12 @@ export class BackendExecutionLogStore {
     return log
   }
 
+  getPath(workflowId: string, logId: string): string {
+    return join(this.paths.executionHistoryDir(workflowId), `${logId}.json`)
+  }
+
   delete(workflowId: string, logId: string): void {
-    const file = join(this.paths.executionHistoryDir(workflowId), `${logId}.json`)
+    const file = this.getPath(workflowId, logId)
     if (existsSync(file)) unlinkSync(file)
   }
 

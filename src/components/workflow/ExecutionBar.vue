@@ -6,11 +6,34 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import JsonEditor from '@/components/ui/json-editor/JsonEditor.vue'
-import { Play, Pause, Square, ChevronDown, ChevronUp, CheckCircle, XCircle, Loader2, Circle, Trash2, AlertTriangle, Info, AlertCircle as AlertCircleIcon } from 'lucide-vue-next'
+import { Play, Pause, Square, ChevronDown, ChevronUp, CheckCircle, XCircle, Loader2, Circle, Trash2, AlertTriangle, Info, AlertCircle as AlertCircleIcon, Copy, Check, MoreHorizontal, FolderOpen } from 'lucide-vue-next'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { executionLogBackendApi } from '@/lib/backend-api/execution-log'
 import type { ExecutionLog } from '@/lib/workflow/types'
 import { WORKFLOW_EXEC_BAR_LAYOUT_KEY } from './workflowLayoutContext'
 
 const stepTabs = ref<Record<string, string>>({})
+const copiedNodeId = ref<string | null>(null)
+
+function copyError(step: ExecutionLog['steps'][number]) {
+  if (!step.error) return
+  navigator.clipboard.writeText(step.error).then(() => {
+    copiedNodeId.value = step.nodeId
+    setTimeout(() => { copiedNodeId.value = null }, 1500)
+  })
+}
+
+const isElectron = navigator.userAgent.includes('Electron')
+
+async function openLogFile(log: ExecutionLog) {
+  const path = await executionLogBackendApi.getPath(log.workflowId, log.id)
+  window.api.fs.openInExplorer(path)
+}
+
+async function copyLogPath(log: ExecutionLog) {
+  const path = await executionLogBackendApi.getPath(log.workflowId, log.id)
+  navigator.clipboard.writeText(path)
+}
 
 const EXEC_BAR_PANEL_SIZES_KEY = 'workflow-exec-bar-panel-sizes'
 const execBarPanelSizes = ref<number[]>(JSON.parse(localStorage.getItem(EXEC_BAR_PANEL_SIZES_KEY) || '[25, 75]'))
@@ -229,14 +252,35 @@ function setExpanded(nextExpanded: boolean) {
                     </div>
                   </div>
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    class="h-4 w-4 p-0 shrink-0 opacity-0 group-hover:opacity-100"
-                    @click.stop="store.deleteExecutionLog(log.id)"
-                  >
-                    <Trash2 class="w-2 h-2 text-muted-foreground" />
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        class="h-5 w-5 p-0 shrink-0 opacity-40 hover:opacity-100"
+                        @click.stop
+                      >
+                        <MoreHorizontal class="w-3 h-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" class="min-w-[160px]">
+                      <DropdownMenuItem
+                        v-if="isElectron"
+                        class="text-[11px] gap-2"
+                        @click="openLogFile(log)"
+                      >
+                        <FolderOpen class="w-3 h-3" />
+                        打开日志文件
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        class="text-[11px] gap-2"
+                        @click="copyLogPath(log)"
+                      >
+                        <Copy class="w-3 h-3" />
+                        复制日志位置
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
 
                 <div
@@ -299,9 +343,16 @@ function setExpanded(nextExpanded: boolean) {
                 <!-- 错误信息 -->
                 <div
                   v-if="step.error"
-                  class="px-2.5 py-1 text-[10px] text-red-500 bg-red-500/10 border-b border-border"
+                  class="px-2.5 py-1 pr-1 text-[10px] text-red-500 bg-red-500/10 border-b border-border flex items-start gap-1"
                 >
-                  {{ step.error }}
+                  <span class="flex-1 break-all">{{ step.error }}</span>
+                  <button
+                    class="shrink-0 p-0.5 rounded hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors"
+                    title="复制错误信息"
+                    @click="copyError(step)"
+                  >
+                    <component :is="copiedNodeId === step.nodeId ? Check : Copy" class="w-3 h-3" />
+                  </button>
                 </div>
 
                 <!-- Tabs：输入 / 输出 / 日志 -->

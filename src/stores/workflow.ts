@@ -772,7 +772,7 @@ export function createWorkflowStore(tabId: string) {
     const executionLog = ref<ExecutionLog | null>(null)
     const executionContext = ref<Record<string, any>>({})
 
-    // table_confirm 交互状态
+    // table_confirm 交互状态（通过 ws-bridge 事件从 interaction.ts 注入）
     const pendingTableConfirm = ref<{
       request: {
         executionId: string
@@ -782,23 +782,15 @@ export function createWorkflowStore(tabId: string) {
         cells: Array<{ id: string; data: Record<string, any> }>
         selectionMode: 'none' | 'single' | 'multi'
       }
-      resolve: (data: { selectedRows: Array<{ id: string; data: Record<string, any> }>; selectedCount: number }) => void
-      reject: (error: Error) => void
     } | null>(null)
 
-    function resolveTableConfirm(selectedRows: Array<{ id: string; data: Record<string, any> }>) {
-      if (pendingTableConfirm.value) {
-        const count = selectedRows.length
-        pendingTableConfirm.value.resolve({ selectedRows, selectedCount: count })
-        pendingTableConfirm.value = null
+    function listenForTableConfirm(): () => void {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const handler = (data: any) => {
+        pendingTableConfirm.value = { request: data }
       }
-    }
-
-    function rejectTableConfirm(error: Error) {
-      if (pendingTableConfirm.value) {
-        pendingTableConfirm.value.reject(error)
-        pendingTableConfirm.value = null
-      }
+      wsBridge.on('interaction:table_confirm', handler)
+      return () => wsBridge.off('interaction:table_confirm', handler)
     }
 
     const undoRedo = createUndoRedoManager(currentWorkflow, api)
@@ -909,8 +901,7 @@ export function createWorkflowStore(tabId: string) {
       isDirty: dirtyTracker.isDirty,
       markDirty: dirtyTracker.markDirty,
       pendingTableConfirm,
-      resolveTableConfirm,
-      rejectTableConfirm,
+      listenForTableConfirm,
       ...aiActions,
     }
   })

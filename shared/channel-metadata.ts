@@ -62,6 +62,7 @@ export const backendChannelMetadata: Record<BackendChannel, ChannelMetadata> = {
   'executionLog:save': mutation('executionLog:save', 'Save execution log'),
   'executionLog:delete': mutation('executionLog:delete', 'Delete execution log'),
   'executionLog:clear': mutation('executionLog:clear', 'Clear execution logs'),
+  'executionLog:getPath': crud('executionLog:getPath', 'Get execution log file path'),
 
   'operationHistory:load': crud('operationHistory:load', 'Load operation history'),
   'operationHistory:save': mutation('operationHistory:save', 'Save operation history'),

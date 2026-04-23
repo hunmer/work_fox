@@ -47,6 +47,8 @@ import PluginsDialog from '@/components/plugins/PluginsDialog.vue'
 import SettingsDialog from '@/components/settings/SettingsDialog.vue'
 import PluginPickerDialog from './PluginPickerDialog.vue'
 import TableConfirmDialog from './TableConfirmDialog.vue'
+import { wsBridge } from '@/lib/ws-bridge'
+import { resolveTableConfirm, rejectTableConfirm } from '@/lib/backend-api/interaction'
 import { WORKFLOW_NODE_DRAG_MIME } from './dragDrop'
 
 import { useConnectionDrop } from '@/composables/workflow/useConnectionDrop'
@@ -425,10 +427,12 @@ watch(() => store.currentWorkflow, (val) => {
 let cleanupFileUpdates: (() => void) | null = null
 let cleanupWorkflowToolRequests: (() => void) | null = null
 let autoSaveTimer: ReturnType<typeof setInterval> | null = null
+let cleanupTableConfirm: (() => void) | null = null
 onMounted(() => {
   agentSettings.init()
   cleanupFileUpdates = store.listenForFileUpdates()
   cleanupWorkflowToolRequests = store.listenForWorkflowToolRequests()
+  cleanupTableConfirm = store.listenForTableConfirm()
   if (!store.currentWorkflow) {
     openWorkflowList(route.query.create === '1')
   }
@@ -441,6 +445,7 @@ onMounted(() => {
 onUnmounted(() => {
   cleanupFileUpdates?.()
   cleanupWorkflowToolRequests?.()
+  cleanupTableConfirm?.()
   if (autoSaveTimer) clearInterval(autoSaveTimer)
 })
 
@@ -578,8 +583,8 @@ function onConnect(params: any) {
       :headers="store.pendingTableConfirm?.request.headers ?? []"
       :cells="store.pendingTableConfirm?.request.cells ?? []"
       :selection-mode="store.pendingTableConfirm?.request.selectionMode ?? 'none'"
-      @submit="store.resolveTableConfirm($event)"
-      @cancel="store.rejectTableConfirm(new Error('用户取消选择'))"
+      @submit="resolveTableConfirm($event)"
+      @cancel="rejectTableConfirm(new Error('用户取消选择'))"
     />
   </div>
 </template>

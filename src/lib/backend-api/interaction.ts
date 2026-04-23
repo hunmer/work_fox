@@ -5,7 +5,6 @@ import type {
   NodeExecutionInteractionSchema,
   TableConfirmInteractionSchema,
 } from '@shared/ws-protocol'
-import { useWorkflowStore } from '@/stores/workflow'
 import { wsBridge } from '../ws-bridge'
 import { executeAgentRunTask } from '../workflow/agent-run'
 
@@ -52,22 +51,42 @@ async function executeMainProcessNode(schema: NodeExecutionInteractionSchema): P
   return window.api.agent.execTool(schema.toolType, JSON.parse(JSON.stringify(schema.params || {})))
 }
 
+// table_confirm 通过 ws-bridge 事件通知组件树内的 store，
+// 避免 useWorkflowStore() 必须在组件树内调用的限制
+let pendingTableConfirmResolve: ((data: { selectedRows: Array<{ id: string; data: Record<string, any> }>; selectedCount: number }) => void) | null = null
+let pendingTableConfirmReject: ((error: Error) => void) | null = null
+
 async function handleTableConfirm(request: InteractionRequest): Promise<unknown> {
   const schema = request.schema as TableConfirmInteractionSchema
-  const store = useWorkflowStore()
 
   return new Promise((resolve, reject) => {
-    store.pendingTableConfirm = {
-      request: {
-        executionId: request.executionId,
-        workflowId: request.workflowId,
-        nodeId: request.nodeId,
-        headers: schema.headers,
-        cells: schema.cells,
-        selectionMode: schema.selectionMode,
-      },
-      resolve,
-      reject,
-    }
+    pendingTableConfirmResolve = resolve
+    pendingTableConfirmReject = reject
+    wsBridge.emit('interaction:table_confirm', {
+      executionId: request.executionId,
+      workflowId: request.workflowId,
+      nodeId: request.nodeId,
+      headers: schema.headers,
+      cells: schema.cells,
+      selectionMode: schema.selectionMode,
+    })
   })
+}
+
+export function resolveTableConfirm(selectedRows: Array<{ id: string; data: Record<string, any> }>) {
+  if (pendingTableConfirmResolve) {
+    const resolve = pendingTableConfirmResolve
+    pendingTableConfirmResolve = null
+    pendingTableConfirmReject = null
+    resolve({ selectedRows, selectedCount: selectedRows.length })
+  }
+}
+
+export function rejectTableConfirm(error: Error) {
+  if (pendingTableConfirmReject) {
+    const reject = pendingTableConfirmReject
+    pendingTableConfirmResolve = null
+    pendingTableConfirmReject = null
+    reject(error)
+  }
 }

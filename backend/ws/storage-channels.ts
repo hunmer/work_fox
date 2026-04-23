@@ -74,6 +74,7 @@ export function registerStorageChannels(router: WSRouter, services: StorageServi
     executionLogStore.clear(workflowId)
     return undefined
   })
+  router.register('executionLog:getPath', ({ workflowId, id }) => executionLogStore.getPath(workflowId, id))
 
   router.register('operationHistory:load', ({ workflowId }) => operationHistoryStore.load(workflowId))
   router.register('operationHistory:save', ({ workflowId, entries }) => {
