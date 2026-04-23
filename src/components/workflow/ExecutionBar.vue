@@ -7,7 +7,7 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/componen
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import JsonEditor from '@/components/ui/json-editor/JsonEditor.vue'
 import { Play, Pause, Square, ChevronDown, ChevronUp, CheckCircle, XCircle, Loader2, Circle, Trash2, AlertTriangle, Info, AlertCircle as AlertCircleIcon, Copy, Check, MoreHorizontal, FolderOpen } from 'lucide-vue-next'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { executionLogBackendApi } from '@/lib/backend-api/execution-log'
 import type { ExecutionLog } from '@/lib/workflow/types'
 import { WORKFLOW_EXEC_BAR_LAYOUT_KEY } from './workflowLayoutContext'
@@ -278,6 +278,14 @@ function setExpanded(nextExpanded: boolean) {
                       >
                         <Copy class="w-3 h-3" />
                         复制日志位置
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        class="text-[11px] gap-2 text-red-500 focus:text-red-500"
+                        @click="store.deleteExecutionLog(log.id)"
+                      >
+                        <Trash2 class="w-3 h-3" />
+                        删除日志
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

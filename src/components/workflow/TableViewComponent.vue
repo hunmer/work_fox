@@ -67,8 +67,8 @@ function handleSubmit() {
 
 <template>
   <div class="flex flex-col gap-2 w-full">
-    <div class="overflow-auto max-h-[200px]">
-      <Table class="text-xs">
+    <div class="overflow-auto max-h-[200px] overscroll-contain" @wheel.stop>
+      <Table class="text-xs w-full table-fixed">
         <TableHeader>
           <TableRow>
             <TableHead
@@ -78,7 +78,7 @@ function handleSubmit() {
             <TableHead
               v-for="header in headers"
               :key="header.id"
-              class="px-2 py-1 whitespace-nowrap"
+              class="px-2 py-1 whitespace-nowrap overflow-hidden text-ellipsis"
             >
               {{ header.title }}
             </TableHead>
@@ -103,7 +103,7 @@ function handleSubmit() {
             <TableCell
               v-for="header in headers"
               :key="header.id"
-              class="px-2 py-1 whitespace-nowrap"
+              class="px-2 py-1 truncate max-w-[120px]"
             >
               {{ cell.data?.[header.id] ?? '' }}
             </TableCell>
