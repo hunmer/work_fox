@@ -216,5 +216,9 @@ export const builtinNodeDefinitions: PluginWorkflowNode[] = [
         ],
       },
     ],
+    outputs: [
+      { key: 'selectedRows', label: '选中行', type: 'any' },
+      { key: 'selectedCount', label: '选中数量', type: 'number' },
+    ],
   },
 ]
