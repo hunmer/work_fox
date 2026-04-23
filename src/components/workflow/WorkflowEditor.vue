@@ -46,6 +46,7 @@ import EditorToolbar from './EditorToolbar.vue'
 import PluginsDialog from '@/components/plugins/PluginsDialog.vue'
 import SettingsDialog from '@/components/settings/SettingsDialog.vue'
 import PluginPickerDialog from './PluginPickerDialog.vue'
+import TableConfirmDialog from './TableConfirmDialog.vue'
 import { WORKFLOW_NODE_DRAG_MIME } from './dragDrop'
 
 import { useConnectionDrop } from '@/composables/workflow/useConnectionDrop'
@@ -571,5 +572,14 @@ function onConnect(params: any) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <TableConfirmDialog
+      :open="!!store.pendingTableConfirm"
+      :headers="store.pendingTableConfirm?.request.headers ?? []"
+      :cells="store.pendingTableConfirm?.request.cells ?? []"
+      :selection-mode="store.pendingTableConfirm?.request.selectionMode ?? 'none'"
+      @submit="store.resolveTableConfirm($event)"
+      @cancel="store.rejectTableConfirm(new Error('用户取消选择'))"
+    />
   </div>
 </template>
