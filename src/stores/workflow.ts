@@ -888,7 +888,7 @@ export function createWorkflowStore(tabId: string) {
 // ====== Provide / Inject ======
 
 // HMR 时 Symbol 会重新创建导致 inject 失败，用全局注册表复用同一个 key
-const WORKFLOW_STORE_KEY: symbol = (globalThis as any).__WORKFLOW_STORE_KEY__
+export const WORKFLOW_STORE_KEY: symbol = (globalThis as any).__WORKFLOW_STORE_KEY__
   ?? ((globalThis as any).__WORKFLOW_STORE_KEY__ = Symbol('workflowStore'))
 
 export function provideWorkflowStore(store: WorkflowStore) {

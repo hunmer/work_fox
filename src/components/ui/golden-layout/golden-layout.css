@@ -1,0 +1,106 @@
+/* src/components/ui/golden-layout/golden-layout.css */
+/* 主题覆盖：golden-layout 样式映射到 WorkFox CSS 变量 */
+/* CSS 类名基于 golden-layout v2.6.0 实际生成的 DOM */
+
+/* ── 全局 ── */
+.lm_root {
+  background: var(--background);
+}
+
+/* ── 面板标题栏 ── */
+.lm_header {
+  background: var(--background) !important;
+  border-bottom: 1px solid var(--border) !important;
+  height: 32px !important;
+}
+
+/* ── Tab 标签 ── */
+.lm_tab {
+  background: var(--muted) !important;
+  color: var(--muted-foreground) !important;
+  font-size: 12px !important;
+  border-radius: 4px 4px 0 0 !important;
+  height: 28px !important;
+  line-height: 28px !important;
+  padding: 0 12px !important;
+  margin-right: 2px !important;
+}
+
+.lm_tab.lm_active {
+  background: var(--background) !important;
+  color: var(--foreground) !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+}
+
+/* Tab 关闭按钮 */
+.lm_tab .lm_close_tab {
+  color: var(--muted-foreground) !important;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.lm_tab:hover .lm_close_tab {
+  opacity: 1;
+}
+
+/* ── 分割线 ── */
+.lm_splitter {
+  background: var(--border) !important;
+}
+.lm_splitter.lm_vertical {
+  width: 4px !important;
+}
+.lm_splitter.lm_horizontal {
+  height: 4px !important;
+}
+
+/* 分割线拖拽手柄 */
+.lm_splitter .lm_drag_handle {
+  background: transparent;
+}
+.lm_splitter:hover {
+  background: var(--accent) !important;
+  opacity: 0.5;
+}
+
+/* ── 拖拽占位/预览 ── */
+.lm_dragProxy,
+.lm_dropTargetIndicator {
+  background: color-mix(in srgb, var(--accent) 20%, transparent) !important;
+  border: 1px dashed var(--accent) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* ── 面板内容区 ── */
+.lm_content {
+  background: var(--background) !important;
+}
+
+/* ── 堆叠容器 ── */
+.lm_stack {
+  background: var(--background) !important;
+}
+
+/* ── 行/列容器 ── */
+.lm_row,
+.lm_column {
+  background: var(--background) !important;
+}
+
+/* ── 事件穿透 ── */
+/* golden-layout 容器设置 pointer-events: none，
+   使得底层的 VueFlow 画布可以接收拖拽/连线/点击事件。
+   面板内容区、标题栏、tab、分割线恢复 pointer-events: auto */
+.lm_goldenlayout {
+  pointer-events: none;
+}
+.lm_content,
+.lm_header,
+.lm_tab,
+.lm_splitter,
+.lm_drag_handle {
+  pointer-events: auto;
+}
+.lm_dragProxy {
+  pointer-events: auto;
+}
