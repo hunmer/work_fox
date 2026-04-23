@@ -77,7 +77,7 @@ export class BrowserAPIAdapter implements IpcAPI {
     completions: (params: any): Promise<{ started: boolean }> =>
       this.rpc('chat:completions', params),
     abort: (requestId: string): Promise<{ aborted: boolean }> =>
-      this.rpc('chat:abort', requestId),
+      this.rpc('chat:abort', { requestId }),
   }
 
   // ------------------------------------------------------------------
@@ -159,8 +159,9 @@ export class BrowserAPIAdapter implements IpcAPI {
   workflow = {
     importOpenFile: (): Promise<any> =>
       pickFileAndRead('.workflow,.json'),
-    exportSaveFile: (json: string): Promise<{ success: boolean }> =>
-      downloadFile(json, 'workflow.workflow'),
+    exportSaveFile: async (json: string): Promise<void> => {
+      await downloadFile(json, 'workflow.workflow')
+    },
   }
 
   // ------------------------------------------------------------------
@@ -187,10 +188,12 @@ export class BrowserAPIAdapter implements IpcAPI {
   plugin = {
     list: () => this.rpc('plugin:list'),
     listLocal: async () => [],
-    enable: (id: string) => this.rpc('plugin:enable', id),
+    enable: (id: string) => this.rpc('plugin:enable', { id }),
     enableLocal: notAvailable('plugin:enable-local'),
-    disable: (id: string) => this.rpc('plugin:disable', id),
+    disable: (id: string) => this.rpc('plugin:disable', { id }),
     disableLocal: notAvailable('plugin:disable-local'),
+    getWorkflowNodes: (pluginId: string) => this.rpc('plugin:get-workflow-nodes', { pluginId }),
+    getAgentTools: (pluginIds: string[]) => this.rpc('plugin:get-agent-tools', { pluginIds }),
     getView: (id: string) => this.rpc('plugin:get-view', id),
     getIcon: (id: string) => this.rpc('plugin:get-icon', id),
     importZip: notAvailable('plugin:import-zip'),

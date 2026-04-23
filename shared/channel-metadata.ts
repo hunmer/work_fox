@@ -132,6 +132,8 @@ export const backendChannelMetadata: Record<BackendChannel, ChannelMetadata> = {
   // --- Chat ---
   'chat:completions': { channel: 'chat:completions', priority: 3, ordered: true, idempotent: false, timeoutMs: 5 * 60_000, streaming: true, description: 'Start chat completion stream' },
   'chat:abort': { channel: 'chat:abort', priority: 2, ordered: false, idempotent: true, timeoutMs: 5_000, streaming: false, description: 'Abort chat completion' },
+  'chat:register-client-nodes': mutation('chat:register-client-nodes', 'Register client workflow node definitions'),
+  'chat:register-client-agent-tools': mutation('chat:register-client-agent-tools', 'Register client agent tool definitions'),
 
   // --- Agent / Workflow Tool ---
   'agent:execTool': {

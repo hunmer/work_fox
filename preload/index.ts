@@ -38,10 +38,12 @@ export interface WorkflowToolExecuteRequest {
 
 const api = {
   chat: {
-    completions: (params: ChatCompletionParams & { _requestId: string }): Promise<{ started: boolean }> =>
-      ipcRenderer.invoke('chat:completions', params),
-    abort: (requestId: string): Promise<{ aborted: boolean }> =>
-      ipcRenderer.invoke('chat:abort', requestId),
+    completions: async (): Promise<{ started: boolean }> => {
+      throw new Error('Electron IPC chat:completions 已移除，请走 backend WS 通道')
+    },
+    abort: async (): Promise<{ aborted: boolean }> => {
+      throw new Error('Electron IPC chat:abort 已移除，请走 backend WS 通道')
+    },
   },
 
   chatHistory: {
@@ -68,8 +70,9 @@ const api = {
   },
 
   workflowTool: {
-    respond: (requestId: string, result: unknown): Promise<{ resolved: boolean }> =>
-      ipcRenderer.invoke('workflow-tool:respond', requestId, result),
+    respond: async (): Promise<{ resolved: boolean }> => {
+      throw new Error('workflow-tool:respond IPC 已移除，请走 workflow interaction / chat_tool bridge')
+    },
   },
 
   agent: {
@@ -110,6 +113,8 @@ const api = {
     disable: (id: string) => ipcRenderer.invoke('plugin:disable', id),
     disableLocal: (id: string) => ipcRenderer.invoke('plugin:disable-local', id),
     getView: (id: string) => ipcRenderer.invoke('plugin:get-view', id),
+    getWorkflowNodes: (pluginId: string) => ipcRenderer.invoke('plugin:get-workflow-nodes', pluginId),
+    getAgentTools: (pluginIds: string[]) => ipcRenderer.invoke('plugin:get-agent-tools', pluginIds),
     getIcon: (id: string) => ipcRenderer.invoke('plugin:get-icon', id),
     importZip: () => ipcRenderer.invoke('plugin:import-zip'),
     openFolder: () => ipcRenderer.invoke('plugin:open-folder'),

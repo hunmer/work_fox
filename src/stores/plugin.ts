@@ -4,6 +4,7 @@ import type { PluginMeta } from '@/types/plugin'
 import { createPluginDomainApi } from '@/lib/backend-api/plugin-domain'
 import { createWorkflowDomainApi } from '@/lib/backend-api/workflow-domain'
 import { webClientPluginRuntime } from '@/lib/plugins/web-client-runtime'
+import { wsBridge } from '@/lib/ws-bridge'
 
 export const usePluginStore = defineStore('plugin', () => {
   const isElectronRuntime = navigator.userAgent.includes('Electron')
@@ -67,9 +68,31 @@ export const usePluginStore = defineStore('plugin', () => {
       if (!isElectronRuntime) {
         await webClientPluginRuntime.sync(plugins.value)
       }
+      await registerClientCapabilities()
     } finally {
       isLoading.value = false
     }
+  }
+
+  async function registerClientCapabilities(): Promise<void> {
+    if (!wsBridge.isConnected()) return
+    const clientPlugins = plugins.value.filter((plugin) => plugin.enabled && (plugin.runtimeSource === 'client' || plugin.runtimeSource === 'hybrid'))
+    const nodeGroups = await Promise.all(clientPlugins.map(async (plugin) => {
+      try {
+        return await getWorkflowNodes(plugin.id)
+      } catch {
+        return []
+      }
+    }))
+    const toolGroups = await Promise.all(clientPlugins.map(async (plugin) => {
+      try {
+        return await getAgentTools([plugin.id])
+      } catch {
+        return []
+      }
+    }))
+    await wsBridge.invoke('chat:register-client-nodes', { nodes: nodeGroups.flat() as any[] })
+    await wsBridge.invoke('chat:register-client-agent-tools', { tools: toolGroups.flat() as any[] })
   }
 
   async function enablePlugin(pluginId: string): Promise<void> {
@@ -89,6 +112,7 @@ export const usePluginStore = defineStore('plugin', () => {
       }
     }
     plugin.enabled = true
+    await registerClientCapabilities()
   }
 
   async function disablePlugin(pluginId: string): Promise<void> {
@@ -111,6 +135,7 @@ export const usePluginStore = defineStore('plugin', () => {
     if (activeViewPluginId.value === pluginId) {
       activeViewPluginId.value = null
     }
+    await registerClientCapabilities()
   }
 
   async function loadViewContent(pluginId: string): Promise<string | null> {
@@ -143,6 +168,7 @@ export const usePluginStore = defineStore('plugin', () => {
     const result = await pluginApi().importZip()
     if (result.success) {
       await init()
+      await registerClientCapabilities()
     }
     return result
   }
@@ -159,6 +185,7 @@ export const usePluginStore = defineStore('plugin', () => {
       const result = await webClientPluginRuntime.install(plugin, manifestUrl)
       if (result.success) {
         await init()
+        await registerClientCapabilities()
       }
       return {
         ...result,
@@ -169,6 +196,7 @@ export const usePluginStore = defineStore('plugin', () => {
     const result = await pluginApi().install(plugin.downloadUrl)
     if (result.success) {
       await init()
+      await registerClientCapabilities()
     }
     return result
   }
@@ -179,6 +207,7 @@ export const usePluginStore = defineStore('plugin', () => {
       : await pluginApi().uninstall(pluginId)
     if (result.success) {
       await init()
+      await registerClientCapabilities()
     }
     return result
   }
@@ -251,6 +280,7 @@ export const usePluginStore = defineStore('plugin', () => {
     createPluginScheme,
     deletePluginScheme,
     readPluginScheme,
-    savePluginScheme
+    savePluginScheme,
+    registerClientCapabilities,
   }
 })

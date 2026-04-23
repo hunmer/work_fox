@@ -5,6 +5,8 @@ type LocalPluginApi = {
   enableLocal: (pluginId: string) => Promise<void>
   disableLocal: (pluginId: string) => Promise<void>
   getView: (pluginId: string) => Promise<string | null>
+  getWorkflowNodes: (pluginId: string) => Promise<any>
+  getAgentTools: (pluginIds: string[]) => Promise<any[]>
   getIcon: (pluginId: string) => Promise<string | null>
   importZip: () => Promise<{ success: boolean; pluginName?: string; error?: string }>
   openFolder: () => Promise<void>
@@ -25,6 +27,8 @@ export function createPluginDomainApi() {
     enableLocal: notAvailable('plugin.enableLocal is not available in current runtime', undefined),
     disableLocal: notAvailable('plugin.disableLocal is not available in current runtime', undefined),
     getView: notAvailable('plugin.getView is not available in current runtime', null),
+    getWorkflowNodes: notAvailable('plugin.getWorkflowNodes is not available in current runtime', { pluginId: '', nodes: [] }),
+    getAgentTools: notAvailable('plugin.getAgentTools is not available in current runtime', []),
     getIcon: notAvailable('plugin.getIcon is not available in current runtime', null),
     importZip: notAvailable('plugin.importZip is not available in current runtime', {
       success: false,
@@ -48,9 +52,17 @@ export function createPluginDomainApi() {
     enableLocal: localPluginApi.enableLocal,
     disable: pluginBackendApi.disable,
     disableLocal: localPluginApi.disableLocal,
-    getWorkflowNodes: pluginBackendApi.getWorkflowNodes,
+    getWorkflowNodes: async (pluginId: string) => {
+      const local = await localPluginApi.getWorkflowNodes(pluginId)
+      if (local?.nodes?.length) return local
+      return pluginBackendApi.getWorkflowNodes(pluginId)
+    },
     listWorkflowPlugins: pluginBackendApi.listWorkflowPlugins,
-    getAgentTools: pluginBackendApi.getAgentTools,
+    getAgentTools: async (pluginIds: string[]) => {
+      const local = await localPluginApi.getAgentTools(pluginIds)
+      if (Array.isArray(local) && local.length > 0) return local
+      return pluginBackendApi.getAgentTools(pluginIds)
+    },
     executeTool: pluginBackendApi.executeTool,
     getConfig: pluginBackendApi.getConfig,
     saveConfig: pluginBackendApi.saveConfig,

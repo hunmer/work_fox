@@ -177,6 +177,14 @@ export interface PluginAgentToolsRequest {
   pluginIds: string[]
 }
 
+export interface ClientPluginNodeRegistrationRequest {
+  nodes: Array<Record<string, unknown>>
+}
+
+export interface ClientPluginToolRegistrationRequest {
+  tools: AgentToolDefinition[]
+}
+
 export interface PluginConfigRequest {
   pluginId: string
 }
@@ -239,6 +247,8 @@ export interface BackendChannelMap {
   'plugin:get-agent-tools': ChannelContract<PluginAgentToolsRequest, AgentToolDefinition[]>
   'plugin:get-config': ChannelContract<PluginConfigRequest, Record<string, string>>
   'plugin:save-config': ChannelContract<PluginConfigSaveRequest, PluginConfigSaveResult>
+  'chat:register-client-nodes': ChannelContract<ClientPluginNodeRegistrationRequest, EmptyResponse>
+  'chat:register-client-agent-tools': ChannelContract<ClientPluginToolRegistrationRequest, EmptyResponse>
 
   // --- AI Provider ---
   'aiProvider:list': ChannelContract<EmptyRequest, AIProviderEntry[]>

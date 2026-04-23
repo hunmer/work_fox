@@ -30,6 +30,14 @@ export function registerPluginIpcHandlers(): void {
     return pluginManager.getViewContent(pluginId)
   })
 
+  ipcMain.handle('plugin:get-workflow-nodes', (_e, pluginId: string) => {
+    return { pluginId, nodes: pluginManager.getWorkflowNodes(pluginId) }
+  })
+
+  ipcMain.handle('plugin:get-agent-tools', (_e, pluginIds: string[]) => {
+    return pluginManager.getAgentTools(pluginIds)
+  })
+
   ipcMain.handle('plugin:get-icon', (_e, pluginId: string) => {
     return pluginManager.getIconBase64(pluginId)
   })

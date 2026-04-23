@@ -5,6 +5,7 @@ import { useAIProviderStore } from '@/stores/ai-provider'
 import { WORKFLOW_TOOL_DEFINITIONS } from './workflow-tools'
 import { buildWorkflowSystemPrompt } from './workflow-prompt'
 import type { ChatCompletionParams } from '@/types'
+import { wsBridge } from '@/lib/ws-bridge'
 
 type ChatCompletionPayload = Parameters<typeof window.api.chat.completions>[0]
 
@@ -37,8 +38,7 @@ export interface AgentStreamOptions {
 }
 
 /**
- * 通过主进程 API 代理运行 Agent 流式请求。
- * 渲染进程构造请求参数，主进程注入 API Key 并转发到 LLM 供应商。
+ * 通过 backend WS 代理运行 Agent 流式请求，必要时 fallback 到 Electron IPC。
  * 返回 requestId（用于 abort）和 cleanup（用于清理 IPC 监听器）。
  */
 export async function runAgentStream(
@@ -130,9 +130,12 @@ export async function runAgentStream(
     ...(model.supportsThinking ? { thinking: { type: 'enabled' as const, budgetTokens: 2000 } } : {}),
   })
 
-  // 发送请求到主进程
   try {
-    await window.api.chat.completions(payload)
+    if (wsBridge.isConnected() || !navigator.userAgent.includes('Electron')) {
+      await wsBridge.invoke('chat:completions', payload as any)
+    } else {
+      await window.api.chat.completions(payload)
+    }
   } catch (error) {
     cleanup()
     callbacks.onError(error instanceof Error ? error : new Error(String(error)))

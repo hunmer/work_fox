@@ -1,6 +1,4 @@
-import { ipcMain, BrowserWindow } from 'electron'
-import { abortClaudeAgentRun, startClaudeAgentRun } from '../services/claude-agent-runtime'
-import { resolvePendingRendererTool } from '../services/workflow-tool-dispatcher'
+import { ipcMain } from 'electron'
 import { testProviderConnection } from '../services/ai-provider-test'
 import { listAIProviders, getAIProvider, createAIProvider, updateAIProvider, deleteAIProvider } from '../services/store'
 import { workflowNodeRegistry } from '../services/workflow-node-registry'
@@ -48,28 +46,6 @@ export function registerChatIpcHandlers(): void {
     } catch (err: any) {
       return { success: false, message: err.message, _logs: logs }
     }
-  })
-
-  ipcMain.handle('chat:completions', async (event, params) => {
-    const mainWindow = BrowserWindow.fromWebContents(event.sender)
-    if (!mainWindow) throw new Error('No main window found')
-    startClaudeAgentRun(mainWindow, params).catch((err) => {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('chat:error', {
-          requestId: params._requestId,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
-    })
-    return { started: true }
-  })
-
-  ipcMain.handle('chat:abort', (_event, requestId: string) => {
-    return abortClaudeAgentRun(requestId)
-  })
-
-  ipcMain.handle('workflow-tool:respond', (_event, requestId: string, result: unknown) => {
-    return { resolved: resolvePendingRendererTool(requestId, result) }
   })
 
   // AI Provider IPC

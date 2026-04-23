@@ -19,6 +19,7 @@ import { registerAppChannels, type AppServices } from './ws/app-channels'
 import { registerFsChannels } from './ws/fs-channels'
 import { ChatRuntime } from './chat/chat-runtime'
 import { registerChatChannels } from './ws/chat-channels'
+import { ClientNodeCache } from './chat/client-node-cache'
 
 async function main(): Promise<void> {
   const config = loadBackendConfig()
@@ -36,6 +37,7 @@ async function main(): Promise<void> {
   const tabStore = new BackendSettingsStore(paths.userDataDir, 'tabs.json')
   const plugins = new BackendPluginRegistry(config, logger)
   plugins.loadAll()
+  const clientNodeCache = new ClientNodeCache()
   const interactionManager = new BackendInteractionManager({
     connectionManager: backend.connections,
     logger,
@@ -67,10 +69,22 @@ async function main(): Promise<void> {
     appVersion: '0.0.12',
   })
   registerFsChannels(backend.router)
-  const chatRuntime = new ChatRuntime(aiProviderStore, logger)
+  backend.connections.onClientDisconnected((clientId) => {
+    clientNodeCache.unregisterClient(clientId)
+  })
+  const chatRuntime = new ChatRuntime(
+    aiProviderStore,
+    logger,
+    workflowStore,
+    plugins,
+    interactionManager,
+    clientNodeCache,
+    backend.connections,
+  )
   registerChatChannels(backend.router, {
     chatRuntime,
     connectionManager: backend.connections,
+    clientNodeCache,
   })
   const { port } = await backend.start()
 

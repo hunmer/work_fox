@@ -1,5 +1,6 @@
 import { listenToChatStream } from '@/lib/agent/stream'
 import { useAIProviderStore } from '@/stores/ai-provider'
+import { wsBridge } from '@/lib/ws-bridge'
 
 type AgentPermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk' | 'auto'
 
@@ -82,7 +83,7 @@ export async function executeAgentRunTask(
     })
   })
 
-  await window.api.chat.completions({
+  const payload = {
     _requestId: requestId,
     providerId: providerStore.currentProvider.id,
     modelId: providerStore.currentModel.id,
@@ -100,7 +101,13 @@ export async function executeAgentRunTask(
       loadRuleMd: data.loadRuleMd !== false,
       enabledPlugins: runtimeConfig?.enabledPlugins,
     },
-  })
+  }
+
+  if (wsBridge.isConnected() || !navigator.userAgent.includes('Electron')) {
+    await wsBridge.invoke('chat:completions', payload as any)
+  } else {
+    await window.api.chat.completions(payload)
+  }
 
   await completionFinished
 

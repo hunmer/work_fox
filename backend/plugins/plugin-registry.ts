@@ -22,6 +22,7 @@ interface LoadedPlugin {
   enabled: boolean
   workflowNodes: NodeTypeDefinition[]
   agentTools: AgentToolDefinition[]
+  agentToolHandler?: (name: string, args: Record<string, any>, api: Record<string, any>) => Promise<any>
   workflowHandlers: Map<string, WorkflowNodeHandler>
 }
 
@@ -183,6 +184,17 @@ export class BackendPluginRegistry {
     return result
   }
 
+  async executeAgentTool(toolName: string, args: Record<string, any>): Promise<any> {
+    for (const plugin of this.plugins.values()) {
+      if (!plugin.enabled || !plugin.agentTools.some((tool) => tool.name === toolName) || !plugin.agentToolHandler) {
+        continue
+      }
+      const api = this.createPluginApi(plugin)
+      return plugin.agentToolHandler(toolName, args, api)
+    }
+    throw new Error(`插件工具不存在: ${toolName}`)
+  }
+
   getConfig(pluginId: string): Record<string, string> {
     const plugin = this.plugins.get(pluginId)
     if (!plugin) return {}
@@ -261,7 +273,7 @@ export class BackendPluginRegistry {
     if (info.type === 'client') return
 
     const { nodes: workflowNodes, handlers: workflowHandlers } = this.loadWorkflowNodes(pluginDir, info)
-    const agentTools = this.loadAgentTools(pluginDir, info)
+    const { tools: agentTools, handler: agentToolHandler } = this.loadAgentTools(pluginDir, info)
 
     this.plugins.set(info.id, {
       dir: pluginDir,
@@ -269,6 +281,7 @@ export class BackendPluginRegistry {
       enabled: !this.disabledIds.has(info.id),
       workflowNodes,
       agentTools,
+      agentToolHandler,
       workflowHandlers,
     })
   }
@@ -312,14 +325,22 @@ export class BackendPluginRegistry {
     return { nodes, handlers }
   }
 
-  private loadAgentTools(pluginDir: string, info: PluginInfo): AgentToolDefinition[] {
+  private loadAgentTools(pluginDir: string, info: PluginInfo): {
+    tools: AgentToolDefinition[]
+    handler?: (name: string, args: Record<string, any>, api: Record<string, any>) => Promise<any>
+  } {
     const toolsModule = loadPluginToolsModule(pluginDir, info)
-    if (!toolsModule) return []
-    return (toolsModule.tools || []).map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      inputSchema: tool.input_schema,
-    }))
+    if (!toolsModule) return { tools: [] }
+    return {
+      tools: (toolsModule.tools || []).map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.input_schema,
+      })),
+      handler: typeof toolsModule.handler === 'function'
+        ? toolsModule.handler as (name: string, args: Record<string, any>, api: Record<string, any>) => Promise<any>
+        : undefined,
+    }
   }
 
   private toPluginMeta(plugin: LoadedPlugin): PluginMeta {

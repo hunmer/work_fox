@@ -217,6 +217,12 @@ export interface PluginWorkflowNode {
     target?: boolean
     dynamicSource?: { dataKey: string; extraCount?: number }
   }
+  outputs?: Array<{
+    key: string
+    type: 'string' | 'number' | 'boolean' | 'object' | 'any'
+    value?: string
+    children?: any[]
+  }>
   handler?: (ctx: PluginNodeContext, args: Record<string, any>) => Promise<PluginToolResult>
 }
 

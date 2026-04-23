@@ -10,26 +10,26 @@ Phase 1
 ### Phase 1: Requirements & Discovery
 - [x] 理解用户目标与约束
 - [x] 审阅迁移计划与当前 backend chat/WS 协议现状
-- [ ] 审阅 Electron agent runtime/tool 链路并记录能力差异
-- **Status:** in_progress
+- [x] 审阅 Electron agent runtime/tool 链路并记录能力差异
+- **Status:** complete
 
 ### Phase 2: Backend Agent Capability Parity
-- [ ] 为 backend ChatRuntime 补齐工具适配器与 workflow 工具执行器
-- [ ] 扩展 interaction bridge 支持 chat_tool
-- [ ] 覆盖工具流式事件、multi-turn、abort 与 usage
-- **Status:** pending
+- [x] 为 backend ChatRuntime 补齐工具适配器与 workflow 工具执行器
+- [x] 扩展 interaction bridge 支持 chat_tool
+- [x] 覆盖工具流式事件、multi-turn、abort 与 usage
+- **Status:** complete
 
 ### Phase 3: Renderer / Client Bridge Migration
-- [ ] 切换 renderer agent 请求到 backend WS
-- [ ] 注册 client 插件节点与 agent tool schema
-- [ ] 通过 interaction bridge 执行 renderer-only 与 client 插件工具
-- **Status:** pending
+- [x] 切换 renderer agent 请求到 backend WS
+- [x] 注册 client 插件节点与 agent tool schema
+- [x] 通过 interaction bridge 执行 renderer-only 与 client 插件工具
+- **Status:** complete
 
 ### Phase 4: Electron Cleanup
 - [ ] 移除 Electron 主进程 agent runtime/tool 相关实现
-- [ ] 收敛 IPC/preload 暴露面，保留必要 fallback
+- [x] 收敛 IPC/preload 暴露面，保留必要 fallback
 - [ ] 检查多标签页、流式事件、工作流同步不回退
-- **Status:** pending
+- **Status:** in_progress
 
 ### Phase 5: Verification
 - [ ] 运行类型检查与 backend 构建

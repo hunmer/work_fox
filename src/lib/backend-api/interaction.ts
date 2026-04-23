@@ -1,6 +1,7 @@
 import { createErrorShape } from '@shared/errors'
 import type {
   AgentChatInteractionSchema,
+  ChatToolInteractionSchema,
   InteractionRequest,
   InteractionType,
   NodeExecutionInteractionSchema,
@@ -8,6 +9,7 @@ import type {
 } from '@shared/ws-protocol'
 import { wsBridge } from '../ws-bridge'
 import { executeAgentRunTask } from '../workflow/agent-run'
+import { executeRendererWorkflowTool } from '../agent/workflow-renderer-tools'
 
 let initialized = false
 
@@ -36,6 +38,10 @@ async function handleWorkflowInteraction(request: InteractionRequest): Promise<{
       return {
         data: await executeMainProcessNode(request.schema as NodeExecutionInteractionSchema),
       }
+    case 'chat_tool':
+      return {
+        data: await executeChatTool(request.schema as ChatToolInteractionSchema),
+      }
     default:
       if (UI_INTERACTION_TYPES.has(request.interactionType)) {
         return { data: await delegateToUI(request) }
@@ -58,6 +64,13 @@ async function executeMainProcessNode(schema: NodeExecutionInteractionSchema): P
     throw new Error('缺少本地节点类型')
   }
   return window.api.agent.execTool(schema.toolType, JSON.parse(JSON.stringify(schema.params || {})))
+}
+
+async function executeChatTool(schema: ChatToolInteractionSchema): Promise<unknown> {
+  if (schema.kind === 'renderer_workflow_tool') {
+    return executeRendererWorkflowTool(schema.toolName, JSON.parse(JSON.stringify(schema.args || {})))
+  }
+  return window.api.agent.execTool(schema.toolName, JSON.parse(JSON.stringify(schema.args || {})), schema.targetTabId)
 }
 
 // ---- 通用 UI interaction 委托 ----

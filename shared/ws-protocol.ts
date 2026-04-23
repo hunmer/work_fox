@@ -41,6 +41,7 @@ export type InteractionType =
   | 'form'
   | 'confirm'
   | 'agent_chat'
+  | 'chat_tool'
   | 'node_execution'
   | 'table_confirm'
   | 'custom'
@@ -63,6 +64,14 @@ export interface AgentChatInteractionSchema {
 export interface NodeExecutionInteractionSchema {
   toolType: string
   params: Record<string, unknown>
+}
+
+export interface ChatToolInteractionSchema {
+  kind: 'renderer_workflow_tool' | 'client_agent_tool'
+  requestId: string
+  toolName: string
+  args: Record<string, unknown>
+  targetTabId?: string
 }
 
 export interface TableConfirmInteractionSchema {

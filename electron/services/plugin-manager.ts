@@ -2,6 +2,7 @@ import type { BrowserWindow } from 'electron'
 import type { PluginInstance, PluginMeta } from './plugin-types'
 import { PluginCatalog, type PluginManifestRecord } from './plugin-catalog'
 import { PluginRuntimeHost } from './plugin-runtime-host'
+import { workflowNodeRegistry } from './workflow-node-registry'
 
 class PluginManager {
   private readonly catalog = new PluginCatalog()
@@ -42,6 +43,14 @@ class PluginManager {
 
   getPlugin(pluginId: string): PluginInstance | undefined {
     return this.runtimeHost.getPlugin(pluginId)
+  }
+
+  getWorkflowNodes(pluginId: string): any[] {
+    return workflowNodeRegistry.getPluginNodes(pluginId)
+  }
+
+  getAgentTools(pluginIds: string[]): any[] {
+    return workflowNodeRegistry.getAgentTools(pluginIds)
   }
 
   getManifest(pluginId: string): PluginManifestRecord | undefined {

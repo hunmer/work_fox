@@ -18,6 +18,7 @@ import { useChatUIStore } from './chat-ui'
 import { useTabStore } from './tab'
 import { runAgentStream } from '@/lib/agent/agent'
 import { useAgentSettingsStore } from './agent-settings'
+import { wsBridge } from '@/lib/ws-bridge'
 
 // ====== 辅助函数 ======
 
@@ -461,7 +462,11 @@ export function createChatStore(scope: string) {
     async function pauseGenerationForUserQuestion() {
       if (!abortController.value) return
       if (currentRequestId) {
-        window.api.chat.abort(currentRequestId).catch(() => {})
+        if (wsBridge.isConnected() || !navigator.userAgent.includes('Electron')) {
+          wsBridge.invoke('chat:abort', { requestId: currentRequestId }).catch(() => {})
+        } else {
+          window.api.chat.abort(currentRequestId).catch(() => {})
+        }
         currentRequestId = null
       }
       abortController.value = null
@@ -548,7 +553,14 @@ export function createChatStore(scope: string) {
 
     async function stopGeneration() {
       if (!abortController.value) return
-      if (currentRequestId) { window.api.chat.abort(currentRequestId).catch(() => {}); currentRequestId = null }
+      if (currentRequestId) {
+        if (wsBridge.isConnected() || !navigator.userAgent.includes('Electron')) {
+          wsBridge.invoke('chat:abort', { requestId: currentRequestId }).catch(() => {})
+        } else {
+          window.api.chat.abort(currentRequestId).catch(() => {})
+        }
+        currentRequestId = null
+      }
       abortController.value = null
       streamCleanup?.()
       streamCleanup = null

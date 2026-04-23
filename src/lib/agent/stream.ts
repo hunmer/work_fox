@@ -1,4 +1,5 @@
 import type { ToolCall } from '@/types'
+import { wsBridge } from '@/lib/ws-bridge'
 
 export interface ToolResultEvent {
   requestId: string
@@ -35,89 +36,47 @@ export interface StreamCallbacks {
 }
 
 /**
- * 监听主进程回传的聊天流事件。
+ * 监听聊天流事件。WS 优先，Electron IPC 作为 fallback。
  * 返回清理函数用于移除监听。
  */
 export function listenToChatStream(requestId: string, callbacks: StreamCallbacks): () => void {
   const unsubscribers: Array<() => void> = []
+  const subscribe = (channel: string, handler: (data: any) => void) => {
+    const wrapped = (data: any) => {
+      if (data.requestId === requestId) handler(data)
+    }
+    if (wsBridge.isConnected() || !navigator.userAgent.includes('Electron')) {
+      wsBridge.on(channel, wrapped)
+      unsubscribers.push(() => wsBridge.off(channel, wrapped))
+      return
+    }
+    unsubscribers.push(window.api.on(channel, wrapped))
+  }
 
-  unsubscribers.push(
-    window.api.on('chat:chunk', (data: any) => {
-      if (data.requestId === requestId) {
-        callbacks.onToken(data.token)
-      }
-    }),
-  )
+  subscribe('chat:chunk', (data) => callbacks.onToken(data.token))
 
-  unsubscribers.push(
-    window.api.on('chat:tool-call', (data: any) => {
-      if (data.requestId === requestId) {
-        callbacks.onToolCall(data.toolCall)
-      }
-    }),
-  )
+  subscribe('chat:tool-call', (data) => callbacks.onToolCall(data.toolCall))
 
-  unsubscribers.push(
-    window.api.on('chat:tool-result', (data: any) => {
-      if (data.requestId === requestId) {
-        callbacks.onToolResult(data)
-      }
-    }),
-  )
+  subscribe('chat:tool-result', (data) => callbacks.onToolResult(data))
 
-  unsubscribers.push(
-    window.api.on('chat:tool-call-args', (data: any) => {
-      if (data.requestId === requestId) {
-        callbacks.onToolCallArgs(data)
-      }
-    }),
-  )
+  subscribe('chat:tool-call-args', (data) => callbacks.onToolCallArgs(data))
 
-  unsubscribers.push(
-    window.api.on('chat:thinking', (data: any) => {
-      if (data.requestId === requestId) {
-        callbacks.onThinking(data.content, data.index)
-      }
-    }),
-  )
+  subscribe('chat:thinking', (data) => callbacks.onThinking(data.content, data.index))
 
-  unsubscribers.push(
-    window.api.on('chat:done', (data: any) => {
-      if (data.requestId === requestId) {
-        // 如果 done 事件携带 usage，先回调
-        if (data.usage) {
-          callbacks.onUsage(data.usage)
-        }
-        callbacks.onDone()
-        unsubscribers.forEach((fn) => fn())
-      }
-    }),
-  )
+  subscribe('chat:done', (data) => {
+    if (data.usage) callbacks.onUsage(data.usage)
+    callbacks.onDone()
+    unsubscribers.forEach((fn) => fn())
+  })
 
-  unsubscribers.push(
-    window.api.on('chat:error', (data: any) => {
-      if (data.requestId === requestId) {
-        callbacks.onError(new Error(data.error))
-        unsubscribers.forEach((fn) => fn())
-      }
-    }),
-  )
+  subscribe('chat:error', (data) => {
+    callbacks.onError(new Error(data.error))
+    unsubscribers.forEach((fn) => fn())
+  })
 
-  unsubscribers.push(
-    window.api.on('chat:retry', (data: any) => {
-      if (data.requestId === requestId) {
-        callbacks.onRetry?.(data)
-      }
-    }),
-  )
+  subscribe('chat:retry', (data) => callbacks.onRetry?.(data))
 
-  unsubscribers.push(
-    window.api.on('chat:usage', (data: any) => {
-      if (data.requestId === requestId) {
-        callbacks.onUsage({ inputTokens: data.inputTokens, outputTokens: data.outputTokens })
-      }
-    }),
-  )
+  subscribe('chat:usage', (data) => callbacks.onUsage({ inputTokens: data.inputTokens, outputTokens: data.outputTokens }))
 
   return () => unsubscribers.forEach((fn) => fn())
 }

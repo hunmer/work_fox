@@ -23,6 +23,12 @@
   - `workfox_plugin`: 插件提供的 agent tools
 - `electron/services/workflow-tool-executor.ts` 当前已承担工作流编辑核心能力，包含节点类型聚合、搜索、变更持久化、自动布局，以及 `workflow:updated` 通知 renderer。
 - `src/lib/agent/agent.ts` 与 `src/lib/agent/stream.ts` 当前仍明确绑定 `window.api.chat` 和 IPC 事件源，还没有统一走 WS bridge。
+- 目前已经完成的迁移实现：
+  - shared 新增 `chat_tool` interaction type，以及 client 节点 / agent tool 注册通道。
+  - backend 新增 `ClientNodeCache`、`ChatWorkflowToolExecutor`、`chat-tool-adapter`，`ChatRuntime` 已接入 multi-turn、MCP tools、tool hooks、tool-progress / tool-use-summary / partial tool json 桥接。
+  - renderer `runAgentStream()` / `listenToChatStream()` / workflow `agent-run` / chat store abort 已切到 `WS 优先 + IPC fallback`。
+  - plugin store 已在初始化、启停、安装卸载后向 backend 注册 client 节点与 client agent tools。
+  - Electron IPC 已移除 `chat:completions` / `chat:abort` / `workflow-tool:respond` handlers，preload 中改为显式报错 stub。
 
 ## Technical Decisions
 | Decision | Rationale |
@@ -30,6 +36,7 @@
 | 以 Electron 现有 `claude-agent-runtime` / `claude-tool-adapter` / `workflow-tool-executor` 为功能基准迁移到 backend | 用户要求 Electron 效果保持一致，最可靠的方式是按现有 Electron 行为逐项对齐 |
 | 后续验证以“事件语义一致 + 工具覆盖一致 + Electron 路由切换后行为一致”为标准 | 仅能跑通不足以证明能力覆盖，需要对齐事件与工具行为 |
 | backend 迁移不能只实现 `chat:completions` 成功返回，还必须完整复刻 Electron 的细粒度流式事件 | renderer 现有 chat UI 已依赖这些事件更新 token、tool call、thinking 和 usage 状态 |
+| Electron 主进程先保留 `agent:execTool`，但移除 chat IPC handler | client plugin tool 和 local bridge 节点仍有本地执行依赖，chat 主路径已可完全切到 backend WS |
 
 ## Issues Encountered
 | Issue | Resolution |

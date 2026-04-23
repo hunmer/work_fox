@@ -731,7 +731,7 @@ function createAIActions(
   }
 
   function listenForFileUpdates() {
-    return (window as any).api.on('workflow:updated', (data: any) => {
+    const handler = (data: any) => {
       console.log('[workflow store] received workflow:updated:', data)
       if (data.workflowId === currentWorkflow.value?.id && data.changes) {
         console.log('[workflow store] merging changes:', data.changes)
@@ -739,18 +739,16 @@ function createAIActions(
       } else {
         console.log('[workflow store] skipped:', { eventWorkflowId: data.workflowId, currentId: currentWorkflow.value?.id, hasChanges: !!data.changes })
       }
-    })
+    }
+    if (wsBridge.isConnected() || !navigator.userAgent.includes('Electron')) {
+      wsBridge.on('workflow:updated', handler)
+      return () => wsBridge.off('workflow:updated', handler)
+    }
+    return (window as any).api.on('workflow:updated', handler)
   }
 
   function listenForWorkflowToolRequests() {
-    return (window as any).api.on('workflow-tool:execute', async (request: WorkflowToolExecuteRequest) => {
-      const result = await executeRendererWorkflowTool(request.name, request.args || {})
-      try {
-        await (window as any).api.workflowTool.respond(request.requestId, result)
-      } catch (error) {
-        console.error('[workflow-store] failed to respond workflow tool request', error)
-      }
-    })
+    return () => {}
   }
 
   return { mergeWorkflowChanges, listenForFileUpdates, listenForWorkflowToolRequests }
