@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { Minus, Square, X, Maximize2, ChevronDown, Plus, Home, Save, LayoutDashboard } from 'lucide-vue-next'
+import { Minus, Square, X, Maximize2, ChevronDown, Plus, Home, Save, LayoutDashboard, SaveAll, RotateCcw, Trash2 } from 'lucide-vue-next'
 import {
   Menubar,
   MenubarMenu,
@@ -11,6 +11,7 @@ import {
   MenubarSub,
   MenubarSubTrigger,
   MenubarSubContent,
+  MenubarSeparator,
 } from '@/components/ui/menubar'
 import {
   DropdownMenu,
@@ -19,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useTabStore } from '@/stores/tab'
+import type { LayoutPreset } from '@/composables/workflow/useEditorLayout'
 
 const router = useRouter()
 const tabStore = useTabStore()
@@ -36,6 +38,7 @@ const props = defineProps<{
   hideTabSwitcher?: boolean
   isDirty?: boolean
   hasCustomLayout?: boolean
+  layoutPresets: LayoutPreset[]
   recentWorkflows: { id: string; name: string; updatedAt: number }[]
 }>()
 
@@ -54,6 +57,9 @@ const emit = defineEmits<{
   goHome: []
   openRecent: [id: string]
   'reset-layout': []
+  'save-preset': []
+  'apply-preset': [id: string]
+  'delete-preset': [id: string]
 }>()
 
 const nameInput = ref<HTMLInputElement | null>(null)
@@ -168,6 +174,44 @@ refreshMaximized()
             @click="emit('openSettings')"
           >
             设置
+          </MenubarItem>
+        </MenubarContent>
+      </MenubarMenu>
+      <MenubarMenu>
+        <MenubarTrigger class="text-xs h-6 px-2">
+          布局
+        </MenubarTrigger>
+        <MenubarContent>
+          <MenubarItem
+            class="text-xs"
+            @click="emit('save-preset')"
+          >
+            <SaveAll class="w-3 h-3 mr-2" />
+            保存为预设...
+          </MenubarItem>
+          <MenubarSeparator v-if="layoutPresets.length > 0" />
+          <MenubarItem
+            v-for="preset in layoutPresets"
+            :key="preset.id"
+            class="text-xs flex items-center justify-between gap-2"
+            @click="emit('apply-preset', preset.id)"
+          >
+            <span class="truncate">{{ preset.name }}</span>
+            <button
+              class="shrink-0 p-0.5 rounded hover:bg-destructive/20 hover:text-destructive"
+              title="删除预设"
+              @click.stop="emit('delete-preset', preset.id)"
+            >
+              <Trash2 class="w-3 h-3" />
+            </button>
+          </MenubarItem>
+          <MenubarSeparator />
+          <MenubarItem
+            class="text-xs"
+            @click="emit('reset-layout')"
+          >
+            <RotateCcw class="w-3 h-3 mr-2" />
+            恢复默认布局
           </MenubarItem>
         </MenubarContent>
       </MenubarMenu>

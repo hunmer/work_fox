@@ -154,6 +154,10 @@ const {
   saveLayout,
   resetToDefault,
   hasCustomLayout,
+  presets,
+  addPreset,
+  deletePreset,
+  applyPreset,
 } = useEditorLayout(store)
 
 const editorLayout = ref<LayoutConfig>(loadLayout())
@@ -198,6 +202,21 @@ function onLayoutChange(config: LayoutConfig) {
 
 function handleResetLayout() {
   editorLayout.value = resetToDefault()
+}
+
+function handleSavePreset() {
+  const name = window.prompt('输入预设名称：')
+  if (!name?.trim()) return
+  addPreset(name.trim(), editorLayout.value)
+}
+
+function handleApplyPreset(id: string) {
+  const layout = applyPreset(id)
+  if (layout) editorLayout.value = layout
+}
+
+function handleDeletePreset(id: string) {
+  deletePreset(id)
 }
 
 // 标签页切换时恢复布局
@@ -354,6 +373,7 @@ function onConnect(params: any) {
       :is-dirty="store.isDirty"
       :recent-workflows="recentWorkflows"
       :has-custom-layout="hasCustomLayout"
+      :layout-presets="presets"
       @new="openWorkflowList(true)"
       @open="openWorkflowList(false)"
       @save="saveWorkflow"
@@ -368,6 +388,9 @@ function onConnect(params: any) {
       @go-home="goHome"
       @open-recent="openRecentWorkflow"
       @reset-layout="handleResetLayout"
+      @save-preset="handleSavePreset"
+      @apply-preset="handleApplyPreset"
+      @delete-preset="handleDeletePreset"
     />
 
     <div v-if="store.currentWorkflow" class="relative flex-1 min-h-0">

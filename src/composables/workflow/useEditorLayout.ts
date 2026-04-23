@@ -1,9 +1,17 @@
 // src/composables/workflow/useEditorLayout.ts
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { LayoutConfig } from 'golden-layout'
 import type { WorkflowStore } from '@/stores/workflow'
 
 const STORAGE_KEY = 'workflow-editor-layout-default'
+const PRESETS_KEY = 'workflow-editor-layout-presets'
+
+export interface LayoutPreset {
+  id: string
+  name: string
+  layout: LayoutConfig
+  createdAt: number
+}
 
 /**
  * 默认布局：匹配原始 ResizablePanelGroup 布局
@@ -111,11 +119,55 @@ export function useEditorLayout(workflowStore: WorkflowStore) {
     return DEFAULT_LAYOUT
   }
 
+  // ── 预设管理 ──────────────────────────────
+
+  const presets = ref<LayoutPreset[]>(loadPresets())
+
+  function loadPresets(): LayoutPreset[] {
+    try {
+      const raw = localStorage.getItem(PRESETS_KEY)
+      return raw ? JSON.parse(raw) : []
+    } catch {
+      return []
+    }
+  }
+
+  function persistPresets() {
+    localStorage.setItem(PRESETS_KEY, JSON.stringify(presets.value))
+  }
+
+  function addPreset(name: string, layout: LayoutConfig): LayoutPreset {
+    const preset: LayoutPreset = {
+      id: `preset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      layout,
+      createdAt: Date.now(),
+    }
+    presets.value.push(preset)
+    persistPresets()
+    return preset
+  }
+
+  function deletePreset(id: string) {
+    presets.value = presets.value.filter(p => p.id !== id)
+    persistPresets()
+  }
+
+  function applyPreset(id: string): LayoutConfig | null {
+    const preset = presets.value.find(p => p.id === id)
+    if (!preset) return null
+    return ensureCanvasPanel(preset.layout)
+  }
+
   return {
     loadLayout,
     saveLayout,
     resetToDefault,
     hasCustomLayout,
     DEFAULT_LAYOUT,
+    presets,
+    addPreset,
+    deletePreset,
+    applyPreset,
   }
 }
