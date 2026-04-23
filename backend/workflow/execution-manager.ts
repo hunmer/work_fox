@@ -19,7 +19,7 @@ import type {
   WorkflowExecuteResponse,
 } from '../../shared/execution-events'
 import { createErrorShape } from '../../shared/errors'
-import type { AgentChatInteractionSchema, NodeExecutionInteractionSchema } from '../../shared/ws-protocol'
+import type { AgentChatInteractionSchema, NodeExecutionInteractionSchema, TableConfirmInteractionSchema } from '../../shared/ws-protocol'
 import { isLocalBridgeWorkflowNode } from '../../shared/workflow-local-bridge'
 import type { BackendWorkflowStore } from '../storage/workflow-store'
 import type { BackendExecutionLogStore } from '../storage/execution-log-store'
@@ -414,6 +414,8 @@ export class BackendWorkflowExecutionManager {
           volume: typeof resolvedData.volume === 'number' ? resolvedData.volume : 80,
           loop: !!resolvedData.loop,
         }
+      case 'table_display':
+        return this.executeTableDisplay(session, node, resolvedData)
       case 'run_code':
         return this.executeCode(session.context, String(resolvedData.code || ''))
       case 'toast':
@@ -509,6 +511,35 @@ export class BackendWorkflowExecutionManager {
       schema,
     })
     appendNodeLog('info', `Electron 本地节点执行完成: ${node.type}`)
+    return result
+  }
+
+  private async executeTableDisplay(
+    session: ExecutionSession,
+    node: WorkflowNode,
+    resolvedData: Record<string, any>,
+  ): Promise<any> {
+    const headers = Array.isArray(resolvedData.headers) ? resolvedData.headers : []
+    const cells = Array.isArray(resolvedData.cells) ? resolvedData.cells : []
+    const selectionMode = ['none', 'single', 'multi'].includes(resolvedData.selectionMode)
+      ? resolvedData.selectionMode
+      : 'none'
+
+    if (selectionMode === 'none') {
+      return { selectedRows: cells, selectedCount: cells.length }
+    }
+
+    const schema: TableConfirmInteractionSchema = { headers, cells, selectionMode }
+
+    const result = await this.deps.interactionManager.request({
+      clientId: session.ownerClientId,
+      executionId: session.id,
+      workflowId: session.workflow.id,
+      nodeId: node.id,
+      interactionType: 'table_confirm',
+      schema,
+    })
+
     return result
   }
 
