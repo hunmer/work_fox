@@ -46,21 +46,42 @@
 /* ── 分割线 ── */
 .lm_splitter {
   background: var(--border) !important;
+  position: relative !important;
+  z-index: 10;
 }
 .lm_splitter.lm_vertical {
-  width: 4px !important;
-}
-.lm_splitter.lm_horizontal {
   height: 4px !important;
 }
+.lm_splitter.lm_horizontal {
+  width: 4px !important;
+}
 
-/* 分割线拖拽手柄 */
+/* 拖拽手柄：golden-layout 只沿分割方向设了尺寸，交叉方向需要 CSS 补全 */
 .lm_splitter .lm_drag_handle {
   background: transparent;
+  position: absolute !important;
 }
-.lm_splitter:hover {
+/* 上下分割线：handle 撑满全宽，上下各扩展 8px 便于抓取 */
+.lm_splitter.lm_vertical .lm_drag_handle {
+  left: 0 !important;
+  right: 0 !important;
+  top: -8px !important;
+  bottom: -8px !important;
+  width: auto !important;
+  height: auto !important;
+}
+/* 左右分割线：handle 撑满全高，左右各扩展 8px 便于抓取 */
+.lm_splitter.lm_horizontal .lm_drag_handle {
+  top: 0 !important;
+  bottom: 0 !important;
+  left: -8px !important;
+  right: -8px !important;
+  width: auto !important;
+  height: auto !important;
+}
+.lm_splitter:hover,
+.lm_splitter.lm_dragging {
   background: var(--accent) !important;
-  opacity: 0.5;
 }
 
 /* ── 拖拽占位/预览 ── */
@@ -87,13 +108,7 @@
   background: var(--background) !important;
 }
 
-/* ── 事件穿透 ── */
-/* golden-layout 容器设置 pointer-events: none，
-   使得底层的 VueFlow 画布可以接收拖拽/连线/点击事件。
-   面板内容区、标题栏、tab、分割线恢复 pointer-events: auto */
-.lm_goldenlayout {
-  pointer-events: none;
-}
+/* ── 事件交互 ── */
 .lm_content,
 .lm_header,
 .lm_tab,

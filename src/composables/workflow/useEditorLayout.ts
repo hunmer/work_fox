@@ -6,16 +6,34 @@ import type { WorkflowStore } from '@/stores/workflow'
 const STORAGE_KEY = 'workflow-editor-layout-default'
 
 /**
- * 默认布局：3 个面板 tab 堆叠
- * VueFlow 在 golden-layout 外层绝对定位，不在 golden-layout 内管理
+ * 默认布局：匹配原始 ResizablePanelGroup 布局
+ *
+ * 结构：
+ *   Column (垂直分割)
+ *     Row (水平分割, ~75%)        ← 工作区
+ *       node-sidebar (左, ~18%)
+ *       flow-canvas   (中, ~52%)  ← VueFlow 画布面板
+ *       right-panel   (右, ~30%)
+ *     exec-bar      (底, ~25%)    ← 执行栏
  */
 const DEFAULT_LAYOUT: LayoutConfig = {
   root: {
-    type: 'stack',
+    type: 'column',
     content: [
-      { type: 'component', componentType: 'node-sidebar', title: '节点' },
-      { type: 'component', componentType: 'right-panel', title: '属性' },
-      { type: 'component', componentType: 'exec-bar', title: '执行' },
+      {
+        type: 'row',
+        content: [
+          { type: 'component', componentType: 'node-sidebar', title: '节点', size: '18%' },
+          { type: 'component', componentType: 'flow-canvas', title: '画布', size: '52%' },
+          { type: 'component', componentType: 'right-panel', title: '属性', size: '30%' },
+        ],
+      },
+      {
+        type: 'stack',
+        content: [
+          { type: 'component', componentType: 'exec-bar', title: '执行', size: '25%' },
+        ],
+      },
     ],
   },
 }
@@ -37,6 +55,19 @@ function clearLocalStorage() {
   localStorage.removeItem(STORAGE_KEY)
 }
 
+function hasComponent(config: LayoutConfig, componentType: string): boolean {
+  function visit(item: any): boolean {
+    if (!item) return false
+    if (item.type === 'component' && item.componentType === componentType) return true
+    return Array.isArray(item.content) && item.content.some(visit)
+  }
+  return visit(config.root)
+}
+
+function ensureCanvasPanel(config: LayoutConfig): LayoutConfig {
+  return hasComponent(config, 'flow-canvas') ? config : DEFAULT_LAYOUT
+}
+
 export function useEditorLayout(workflowStore: WorkflowStore) {
   const hasCustomLayout = computed(
     () => !!workflowStore.currentWorkflow?.layoutSnapshot
@@ -46,10 +77,10 @@ export function useEditorLayout(workflowStore: WorkflowStore) {
     try {
       // 优先级：工作流级 > 全局默认 > 内置默认
       const snapshot = workflowStore.currentWorkflow?.layoutSnapshot
-      if (snapshot) return snapshot as LayoutConfig
+      if (snapshot) return ensureCanvasPanel(snapshot as LayoutConfig)
 
       const global = loadFromLocalStorage()
-      if (global) return global
+      if (global) return ensureCanvasPanel(global)
     } catch (e) {
       console.warn('[GoldenLayout] 布局加载失败，回退默认布局', e)
     }

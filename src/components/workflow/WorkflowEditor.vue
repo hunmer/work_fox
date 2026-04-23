@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import { ref, markRaw, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { VueFlow, useVueFlow, ConnectionMode } from '@vue-flow/core'
-import { Background } from '@vue-flow/background'
-import { MiniMap } from '@vue-flow/minimap'
-import { Controls } from '@vue-flow/controls'
+import { useVueFlow, ConnectionMode } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
@@ -30,13 +27,13 @@ import { provideWorkflowStore, type WorkflowStore } from '@/stores/workflow'
 import { useTabStore, type Tab } from '@/stores/tab'
 import CustomNodeWrapper from './CustomNodeWrapper.vue'
 import CustomEdge from './CustomEdge.vue'
+import WorkflowCanvas from './WorkflowCanvas.vue'
 import NodeSidebar from './NodeSidebar.vue'
 import RightPanel from './RightPanel.vue'
 import ExecutionBar from './ExecutionBar.vue'
 import WorkflowListDialog from './WorkflowListDialog.vue'
 import NodeSelectDialog from './NodeSelectDialog.vue'
 import EditorToolbar from './EditorToolbar.vue'
-import CanvasToolbar from './CanvasToolbar.vue'
 import PluginsDialog from '@/components/plugins/PluginsDialog.vue'
 import SettingsDialog from '@/components/settings/SettingsDialog.vue'
 import PluginPickerDialog from './PluginPickerDialog.vue'
@@ -49,6 +46,10 @@ import { useWorkflowFileActions } from '@/composables/workflow/useWorkflowFileAc
 import { useClipboard } from '@/composables/workflow/useClipboard'
 import { useEditorShortcuts } from '@/composables/workflow/useEditorShortcuts'
 import { useAgentSettingsStore } from '@/stores/agent-settings'
+import {
+  WORKFLOW_CANVAS_CONTEXT_KEY,
+  type WorkflowCanvasContext,
+} from './workflowCanvasContext'
 
 const props = defineProps<{
   tab: Tab
@@ -159,12 +160,36 @@ const editorLayout = ref<LayoutConfig>(loadLayout())
 
 const componentRegistry: ComponentRegistry = {
   'node-sidebar': NodeSidebar,
+  'flow-canvas': WorkflowCanvas,
   'right-panel': RightPanel,
   'exec-bar': ExecutionBar,
 }
 
+const canvasContext: WorkflowCanvasContext = {
+  flowId: FLOW_ID,
+  nodes,
+  edges,
+  nodeTypes,
+  edgeTypes,
+  connectionMode: ConnectionMode.Loose,
+  nodesDraggable: computed(() => !store.isPreview),
+  nodesConnectable: computed(() => !store.isPreview),
+  edgesUpdatable: computed(() => !store.isPreview),
+  minimapVisible: computed(() => agentSettings.minimapVisible),
+  onConnect,
+  onConnectStart,
+  onConnectEnd,
+  onDragOver,
+  onDrop,
+  onNodeClick,
+  onPaneClick,
+  onNodesInitialized: handleNodesInitialized,
+  onEdgeInsertNode,
+}
+
 const parentProvides: ProvideMap = [
   { key: WORKFLOW_STORE_KEY, value: props.store },
+  { key: WORKFLOW_CANVAS_CONTEXT_KEY, value: canvasContext },
 ]
 
 function onLayoutChange(config: LayoutConfig) {
@@ -346,43 +371,7 @@ function onConnect(params: any) {
     />
 
     <div v-if="store.currentWorkflow" class="relative flex-1 min-h-0">
-      <!-- VueFlow 画布：绝对定位底层，始终存在，不受 golden-layout 影响 -->
-      <VueFlow
-        :id="FLOW_ID"
-        :nodes="nodes"
-        :edges="edges"
-        :node-types="nodeTypes"
-        :edge-types="edgeTypes"
-        :min-zoom="0.2"
-        :max-zoom="4"
-        :connection-mode="ConnectionMode.Loose"
-        :nodes-draggable="!store.isPreview"
-        :nodes-connectable="!store.isPreview"
-        :edges-updatable="!store.isPreview"
-        class="absolute inset-0 z-0"
-        @connect="onConnect"
-        @connect-start="onConnectStart"
-        @connect-end="onConnectEnd"
-        @dragover="onDragOver"
-        @drop="onDrop"
-        @node-click="onNodeClick"
-        @nodes-initialized="handleNodesInitialized as any"
-        @pane-click="onPaneClick"
-      >
-        <Background />
-        <MiniMap v-if="agentSettings.minimapVisible" />
-        <template #edge-custom="edgeProps">
-          <CustomEdge
-            v-bind="edgeProps"
-            @insert-node="onEdgeInsertNode"
-          />
-        </template>
-        <Controls />
-      </VueFlow>
-
-      <CanvasToolbar class="absolute bottom-3 left-1/2 -translate-x-1/2 z-20" />
-
-      <!-- Golden Layout：覆盖在 VueFlow 之上 -->
+      <!-- Golden Layout：画布作为真实面板挂载，避免透明覆盖层拦截事件 -->
       <GoldenLayout
         :config="editorLayout"
         :registry="componentRegistry"

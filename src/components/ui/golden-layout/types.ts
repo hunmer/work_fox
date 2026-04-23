@@ -12,7 +12,7 @@ export type ComponentRegistry = Record<string, Component>
  * 用于将父组件的 provide/inject 传递到 golden-layout 子面板
  * （createApp 创建的子应用不继承父应用的 provide 链）
  */
-export type ProvideMap = Array<{ key: InjectionKey<unknown> | string; value: unknown }>
+export type ProvideMap = Array<{ key: InjectionKey<any> | string | symbol; value: unknown }>
 
 /**
  * 布局持久化数据结构

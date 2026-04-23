@@ -90,6 +90,7 @@ function initLayout(config: LayoutConfig) {
 
     const mountEl = document.createElement('div')
     mountEl.style.height = '100%'
+    mountEl.style.width = '100%'
     container.element.appendChild(mountEl)
 
     const app = createApp(component)
