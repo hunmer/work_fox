@@ -11,7 +11,11 @@ import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
 import '@vue-flow/node-resizer/dist/style.css'
 
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable'
+import { GoldenLayout } from '@/components/ui/golden-layout'
+import type { ComponentRegistry, ProvideMap } from '@/components/ui/golden-layout'
+import { WORKFLOW_STORE_KEY } from '@/stores/workflow'
+import { useEditorLayout } from '@/composables/workflow/useEditorLayout'
+import type { LayoutConfig } from 'golden-layout'
 import {
   Empty,
   EmptyContent,
@@ -40,7 +44,6 @@ import PluginPickerDialog from './PluginPickerDialog.vue'
 import { useConnectionDrop } from '@/composables/workflow/useConnectionDrop'
 import { useEdgeInsert } from '@/composables/workflow/useEdgeInsert'
 import { useExecutionPanel } from '@/composables/workflow/useExecutionPanel'
-import { usePanelSizes } from '@/composables/workflow/usePanelSizes'
 import { useFlowCanvas } from '@/composables/workflow/useFlowCanvas'
 import { useWorkflowFileActions } from '@/composables/workflow/useWorkflowFileActions'
 import { useClipboard } from '@/composables/workflow/useClipboard'
@@ -95,12 +98,7 @@ const {
 
 const {
   executionBarExpanded,
-  execPanelSizes,
-  execPanelRef,
-  onExecBarResize,
 } = useExecutionPanel()
-
-const { panelSizes, handlePanelResize } = usePanelSizes()
 
 const {
   nodes,
@@ -148,6 +146,39 @@ const { handleKeyDown } = useEditorShortcuts(store, {
 
 const nodeTypes = { custom: markRaw(CustomNodeWrapper) }
 const edgeTypes = { custom: markRaw(CustomEdge) }
+
+// ── Golden Layout 配置 ──────────────────────────────
+const {
+  loadLayout,
+  saveLayout,
+  resetToDefault,
+  hasCustomLayout,
+} = useEditorLayout(store)
+
+const editorLayout = ref<LayoutConfig>(loadLayout())
+
+const componentRegistry: ComponentRegistry = {
+  'node-sidebar': NodeSidebar,
+  'right-panel': RightPanel,
+  'exec-bar': ExecutionBar,
+}
+
+const parentProvides: ProvideMap = [
+  { key: WORKFLOW_STORE_KEY, value: props.store },
+]
+
+function onLayoutChange(config: LayoutConfig) {
+  saveLayout(config)
+}
+
+function handleResetLayout() {
+  editorLayout.value = resetToDefault()
+}
+
+// 标签页切换时恢复布局
+watch(() => props.tab.id, () => {
+  editorLayout.value = loadLayout()
+})
 
 function onNodeSelectDialogClose(open: boolean) {
   nodeSelectOpen.value = open
@@ -297,6 +328,7 @@ function onConnect(params: any) {
       :hide-tab-switcher="!store.currentWorkflow"
       :is-dirty="store.isDirty"
       :recent-workflows="recentWorkflows"
+      :has-custom-layout="hasCustomLayout"
       @new="openWorkflowList(true)"
       @open="openWorkflowList(false)"
       @save="saveWorkflow"
@@ -310,104 +342,55 @@ function onConnect(params: any) {
       @open-settings="settingsDialogOpen = true"
       @go-home="goHome"
       @open-recent="openRecentWorkflow"
+      @reset-layout="handleResetLayout"
     />
 
-    <ResizablePanelGroup
-      v-if="store.currentWorkflow"
-      direction="vertical"
-      @layout="onExecBarResize"
-    >
-        <ResizablePanel
-          :default-size="execPanelSizes[0]"
-          :min-size="40"
-        >
-          <ResizablePanelGroup
-            direction="horizontal"
-            class="h-full overflow-hidden"
-            @layout="handlePanelResize"
-          >
-            <ResizablePanel
-              :default-size="panelSizes[0]"
-              :min-size="10"
-              :max-size="35"
-            >
-              <NodeSidebar
-                :enabled-plugins="enabledPlugins"
-                @open-plugin-picker="pluginPickerOpen = true"
-              />
-            </ResizablePanel>
+    <div v-if="store.currentWorkflow" class="relative flex-1 min-h-0">
+      <!-- VueFlow 画布：绝对定位底层，始终存在，不受 golden-layout 影响 -->
+      <VueFlow
+        :id="FLOW_ID"
+        :nodes="nodes"
+        :edges="edges"
+        :node-types="nodeTypes"
+        :edge-types="edgeTypes"
+        :min-zoom="0.2"
+        :max-zoom="4"
+        :connection-mode="ConnectionMode.Loose"
+        :nodes-draggable="!store.isPreview"
+        :nodes-connectable="!store.isPreview"
+        :edges-updatable="!store.isPreview"
+        class="absolute inset-0 z-0"
+        @connect="onConnect"
+        @connect-start="onConnectStart"
+        @connect-end="onConnectEnd"
+        @dragover="onDragOver"
+        @drop="onDrop"
+        @node-click="onNodeClick"
+        @nodes-initialized="handleNodesInitialized as any"
+        @pane-click="onPaneClick"
+      >
+        <Background />
+        <MiniMap v-if="agentSettings.minimapVisible" />
+        <template #edge-custom="edgeProps">
+          <CustomEdge
+            v-bind="edgeProps"
+            @insert-node="onEdgeInsertNode"
+          />
+        </template>
+        <Controls />
+      </VueFlow>
 
-            <ResizableHandle with-handle />
+      <CanvasToolbar class="absolute bottom-3 left-1/2 -translate-x-1/2 z-20" />
 
-            <ResizablePanel
-              :default-size="panelSizes[1]"
-              :min-size="30"
-              class="relative"
-            >
-              <VueFlow
-                :id="FLOW_ID"
-                :nodes="nodes"
-                :edges="edges"
-                :node-types="nodeTypes"
-                :edge-types="edgeTypes"
-                :min-zoom="0.2"
-                :max-zoom="4"
-                :connection-mode="ConnectionMode.Loose"
-                :nodes-draggable="!store.isPreview"
-                :nodes-connectable="!store.isPreview"
-                :edges-updatable="!store.isPreview"
-                class="h-full"
-                @connect="onConnect"
-                @connect-start="onConnectStart"
-                @connect-end="onConnectEnd"
-                @dragover="onDragOver"
-                @drop="onDrop"
-                @node-click="onNodeClick"
-                @nodes-initialized="handleNodesInitialized as any"
-                @pane-click="onPaneClick"
-              >
-                <Background />
-                <MiniMap v-if="agentSettings.minimapVisible" />
-                <template #edge-custom="edgeProps">
-                  <CustomEdge
-                    v-bind="edgeProps"
-                    @insert-node="onEdgeInsertNode"
-                  />
-                </template>
-                <Controls />
-              </VueFlow>
-
-              <CanvasToolbar />
-            </ResizablePanel>
-
-            <ResizableHandle with-handle />
-
-            <ResizablePanel
-              :default-size="panelSizes[2]"
-              :min-size="15"
-              :max-size="50"
-            >
-              <RightPanel />
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        </ResizablePanel>
-
-        <ResizableHandle
-          v-if="executionBarExpanded"
-          with-handle
-        />
-
-        <ResizablePanel
-          ref="execPanelRef"
-          :collapsible="!executionBarExpanded"
-          :collapsed-size="4"
-          :default-size="executionBarExpanded ? execPanelSizes[1] : 4"
-          :min-size="executionBarExpanded ? 15 : 4"
-          :max-size="executionBarExpanded ? 60 : 4"
-        >
-          <ExecutionBar v-model:expanded="executionBarExpanded" />
-        </ResizablePanel>
-      </ResizablePanelGroup>
+      <!-- Golden Layout：覆盖在 VueFlow 之上 -->
+      <GoldenLayout
+        :config="editorLayout"
+        :registry="componentRegistry"
+        :provides="parentProvides"
+        class="absolute inset-0 z-10"
+        @layout-change="onLayoutChange"
+      />
+    </div>
 
     <Empty v-else class="flex-1">
       <EmptyHeader>
