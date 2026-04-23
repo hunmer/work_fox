@@ -1,0 +1,26 @@
+{
+  "id": "workfox.aliyun-ai",
+  "name": "阿里云AI生图",
+  "version": "1.0.0",
+  "description": "阿里云百炼AI图片生成与编辑，支持千问文生图、图像编辑、万相文生图",
+  "author": { "name": "workfox" },
+  "tags": ["AI", "图片生成", "图片编辑", "阿里云", "百炼", "千问", "万相"],
+  "type": "server",
+  "hasWorkflow": true,
+  "hasView": false,
+  "entries": {
+    "server": "main.js",
+    "workflow": "workflow.js"
+  },
+  "config": [
+    {
+      "key": "apiKey",
+      "label": "API Key",
+      "desc": "阿里云百炼 DashScope API Key（北京地域）",
+      "type": "string",
+      "value": "",
+      "placeholder": "sk-xxx",
+      "required": true
+    }
+  ]
+}
