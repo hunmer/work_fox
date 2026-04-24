@@ -153,6 +153,7 @@ onBeforeUnmount(() => {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   overflow: hidden;
   user-select: none;
+  z-index: 999999;
 }
 
 .header {

@@ -3,6 +3,12 @@ import { BackendAIProviderStore } from '../storage/ai-provider-store'
 import { BackendChatHistoryStore } from '../storage/chat-history-store'
 import { BackendSettingsStore } from '../storage/settings-store'
 import type { BackendPluginRegistry } from '../plugins/plugin-registry'
+import {
+  SHORTCUT_GROUPS,
+  SHORTCUT_ACTIONS,
+  getMergedBindings,
+  type ShortcutBinding,
+} from '../../shared/shortcut-types'
 
 export interface AppServices {
   aiProviderStore: BackendAIProviderStore
@@ -101,45 +107,79 @@ export function registerAppChannels(router: WSRouter, services: AppServices): vo
   router.register('agentSettings:set', ({ settings }) => agentSettingsStore.set(settings))
 
   // --- Shortcuts ---
-  router.register('shortcut:list', async () => {
+  async function getStoredBindings(): Promise<ShortcutBinding[]> {
     const data: any = await shortcutStore.get()
-    if (!data || typeof data !== 'object') {
-      return { groups: [], shortcuts: [] }
-    }
-    return data
+    return Array.isArray(data?.shortcuts) ? data.shortcuts : []
+  }
+
+  async function setStoredBindings(bindings: ShortcutBinding[]): Promise<void> {
+    await shortcutStore.set({ shortcuts: bindings })
+  }
+
+  router.register('shortcut:list', async () => {
+    const stored = await getStoredBindings()
+    const bindings = getMergedBindings(stored)
+    const shortcuts = bindings.map(b => {
+      const action = SHORTCUT_ACTIONS.find(a => a.id === b.id)
+      return {
+        ...b,
+        label: action?.label ?? b.id,
+        supportsGlobal: action?.supportsGlobal ?? false,
+        defaultAccelerator: action?.defaultAccelerator ?? '',
+        group: action?.group ?? '',
+        electronOnly: action?.electronOnly ?? false,
+      }
+    })
+    return { groups: SHORTCUT_GROUPS, shortcuts }
   })
   router.register('shortcut:update', async ({ id, accelerator, isGlobal, enabled }) => {
-    const data: any = await shortcutStore.get()
-    const shortcuts: any[] = data?.shortcuts ?? []
-    const idx = shortcuts.findIndex((s: any) => s.id === id)
-    if (idx !== -1) {
-      shortcuts[idx] = { ...shortcuts[idx], accelerator, isGlobal, ...(enabled !== undefined ? { enabled } : {}) }
+    let stored = await getStoredBindings()
+    const idx = stored.findIndex(s => s.id === id)
+    const binding: ShortcutBinding = {
+      id,
+      accelerator,
+      global: isGlobal,
+      enabled: enabled ?? (idx !== -1 ? stored[idx].enabled : true),
     }
-    await shortcutStore.set(data)
-    return undefined
+    if (idx !== -1) {
+      stored[idx] = { ...stored[idx], ...binding }
+    } else {
+      stored.push(binding)
+    }
+    await setStoredBindings(stored)
+
+    // conflict check
+    const merged = getMergedBindings(stored)
+    const conflict = merged.find(b => b.id !== id && b.accelerator === accelerator && b.enabled)
+    if (conflict) {
+      const conflictAction = SHORTCUT_ACTIONS.find(a => a.id === conflict.id)
+      return { success: false, error: `快捷键已被「${conflictAction?.label}」占用`, conflictId: conflict.id }
+    }
+    return { success: true }
   })
   router.register('shortcut:toggle', async ({ id, enabled }) => {
-    const data: any = await shortcutStore.get()
-    const shortcuts: any[] = data?.shortcuts ?? []
-    const idx = shortcuts.findIndex((s: any) => s.id === id)
+    const stored = await getStoredBindings()
+    const idx = stored.findIndex(s => s.id === id)
     if (idx !== -1) {
-      shortcuts[idx] = { ...shortcuts[idx], enabled }
+      stored[idx] = { ...stored[idx], enabled }
+    } else {
+      const action = SHORTCUT_ACTIONS.find(a => a.id === id)
+      if (action) stored.push({ id, accelerator: action.defaultAccelerator, global: false, enabled })
     }
-    await shortcutStore.set(data)
-    return undefined
+    await setStoredBindings(stored)
+    return { success: true }
   })
   router.register('shortcut:clear', async ({ id }) => {
-    const data: any = await shortcutStore.get()
-    const shortcuts: any[] = data?.shortcuts ?? []
-    const idx = shortcuts.findIndex((s: any) => s.id === id)
+    const stored = await getStoredBindings()
+    const idx = stored.findIndex(s => s.id === id)
     if (idx !== -1) {
-      shortcuts[idx] = { ...shortcuts[idx], accelerator: '' }
+      stored[idx] = { ...stored[idx], accelerator: '' }
     }
-    await shortcutStore.set(data)
+    await setStoredBindings(stored)
     return undefined
   })
   router.register('shortcut:reset', async () => {
-    await shortcutStore.set({ groups: [], shortcuts: [] })
+    await setStoredBindings([])
     return undefined
   })
 

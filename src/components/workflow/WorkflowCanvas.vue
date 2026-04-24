@@ -49,6 +49,6 @@ if (!canvas) {
       <Controls />
     </VueFlow>
 
-    <CanvasToolbar class="absolute bottom-3 left-1/2 -translate-x-1/2 z-20" />
+    <CanvasToolbar class="absolute bottom-10 left-1/2 -translate-x-1/2 z-20" />
   </div>
 </template>

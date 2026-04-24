@@ -11,6 +11,7 @@ export interface ShortcutItem {
   supportsGlobal: boolean
   defaultAccelerator: string
   group: string
+  electronOnly?: boolean
 }
 
 export interface ShortcutGroup {

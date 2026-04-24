@@ -6,12 +6,15 @@ import WsMessageMonitor from '@/components/utils/WsMessageMonitor.vue'
 import { useTabStore } from '@/stores/tab'
 import { usePluginStore } from '@/stores/plugin'
 import { useAIProviderStore } from '@/stores/ai-provider'
+import { useShortcutActions } from '@/composables/useShortcutActions'
 
 const tabStore = useTabStore()
 const pluginStore = usePluginStore()
 const providerStore = useAIProviderStore()
 
 const commandPaletteOpen = ref(false)
+
+useShortcutActions()
 
 onMounted(async () => {
   await pluginStore.init()

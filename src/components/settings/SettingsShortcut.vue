@@ -21,6 +21,7 @@ import { useNotification } from '@/composables/useNotification'
 const notify = useNotification()
 
 const store = useShortcutStore()
+const isElectronRuntime = navigator.userAgent.includes('Electron')
 
 const activeTab = ref(store.groups[0]?.key ?? 'tab')
 
@@ -162,6 +163,14 @@ async function onGlobalChange(id: string, value: boolean) {
   }
 }
 
+function filteredShortcutsByGroup(group: string) {
+  return store.getShortcutsByGroup(group).filter(s => isElectronRuntime || !s.electronOnly)
+}
+
+function filteredGroups() {
+  return store.groups.filter(g => filteredShortcutsByGroup(g.key).length > 0)
+}
+
 function startRecording(id: string) {
   recordingId.value = id
   recordedKeys.value = []
@@ -190,7 +199,7 @@ onUnmounted(() => {
     <Tabs v-model="activeTab">
       <TabsList class="w-full justify-start h-8 p-0.5 bg-muted/50">
         <TabsTrigger
-          v-for="group in store.groups"
+          v-for="group in filteredGroups()"
           :key="group.key"
           :value="group.key"
           class="text-xs px-3 py-1 data-[state=active]:bg-background"
@@ -200,14 +209,14 @@ onUnmounted(() => {
       </TabsList>
 
       <TabsContent
-        v-for="group in store.groups"
+        v-for="group in filteredGroups()"
         :key="group.key"
         :value="group.key"
         class="mt-2"
       >
         <div class="flex flex-col gap-0.5">
           <template
-            v-for="(item, i) in store.getShortcutsByGroup(group.key)"
+            v-for="(item, i) in filteredShortcutsByGroup(group.key)"
             :key="item.id"
           >
             <Separator
@@ -228,7 +237,7 @@ onUnmounted(() => {
 
               <div class="flex items-center gap-3 ml-auto">
                 <label
-                  v-if="item.supportsGlobal"
+                  v-if="item.supportsGlobal && isElectronRuntime"
                   class="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0"
                   :class="!item.enabled ? 'pointer-events-none' : 'cursor-pointer'"
                 >

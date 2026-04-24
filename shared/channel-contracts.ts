@@ -278,8 +278,8 @@ export interface BackendChannelMap {
 
   // --- Shortcut ---
   'shortcut:list': ChannelContract<EmptyRequest, { groups: any[]; shortcuts: any[] }>
-  'shortcut:update': ChannelContract<{ id: string; accelerator: string; isGlobal: boolean; enabled?: boolean }, EmptyResponse>
-  'shortcut:toggle': ChannelContract<{ id: string; enabled: boolean }, EmptyResponse>
+  'shortcut:update': ChannelContract<{ id: string; accelerator: string; isGlobal: boolean; enabled?: boolean }, { success: boolean; error?: string; conflictId?: string }>
+  'shortcut:toggle': ChannelContract<{ id: string; enabled: boolean }, { success: boolean }>
   'shortcut:clear': ChannelContract<{ id: string }, EmptyResponse>
   'shortcut:reset': ChannelContract<EmptyRequest, EmptyResponse>
 

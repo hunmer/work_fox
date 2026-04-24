@@ -33,7 +33,17 @@ const DEFAULT_LAYOUT: LayoutConfig = {
         content: [
           { type: 'component', componentType: 'node-sidebar', title: '节点', size: '18%' },
           { type: 'component', componentType: 'flow-canvas', title: '画布', size: '52%' },
-          { type: 'component', componentType: 'right-panel', title: '属性', size: '30%' },
+          {
+            type: 'stack',
+            title: '属性',
+            size: '30%',
+            content: [
+              { type: 'component', componentType: 'right-properties', title: '节点属性' },
+              { type: 'component', componentType: 'right-version', title: '版本控制' },
+              { type: 'component', componentType: 'right-operations', title: '操作历史' },
+              { type: 'component', componentType: 'right-assistant', title: 'AI 助手' },
+            ],
+          },
         ],
       },
       {

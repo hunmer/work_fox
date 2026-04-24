@@ -39,6 +39,10 @@ import CustomEdge from './CustomEdge.vue'
 import WorkflowCanvas from './WorkflowCanvas.vue'
 import NodeSidebar from './NodeSidebar.vue'
 import RightPanel from './RightPanel.vue'
+import RightProperties from './RightProperties.vue'
+import RightVersion from './RightVersion.vue'
+import RightOperations from './RightOperations.vue'
+import RightAssistant from './RightAssistant.vue'
 import ExecutionBar from './ExecutionBar.vue'
 import WorkflowListDialog from './WorkflowListDialog.vue'
 import NodeSelectDialog from './NodeSelectDialog.vue'
@@ -171,11 +175,35 @@ const {
 const editorLayout = ref<LayoutConfig>(loadLayout())
 const execBarExpanded = ref(false)
 const layoutKey = ref(0) // 递增时强制重建 GoldenLayout，确保尺寸完全重置
+const goldenLayoutRef = ref<InstanceType<typeof GoldenLayout> | null>(null)
+
+const RIGHT_TAB_MAP: Record<string, string> = {
+  properties: 'right-properties',
+  version: 'right-version',
+  operations: 'right-operations',
+  'ai-assistant': 'right-assistant',
+}
+
+function activateRightPanelTab(tab: string) {
+  const gl = goldenLayoutRef.value?.getLayout()
+  if (!gl) return
+  const componentType = RIGHT_TAB_MAP[tab]
+  if (!componentType) return
+  try {
+    const items = gl.getAllContentItems?.() ?? []
+    const target = items.find((item: any) => item.componentType === componentType)
+    target?.select?.()
+  } catch { /* layout may not be ready */ }
+}
 
 const componentRegistry: ComponentRegistry = {
   'node-sidebar': NodeSidebar,
   'flow-canvas': WorkflowCanvas,
   'right-panel': RightPanel,
+  'right-properties': RightProperties,
+  'right-version': RightVersion,
+  'right-operations': RightOperations,
+  'right-assistant': RightAssistant,
   'exec-bar': ExecutionBar,
 }
 
@@ -306,6 +334,7 @@ function onNodeClick({ node, event }: any) {
   }
   store.selectedEmbeddedNode = null
   store.rightPanelTab = 'properties'
+  activateRightPanelTab('properties')
 }
 
 function onPaneClick() {
@@ -511,6 +540,7 @@ function onConnect(params: any) {
     >
       <!-- Golden Layout：画布作为真实面板挂载，避免透明覆盖层拦截事件 -->
       <GoldenLayout
+        ref="goldenLayoutRef"
         :key="layoutKey"
         :config="editorLayout"
         :registry="componentRegistry"
