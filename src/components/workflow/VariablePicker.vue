@@ -215,48 +215,11 @@ function handleSelectLoopField(_nodeId: string, fieldPath: string) {
       align="end"
       class="w-56"
     >
-      <!-- 节点属性 sub-menu -->
-      <DropdownMenuSub>
-        <DropdownMenuSubTrigger class="text-xs font-medium">
-          <span>节点属性</span>
-        </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent class="w-56">
-          <template v-if="otherNodes.length === 0">
-            <div class="px-2 py-1.5 text-xs text-muted-foreground">
-              画布上没有其他节点
-            </div>
-          </template>
-          <template v-for="node in otherNodes" :key="node.id">
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger class="text-xs">
-                <component
-                  :is="getNodeIcon(node.type)"
-                  v-if="getNodeIcon(node.type)"
-                  class="w-3.5 h-3.5 mr-1.5 shrink-0 text-muted-foreground"
-                />
-                <span class="truncate">{{ getNodeLabel(node) }}</span>
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent class="min-w-[180px]">
-                <template v-if="getNodeOutputs(node).length > 0">
-                  <VariableFieldMenu
-                    :fields="getNodeOutputs(node)"
-                    :node-id="node.id"
-                    @select="handleSelectField"
-                  />
-                </template>
-                <div v-else class="px-2 py-1.5 text-xs text-muted-foreground">
-                  无输出字段
-                </div>
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-          </template>
-        </DropdownMenuSubContent>
-      </DropdownMenuSub>
 
-      <!-- 输入字段 sub-menu -->
+    <!-- 节点输入 sub-menu -->
       <DropdownMenuSub>
         <DropdownMenuSubTrigger class="text-xs font-medium">
-          <span>输入字段</span>
+          <span>节点输入</span>
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent class="w-56">
           <template v-if="otherNodes.length === 0">
@@ -291,6 +254,45 @@ function handleSelectLoopField(_nodeId: string, fieldPath: string) {
         </DropdownMenuSubContent>
       </DropdownMenuSub>
 
+      <!-- 节点输出 sub-menu -->
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger class="text-xs font-medium">
+          <span>节点输出</span>
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent class="w-56">
+          <template v-if="otherNodes.length === 0">
+            <div class="px-2 py-1.5 text-xs text-muted-foreground">
+              画布上没有其他节点
+            </div>
+          </template>
+          <template v-for="node in otherNodes" :key="node.id">
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger class="text-xs">
+                <component
+                  :is="getNodeIcon(node.type)"
+                  v-if="getNodeIcon(node.type)"
+                  class="w-3.5 h-3.5 mr-1.5 shrink-0 text-muted-foreground"
+                />
+                <span class="truncate">{{ getNodeLabel(node) }}</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent class="min-w-[180px]">
+                <template v-if="getNodeOutputs(node).length > 0">
+                  <VariableFieldMenu
+                    :fields="getNodeOutputs(node)"
+                    :node-id="node.id"
+                    @select="handleSelectField"
+                  />
+                </template>
+                <div v-else class="px-2 py-1.5 text-xs text-muted-foreground">
+                  无输出字段
+                </div>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </template>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+
+      
       <!-- 循环体变量 sub-menu -->
       <DropdownMenuSub v-if="loopBodyNodes.length > 0">
         <DropdownMenuSubTrigger class="text-xs font-medium">

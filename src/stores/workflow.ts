@@ -305,6 +305,7 @@ function createCrudActions(
     if (existing) {
       await api().workflow.update(plain.id, { ...plain, updatedAt: now })
       Object.assign(existing, { ...plain, updatedAt: now })
+      if (currentWorkflow.value?.id === plain.id) currentWorkflow.value.updatedAt = now
     } else {
       const created = await api().workflow.create({ ...plain, createdAt: now, updatedAt: now })
       workflows.value.push(created)
@@ -792,8 +793,10 @@ function createExecutionActions(
   executionContext: Ref<Record<string, any>>,
   execLogMgr: ReturnType<typeof createExecutionLogManager>,
   loadData: () => Promise<void>,
+  saveWorkflow: (workflow: Workflow) => Promise<void>,
 ) {
   let currentExecutionId: string | null = null
+  let startingExecution = false
   const backendConnectionState = ref<'idle' | 'connected' | 'reconnecting' | 'error'>('idle')
   const backendReconnectAttempt = ref(0)
   const backendLastError = ref<string | null>(null)
@@ -943,15 +946,25 @@ function createExecutionActions(
   })
 
   async function startExecution(): Promise<{ executionId: string | null; status: EngineStatus }> {
-    if (!currentWorkflow.value) {
+    if (!currentWorkflow.value || startingExecution) {
       return { executionId: null, status: executionStatus.value }
     }
 
-    backendLastError.value = null
-    const result = await createWorkflowDomainApi().workflow.execute(currentWorkflow.value.id)
-    currentExecutionId = result.executionId
-    executionStatus.value = result.status as EngineStatus
-    return { executionId: currentExecutionId, status: executionStatus.value }
+    startingExecution = true
+    try {
+      backendLastError.value = null
+      await saveWorkflow(currentWorkflow.value)
+      const result = await createWorkflowDomainApi().workflow.execute(currentWorkflow.value.id)
+      currentExecutionId = result.executionId
+      executionStatus.value = result.status as EngineStatus
+      return { executionId: currentExecutionId, status: executionStatus.value }
+    } catch (error) {
+      backendLastError.value = error instanceof Error ? error.message : String(error)
+      executionStatus.value = 'error'
+      return { executionId: currentExecutionId, status: executionStatus.value }
+    } finally {
+      startingExecution = false
+    }
   }
 
   function pauseExecution(): void {
@@ -1132,6 +1145,7 @@ export function createWorkflowStore(tabId: string) {
       executionContext,
       execLogMgr,
       crudActions.loadData,
+      crudActions.saveWorkflow,
     )
     const debugActions = createDebugActions(currentWorkflow, executionContext)
     const aiActions = createAIActions(currentWorkflow, undoRedo)
