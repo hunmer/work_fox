@@ -566,6 +566,12 @@ function confirmImport() {
                         </SelectItem>
                       </SelectContent>
                     </Select>
+                    <OutputFieldEditor
+                      v-else-if="field.type === 'output_fields'"
+                      :model-value="Array.isArray(item[field.key]) ? item[field.key] : []"
+                      :exclude-node-id="selectedNodeId"
+                      @update:model-value="updateArrayItemField(prop.key, idx, field.key, $event)"
+                    />
                   </div>
                 </div>
                 <Button

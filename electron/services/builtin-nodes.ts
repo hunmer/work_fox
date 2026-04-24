@@ -76,6 +76,46 @@ const builtinNodes: PluginWorkflowNode[] = [
     ],
   },
   {
+    type: 'variable_aggregate',
+    label: '变量聚合',
+    category: '流程控制',
+    icon: 'Combine',
+    description: '对多个分支的输出变量进行分组聚合，返回每组第一个非空值。',
+    properties: [
+      {
+        key: 'strategy',
+        label: '聚合策略',
+        type: 'select',
+        default: 'first_non_empty',
+        required: true,
+        options: [
+          { label: '返回每个分组中第一个非空的值', value: 'first_non_empty' },
+        ],
+        tooltip: '对同一组内的变量实施相应聚合策略。',
+      },
+      {
+        key: 'groups',
+        label: '变量分组',
+        type: 'array',
+        default: [],
+        required: true,
+        itemTemplate: { key: '', variables: [] },
+        fields: [
+          { key: 'key', label: '输出字段名', type: 'text', required: true, placeholder: 'result' },
+          {
+            key: 'variables',
+            label: '变量列表',
+            type: 'output_fields',
+            required: true,
+            tooltip: '同一分组下可添加多个变量，类型默认以第一个变量为主。',
+          },
+        ],
+        tooltip: '可创建多个分组，每个分组输出一个聚合后的变量。',
+      },
+    ] as any,
+    outputs: [{ key: 'result', type: 'object' }],
+  },
+  {
     type: LOOP_NODE_TYPE,
     label: '循环节点',
     category: '流程控制',

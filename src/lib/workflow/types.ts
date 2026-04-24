@@ -107,7 +107,7 @@ export interface OutputField {
 export interface ArrayFieldItem {
   key: string
   label: string
-  type: 'text' | 'number' | 'select' | 'checkbox'
+  type: 'text' | 'number' | 'select' | 'checkbox' | 'output_fields'
   required?: boolean
   default?: any
   options?: { label: string; value: string }[]

@@ -443,6 +443,8 @@ export class WorkflowEngine {
         return this.executeToast(resolvedData.message || '', resolvedData.type || 'info')
       case 'switch':
         return this.executeSwitch(resolvedData.conditions || [])
+      case 'variable_aggregate':
+        return this.executeVariableAggregate(resolvedData.groups || [])
       case LOOP_NODE_TYPE:
         return this.executeLoopNode(node, resolvedData)
       case 'agent_run':
@@ -471,6 +473,33 @@ export class WorkflowEngine {
 
   private async executeAgentRun(data: Record<string, any>): Promise<any> {
     return executeAgentRunTask(data, this.runtimeConfig)
+  }
+
+  private executeVariableAggregate(groups: any[]): Record<string, any> {
+    if (!Array.isArray(groups)) return {}
+
+    return groups.reduce<Record<string, any>>((result, group) => {
+      const key = typeof group?.key === 'string' ? group.key.trim() : ''
+      if (!key) return result
+      const variables = Array.isArray(group.variables) ? group.variables : []
+      result[key] = this.findFirstNonEmptyVariableValue(variables)
+      return result
+    }, {})
+  }
+
+  private findFirstNonEmptyVariableValue(variables: any[]): any {
+    for (const variable of variables) {
+      const value = variable?.value
+      if (!this.isEmptyAggregateValue(value)) return value
+    }
+    return ''
+  }
+
+  private isEmptyAggregateValue(value: any): boolean {
+    if (value === null || value === undefined || value === '') return true
+    if (Array.isArray(value)) return value.length === 0
+    if (typeof value === 'object') return Object.keys(value).length === 0
+    return false
   }
 
   private executeSwitch(conditions: ConditionItem[]): any {

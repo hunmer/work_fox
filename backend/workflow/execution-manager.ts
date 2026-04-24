@@ -475,6 +475,8 @@ export class BackendWorkflowExecutionManager {
         }
       case 'switch':
         return this.executeSwitch(session, resolvedData.conditions || [])
+      case 'variable_aggregate':
+        return this.executeVariableAggregate(resolvedData.groups || [])
       case LOOP_NODE_TYPE:
         return this.executeLoopNode(session, node, resolvedData, appendNodeLog)
       case 'agent_run':
@@ -497,6 +499,33 @@ export class BackendWorkflowExecutionManager {
         }
         throw new Error(`节点类型 ${node.type} 当前 backend 不支持`)
     }
+  }
+
+  private executeVariableAggregate(groups: any[]): Record<string, any> {
+    if (!Array.isArray(groups)) return {}
+
+    return groups.reduce<Record<string, any>>((result, group) => {
+      const key = typeof group?.key === 'string' ? group.key.trim() : ''
+      if (!key) return result
+      const variables = Array.isArray(group.variables) ? group.variables : []
+      result[key] = this.findFirstNonEmptyVariableValue(variables)
+      return result
+    }, {})
+  }
+
+  private findFirstNonEmptyVariableValue(variables: any[]): any {
+    for (const variable of variables) {
+      const value = variable?.value
+      if (!this.isEmptyAggregateValue(value)) return value
+    }
+    return ''
+  }
+
+  private isEmptyAggregateValue(value: any): boolean {
+    if (value === null || value === undefined || value === '') return true
+    if (Array.isArray(value)) return value.length === 0
+    if (typeof value === 'object') return Object.keys(value).length === 0
+    return false
   }
 
   private async executeAgentRun(
