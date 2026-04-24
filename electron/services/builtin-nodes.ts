@@ -176,7 +176,7 @@ export const builtinNodeDefinitions: PluginWorkflowNode[] = [
       target: true,
       source: false,
     } as any,
-    customViewMinSize: { width: 520, height: 260 } as any,
+    customViewMinSize: { width: 520, height: 260 },
     manualCreate: false as any,
   },
   // AI

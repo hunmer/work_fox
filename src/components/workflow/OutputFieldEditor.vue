@@ -11,10 +11,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Plus, Trash2 } from 'lucide-vue-next'
+import VariablePicker from './VariablePicker.vue'
 
 const props = defineProps<{
   modelValue: OutputField[]
   depth?: number
+  excludeNodeId?: string
 }>()
 
 const emit = defineEmits<{
@@ -74,6 +76,11 @@ function addChildField(index: number) {
   const children = [...(field.children ?? []), createEmptyField()]
   updateChildren(index, children)
 }
+
+function insertVariable(index: number, variablePath: string) {
+  const current = fields.value[index]?.value ?? ''
+  updateField(index, { value: `${current}${variablePath}` })
+}
 </script>
 
 <template>
@@ -130,13 +137,22 @@ function addChildField(index: number) {
         </Select>
 
         <!-- 值 -->
-        <Input
+        <div
           v-if="field.type !== 'object'"
-          :model-value="field.value ?? ''"
-          placeholder="默认值"
-          class="h-6 text-[11px]"
-          @update:model-value="updateField(index, { value: $event })"
-        />
+          class="flex gap-1"
+        >
+          <Input
+            :model-value="field.value ?? ''"
+            placeholder="默认值"
+            class="h-6 text-[11px] flex-1"
+            @update:model-value="updateField(index, { value: $event })"
+          />
+          <VariablePicker
+            v-if="excludeNodeId"
+            :exclude-node-id="excludeNodeId"
+            @select="insertVariable(index, $event)"
+          />
+        </div>
         <span
           v-else
           class="h-6"
@@ -160,6 +176,7 @@ function addChildField(index: number) {
         v-if="field.type === 'object'"
         :model-value="field.children ?? []"
         :depth="(depth ?? 0) + 1"
+        :exclude-node-id="excludeNodeId"
         @update:model-value="updateChildren(index, $event)"
       />
     </div>

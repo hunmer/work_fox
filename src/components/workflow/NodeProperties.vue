@@ -555,6 +555,7 @@ function confirmImport() {
               <OutputFieldEditor
                 v-else-if="prop.type === 'output_fields'"
                 :model-value="getFieldValue(prop.key) || []"
+                :exclude-node-id="selectedNodeId"
                 @update:model-value="setFieldValue(prop.key, $event)"
               />
             </template>
@@ -611,7 +612,10 @@ function confirmImport() {
           v-if="outputsExpanded"
           class="px-3 pb-3 max-h-[40vh] overflow-y-auto"
         >
-          <OutputFieldEditor v-model="nodeOutputs" />
+          <OutputFieldEditor
+            v-model="nodeOutputs"
+            :exclude-node-id="selectedNodeId"
+          />
         </div>
       </div>
     </template>

@@ -229,6 +229,8 @@ export interface PluginWorkflowNode {
     value?: string
     children?: any[]
   }>
+  customView?: unknown
+  customViewMinSize?: { width?: number; height?: number }
   manualCreate?: boolean
   compound?: {
     rootRole?: string
