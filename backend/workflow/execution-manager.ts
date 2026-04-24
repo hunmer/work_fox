@@ -477,6 +477,8 @@ export class BackendWorkflowExecutionManager {
         return this.executeSwitch(session, resolvedData.conditions || [])
       case 'variable_aggregate':
         return this.executeVariableAggregate(resolvedData.groups || [])
+      case 'sub_workflow':
+        return this.executeSubWorkflow(session, resolvedData, appendNodeLog)
       case LOOP_NODE_TYPE:
         return this.executeLoopNode(session, node, resolvedData, appendNodeLog)
       case 'agent_run':
@@ -689,6 +691,37 @@ export class BackendWorkflowExecutionManager {
     return { ...output, items }
   }
 
+  private async executeSubWorkflow(
+    session: ExecutionSession,
+    resolvedData: Record<string, any>,
+    appendNodeLog: (level: ExecutionLogEntry['level'], message: string) => void,
+  ): Promise<unknown> {
+    const workflowId = typeof resolvedData.workflowId === 'string' ? resolvedData.workflowId : ''
+    if (!workflowId) {
+      throw new Error('sub_workflow node is missing workflowId')
+    }
+    if (workflowId === session.workflow.id) {
+      throw new Error('sub_workflow cannot call the current workflow')
+    }
+
+    const workflow = this.deps.workflowStore.getWorkflow(workflowId)
+    if (!workflow) {
+      throw new Error(`sub_workflow target not found: ${workflowId}`)
+    }
+
+    appendNodeLog('info', `Start sub_workflow: ${workflow.name}`)
+    const result = await this.executeEmbeddedWorkflow(
+      session,
+      {
+        nodes: clone(workflow.nodes),
+        edges: clone(workflow.edges),
+      },
+      this.buildOutputObject(resolvedData.inputFields) ?? {},
+    )
+    appendNodeLog('info', `Completed sub_workflow: ${workflow.name}`)
+    return result
+  }
+
   private resolveLoopIterations(loopType: string, resolvedData: Record<string, any>): { count: number; items: unknown[] } {
     if (loopType === 'array') {
       const items = Array.isArray(resolvedData.arrayPath) ? resolvedData.arrayPath : []
@@ -780,6 +813,7 @@ export class BackendWorkflowExecutionManager {
   private async executeEmbeddedWorkflow(
     session: ExecutionSession,
     workflow: { nodes: WorkflowNode[]; edges: WorkflowEdge[] },
+    input?: Record<string, any>,
   ): Promise<unknown> {
     const nodeMap = new Map(workflow.nodes.map((node) => [node.id, node]))
     const adjacency = new Map<string, WorkflowEdge[]>()
@@ -793,6 +827,13 @@ export class BackendWorkflowExecutionManager {
     const startNode = workflow.nodes.find((node) => node.type === 'start')
     if (!startNode) {
       throw new Error('循环体子工作流缺少开始节点')
+    }
+
+    if (input && Object.keys(input).length > 0) {
+      if (!session.context.__data__) session.context.__data__ = {}
+      session.context.__data__[startNode.id] = input
+      if (!session.context.__inputs__) session.context.__inputs__ = {}
+      session.context.__inputs__[startNode.id] = input
     }
 
     const visited = new Set<string>([startNode.id])

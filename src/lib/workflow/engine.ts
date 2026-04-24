@@ -445,6 +445,8 @@ export class WorkflowEngine {
         return this.executeSwitch(resolvedData.conditions || [])
       case 'variable_aggregate':
         return this.executeVariableAggregate(resolvedData.groups || [])
+      case 'sub_workflow':
+        return this.executeSubWorkflow(resolvedData)
       case LOOP_NODE_TYPE:
         return this.executeLoopNode(node, resolvedData)
       case 'agent_run':
@@ -588,6 +590,29 @@ export class WorkflowEngine {
     return this.executeScopedLoopBody(bodyNode)
   }
 
+  private async executeSubWorkflow(resolvedData: Record<string, any>): Promise<unknown> {
+    const workflowId = typeof resolvedData.workflowId === 'string' ? resolvedData.workflowId : ''
+    if (!workflowId) {
+      throw new Error('sub_workflow node is missing workflowId')
+    }
+    if (workflowId === this.runtimeConfig?.workflowId) {
+      throw new Error('sub_workflow cannot call the current workflow')
+    }
+
+    const workflow = await workflowBackendApi.get(workflowId)
+    if (!workflow) {
+      throw new Error(`sub_workflow target not found: ${workflowId}`)
+    }
+
+    return this.executeEmbeddedWorkflow(
+      {
+        nodes: JSON.parse(JSON.stringify(workflow.nodes)),
+        edges: JSON.parse(JSON.stringify(workflow.edges)),
+      },
+      this.buildOutputObject(resolvedData.inputFields) ?? {},
+    )
+  }
+
   private async executeScopedLoopBody(bodyNode: WorkflowNode): Promise<unknown> {
     const scopeNodes = getNodesForExecutionScope(this.nodes, bodyNode.id)
     const scopeNodeIds = new Set(scopeNodes.map((node) => node.id))
@@ -630,6 +655,7 @@ export class WorkflowEngine {
 
   private async executeEmbeddedWorkflow(
     workflow: { nodes: WorkflowNode[]; edges: WorkflowEdge[] },
+    input?: Record<string, any>,
   ): Promise<unknown> {
     const nodeMap = new Map(workflow.nodes.map((node) => [node.id, node]))
     const adjacency = new Map<string, WorkflowEdge[]>()
@@ -643,6 +669,13 @@ export class WorkflowEngine {
     const startNode = workflow.nodes.find((node) => node.type === 'start')
     if (!startNode) {
       throw new Error('循环体子工作流缺少开始节点')
+    }
+
+    if (input && Object.keys(input).length > 0) {
+      if (!this.context.__data__) this.context.__data__ = {}
+      this.context.__data__[startNode.id] = input
+      if (!this.context.__inputs__) this.context.__inputs__ = {}
+      this.context.__inputs__[startNode.id] = input
     }
 
     const visited = new Set<string>([startNode.id])

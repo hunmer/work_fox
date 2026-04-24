@@ -172,7 +172,7 @@ const nodeInputFields = computed<OutputField[]>({
 })
 
 const allowInputFields = computed(() => !!definition.value?.allowInputFields)
-const inputFieldsTitle = computed(() => store.selectedNode?.type === 'sub_workflow' ? '??????' : '????')
+const inputFieldsTitle = computed(() => store.selectedNode?.type === 'sub_workflow' ? '开始节点输入' : '输入字段')
 
 async function handleDebug() {
   const nodeId = store.effectiveSelectedNodeId
