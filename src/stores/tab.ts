@@ -79,14 +79,15 @@ export const useTabStore = defineStore('tabs', () => {
 
     const reusable = workflowId ? getReusableEmptyActiveTab() : null
     if (reusable) {
-      const existingStore = reusable.store
+      const { tab, store: existingStore } = reusable
+      tab.workflowId = workflowId
       void existingStore.loadData().then(() => {
         const wf = existingStore.workflows.find(w => w.id === workflowId)
         if (!wf) return
         existingStore.currentWorkflow = JSON.parse(JSON.stringify(wf))
-        updateTabWorkflow(reusable.tab.id, wf.id, wf.name)
+        updateTabWorkflow(tab.id, wf.id, wf.name)
       })
-      return reusable.tab.id
+      return tab.id
     }
 
     const id = crypto.randomUUID()

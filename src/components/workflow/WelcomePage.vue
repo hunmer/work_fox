@@ -1,5 +1,9 @@
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import { Plus, FolderOpen, Import, Clock } from 'lucide-vue-next'
+import { createWorkflowStore, provideWorkflowStore } from '@/stores/workflow'
+import type { Workflow } from '@/lib/workflow/types'
+import WorkflowListDialog from './WorkflowListDialog.vue'
 
 interface RecentWorkflow {
   id: string
@@ -11,11 +15,26 @@ defineProps<{
   recentWorkflows?: RecentWorkflow[]
 }>()
 
-defineEmits<{
-  'new': []
-  open: [workflowId?: string]
+const emit = defineEmits<{
+  open: [workflowId: string]
+  select: [workflow: Workflow]
   import: []
 }>()
+
+const dialogStore = createWorkflowStore('welcome-dialog')
+provideWorkflowStore(dialogStore)
+
+const listDialogOpen = ref(false)
+const listDialogCreateMode = ref(false)
+
+onMounted(() => {
+  dialogStore.loadData()
+})
+
+function onDialogSelect(workflow: Workflow | null) {
+  if (!workflow) return
+  emit('select', workflow)
+}
 
 function formatTime(ts: number) {
   const diff = Date.now() - ts
@@ -35,7 +54,7 @@ function formatTime(ts: number) {
     <div class="flex gap-8">
       <button
         class="group flex flex-col items-center gap-4 p-8 rounded-xl border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50 transition-all cursor-pointer w-52"
-        @click="$emit('new')"
+        @click="listDialogCreateMode = true; listDialogOpen = true"
       >
         <div class="p-4 rounded-full bg-muted group-hover:bg-primary/10 transition-colors">
           <Plus class="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors" />
@@ -46,7 +65,7 @@ function formatTime(ts: number) {
 
       <button
         class="group flex flex-col items-center gap-4 p-8 rounded-xl border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50 transition-all cursor-pointer w-52"
-        @click="$emit('open')"
+        @click="listDialogCreateMode = false; listDialogOpen = true"
       >
         <div class="p-4 rounded-full bg-muted group-hover:bg-primary/10 transition-colors">
           <FolderOpen class="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors" />
@@ -84,5 +103,13 @@ function formatTime(ts: number) {
         </button>
       </div>
     </div>
+
+    <WorkflowListDialog
+      :open="listDialogOpen"
+      :create-mode="listDialogCreateMode"
+      @update:open="listDialogOpen = $event"
+      @select="onDialogSelect"
+      @cancel="listDialogOpen = false"
+    />
   </div>
 </template>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, markRaw, computed, watch, onMounted, onUnmounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { useVueFlow, ConnectionMode } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
@@ -410,7 +410,6 @@ const recentWorkflows = computed(() =>
 )
 
 const router = useRouter()
-const route = useRoute()
 
 function goHome() {
   router.push('/home')
@@ -475,9 +474,6 @@ onMounted(() => {
   cleanupFileUpdates = store.listenForFileUpdates()
   cleanupWorkflowToolRequests = store.listenForWorkflowToolRequests()
   cleanupTableConfirm = store.listenForUIInteractions()
-  if (!store.currentWorkflow && !props.tab.workflowId) {
-    openWorkflowList(route.query.create === '1')
-  }
   autoSaveTimer = setInterval(() => {
     if (store.isDirty && store.currentWorkflow) {
       saveWorkflow()

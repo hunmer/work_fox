@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useTabStore } from '@/stores/tab'
 import { workflowBackendApi } from '@/lib/backend-api/workflow'
 import WelcomePage from '@/components/workflow/WelcomePage.vue'
+import type { Workflow } from '@/lib/workflow/types'
 
 const router = useRouter()
 const tabStore = useTabStore()
@@ -28,19 +29,14 @@ onMounted(async () => {
   }
 })
 
-function handleNew() {
-  const tabId = tabStore.addTab()
-  router.push({ path: '/editor', query: { create: '1' } })
+function handleOpen(workflowId: string) {
+  tabStore.addTab(workflowId)
+  router.push('/editor')
 }
 
-function handleOpen(workflowId?: string) {
-  if (workflowId) {
-    const tabId = tabStore.addTab(workflowId)
-    router.push('/editor')
-  } else {
-    const tabId = tabStore.addTab()
-    router.push({ path: '/editor', query: { open: '1' } })
-  }
+function handleSelect(workflow: Workflow) {
+  tabStore.addTab(workflow.id, workflow.name)
+  router.push('/editor')
 }
 
 function handleImport() {
@@ -51,8 +47,8 @@ function handleImport() {
 <template>
   <WelcomePage
     :recent-workflows="recentWorkflows"
-    @new="handleNew"
     @open="handleOpen"
+    @select="handleSelect"
     @import="handleImport"
   />
 </template>
