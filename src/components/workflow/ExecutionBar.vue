@@ -310,11 +310,6 @@ function setExpanded(nextExpanded: boolean) {
           :min-size="40"
         >
           <div class="h-full flex flex-col">
-            <div class="px-2 py-1 border-b border-border">
-              <span class="text-[10px] text-muted-foreground font-medium">
-                {{ displayLog ? `${formatTime(displayLog.startedAt)} · ${displayLog.steps.length} 节点` : '执行详情' }}
-              </span>
-            </div>
             <div
               v-if="displayLog"
               class="execution-cards flex-1 min-h-0 flex gap-2 p-2 overflow-x-auto"

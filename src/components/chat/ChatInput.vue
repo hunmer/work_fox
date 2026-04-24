@@ -133,7 +133,7 @@ function removeImage(index: number) {
 </script>
 
 <template>
-  <div class="p-3 space-y-1">
+  <div class="p-3 mb-3 space-y-1">
     <!-- 上方状态栏：Skill / MCP / 工作区 -->
     <div class="flex items-center justify-end gap-0.5">
       <DropdownMenu>
