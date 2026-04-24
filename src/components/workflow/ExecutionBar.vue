@@ -15,6 +15,29 @@ import { WORKFLOW_EXEC_BAR_LAYOUT_KEY } from './workflowLayoutContext'
 const stepTabs = ref<Record<string, string>>({})
 const copiedNodeId = ref<string | null>(null)
 
+function copyNodeInfo(step: ExecutionLog['steps'][number]) {
+  const parts = [
+    `# ${step.nodeLabel}`,
+    '',
+    '## 输入',
+    step.input !== undefined && step.input !== null ? JSON.stringify(step.input, null, 2) : '无',
+    '',
+    '## 输出',
+    step.output !== undefined && step.output !== null ? JSON.stringify(step.output, null, 2) : '无',
+  ]
+  if (step.logs?.length) {
+    parts.push('', '## 日志')
+    step.logs.forEach(l => parts.push(`[${l.level}] ${l.message}`))
+  }
+  if (step.error) {
+    parts.push('', '## 错误', step.error)
+  }
+  navigator.clipboard.writeText(parts.join('\n')).then(() => {
+    copiedNodeId.value = `info-${step.nodeId}`
+    setTimeout(() => { copiedNodeId.value = null }, 1500)
+  })
+}
+
 function copyError(step: ExecutionLog['steps'][number]) {
   if (!step.error) return
   navigator.clipboard.writeText(step.error).then(() => {
@@ -341,6 +364,13 @@ function setExpanded(nextExpanded: boolean) {
                   <span class="text-[10px] text-muted-foreground shrink-0">
                     {{ step.finishedAt ? formatDuration(step.startedAt, step.finishedAt) : '...' }}
                   </span>
+                  <button
+                    class="shrink-0 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    title="复制节点信息"
+                    @click="copyNodeInfo(step)"
+                  >
+                    <component :is="copiedNodeId === `info-${step.nodeId}` ? Check : Copy" class="w-3 h-3" />
+                  </button>
                 </div>
 
                 <!-- 错误信息 -->
