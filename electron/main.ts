@@ -4,10 +4,8 @@ import { readFileSync, statSync, openSync, readSync, closeSync, existsSync } fro
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { registerWorkflowIpcHandlers } from './ipc/workflow'
 import { registerChatIpcHandlers } from './ipc/chat'
-import { registerShortcutIpcHandlers, registerGlobalShortcuts, unregisterGlobalShortcuts } from './ipc/shortcut'
+import { registerGlobalShortcuts, unregisterGlobalShortcuts } from './ipc/shortcut'
 import { registerPluginIpcHandlers } from './ipc/plugin'
-import { registerTabsIpcHandlers } from './ipc/tabs'
-import { registerAgentSettingsIpcHandlers } from './ipc/agent-settings'
 import { registerFsIpcHandlers } from './ipc/fs'
 import { registerBackendIpcHandlers } from './ipc/backend'
 import { pluginManager } from './services/plugin-manager'
@@ -117,10 +115,7 @@ app.whenReady().then(() => {
 
   registerWorkflowIpcHandlers()
   registerChatIpcHandlers()
-  registerShortcutIpcHandlers()
   registerPluginIpcHandlers()
-  registerTabsIpcHandlers()
-  registerAgentSettingsIpcHandlers()
   registerFsIpcHandlers()
   registerBackendIpcHandlers()
   workflowNodeRegistry.registerBuiltinNodes(builtinNodeDefinitions)

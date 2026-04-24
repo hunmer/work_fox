@@ -20,6 +20,14 @@ export interface ConditionItem {
   value: string
 }
 
+export interface WorkflowNodeCompositeMeta {
+  rootId?: string
+  parentId?: string | null
+  role?: string
+  generated?: boolean
+  hidden?: boolean
+}
+
 /** 工作流节点 */
 export interface WorkflowNode {
   id: string
@@ -28,6 +36,15 @@ export interface WorkflowNode {
   position: { x: number; y: number }
   data: Record<string, any> // 节点参数
   nodeState?: NodeRunState // 节点运行状态，默认 'normal'
+  composite?: WorkflowNodeCompositeMeta
+}
+
+export interface WorkflowEdgeCompositeMeta {
+  rootId?: string
+  parentId?: string | null
+  generated?: boolean
+  hidden?: boolean
+  locked?: boolean
 }
 
 /** 工作流连线 */
@@ -37,6 +54,7 @@ export interface WorkflowEdge {
   target: string
   sourceHandle?: string | null
   targetHandle?: string | null
+  composite?: WorkflowEdgeCompositeMeta
 }
 
 /** 工作流 */
@@ -90,11 +108,17 @@ export interface ArrayFieldItem {
   placeholder?: string
 }
 
+export interface NodePropertyVisibleWhen {
+  key: string
+  equals?: unknown
+  in?: unknown[]
+}
+
 /** 节点属性表单字段定义 */
 export interface NodeProperty {
   key: string
   label: string
-  type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'code' | 'conditions' | 'array'
+  type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'code' | 'conditions' | 'array' | 'output_fields'
   required?: boolean
   readonly?: boolean
   default?: any
@@ -104,12 +128,44 @@ export interface NodeProperty {
   fields?: ArrayFieldItem[]
   /** 新增项的默认值模板 */
   itemTemplate?: Record<string, any>
+  visibleWhen?: NodePropertyVisibleWhen
+}
+
+export interface NodeNamedHandleConfig {
+  id: string
+  label?: string
+}
+
+export interface CompoundChildNodeDefinition {
+  role: string
+  type: string
+  label?: string
+  offset?: { x: number; y: number }
+  hidden?: boolean
+  parentRole?: string
+  data?: Record<string, unknown>
+}
+
+export interface CompoundEdgeDefinition {
+  sourceRole: string
+  targetRole: string
+  sourceHandle?: string | null
+  targetHandle?: string | null
+  hidden?: boolean
+  locked?: boolean
+}
+
+export interface CompoundNodeDefinition {
+  rootRole?: string
+  children: CompoundChildNodeDefinition[]
+  edges?: CompoundEdgeDefinition[]
 }
 
 /** 节点连接点配置 */
 export interface NodeHandleConfig {
   source?: boolean // 是否显示输出连接点，默认 true
   target?: boolean // 是否显示输入连接点，默认 true
+  sourceHandles?: NodeNamedHandleConfig[]
   /** 动态源连接点配置，设置后忽略 source */
   dynamicSource?: {
     dataKey: string // node data 中条件数组的 key
@@ -131,6 +187,8 @@ export interface NodeTypeDefinition {
   customView?: any
   /** 自定义视图所需的最小节点尺寸 */
   customViewMinSize?: { width?: number; height?: number }
+  manualCreate?: boolean
+  compound?: CompoundNodeDefinition
 }
 
 /** 执行日志条目 */

@@ -19,6 +19,14 @@ export interface ConditionItem {
   value: string
 }
 
+export interface WorkflowNodeCompositeMeta {
+  rootId?: string
+  parentId?: string | null
+  role?: string
+  generated?: boolean
+  hidden?: boolean
+}
+
 export interface WorkflowNode {
   id: string
   type: string
@@ -26,6 +34,15 @@ export interface WorkflowNode {
   position: { x: number; y: number }
   data: Record<string, unknown>
   nodeState?: NodeRunState
+  composite?: WorkflowNodeCompositeMeta
+}
+
+export interface WorkflowEdgeCompositeMeta {
+  rootId?: string
+  parentId?: string | null
+  generated?: boolean
+  hidden?: boolean
+  locked?: boolean
 }
 
 export interface WorkflowEdge {
@@ -34,6 +51,7 @@ export interface WorkflowEdge {
   target: string
   sourceHandle?: string | null
   targetHandle?: string | null
+  composite?: WorkflowEdgeCompositeMeta
 }
 
 export interface AgentResourceItem {
@@ -84,10 +102,16 @@ export interface ArrayFieldItem {
   placeholder?: string
 }
 
+export interface NodePropertyVisibleWhen {
+  key: string
+  equals?: unknown
+  in?: unknown[]
+}
+
 export interface NodeProperty {
   key: string
   label: string
-  type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'code' | 'conditions' | 'array'
+  type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'code' | 'conditions' | 'array' | 'output_fields'
   required?: boolean
   readonly?: boolean
   default?: unknown
@@ -95,11 +119,43 @@ export interface NodeProperty {
   tooltip?: string
   fields?: ArrayFieldItem[]
   itemTemplate?: Record<string, unknown>
+  visibleWhen?: NodePropertyVisibleWhen
+}
+
+export interface NodeNamedHandleConfig {
+  id: string
+  label?: string
+}
+
+export interface CompoundChildNodeDefinition {
+  role: string
+  type: string
+  label?: string
+  offset?: { x: number; y: number }
+  hidden?: boolean
+  parentRole?: string
+  data?: Record<string, unknown>
+}
+
+export interface CompoundEdgeDefinition {
+  sourceRole: string
+  targetRole: string
+  sourceHandle?: string | null
+  targetHandle?: string | null
+  hidden?: boolean
+  locked?: boolean
+}
+
+export interface CompoundNodeDefinition {
+  rootRole?: string
+  children: CompoundChildNodeDefinition[]
+  edges?: CompoundEdgeDefinition[]
 }
 
 export interface NodeHandleConfig {
   source?: boolean
   target?: boolean
+  sourceHandles?: NodeNamedHandleConfig[]
   dynamicSource?: {
     dataKey: string
     extraCount?: number
@@ -117,6 +173,8 @@ export interface NodeTypeDefinition {
   outputs?: OutputField[]
   customView?: unknown
   customViewMinSize?: { width?: number; height?: number }
+  manualCreate?: boolean
+  compound?: CompoundNodeDefinition
 }
 
 export interface ExecutionLogEntry {
