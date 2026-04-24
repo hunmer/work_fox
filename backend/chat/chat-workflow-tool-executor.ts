@@ -82,6 +82,7 @@ function buildNodeUsageNotes(def: any): string[] {
     '字符串字段支持变量引用，纯变量会保留原始类型，变量与文本混排会转成字符串。',
     '嵌套对象字段和数组项中的字符串字段也支持变量引用。',
     '上游节点输出优先使用 {{ __data__["节点ID"].字段路径 }}；上下文路径可用 {{ context.some.path }}。',
+    '变量引用中的节点 ID / 配置 key 统一使用双引号写法，不要写成单引号版本。',
   ]
 
   if (def.type === 'run_code') {
@@ -160,6 +161,67 @@ function createNodeData(definition?: NodeTypeDefinition, overrideData?: Record<s
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+const OUTPUT_FIELD_TYPES = new Set(['string', 'number', 'boolean', 'object', 'any'])
+
+function findInvalidVariableTemplate(value: string): string | null {
+  if (/\{\{\s*__data__\['[^']+'\]/.test(value)) return '检测到 __data__ 使用了单引号节点 ID，请改成 {{ __data__["节点ID"].字段路径 }}'
+  if (/\{\{\s*__inputs__\['[^']+'\]/.test(value)) return '检测到 __inputs__ 使用了单引号节点 ID，请改成 {{ __inputs__["节点ID"].字段路径 }}'
+  if (/\{\{\s*__config__\['[^']+'\]\['[^']+'\]/.test(value)) return '检测到 __config__ 使用了单引号 key，请改成 {{ __config__["插件ID"]["key"] }}'
+  return null
+}
+
+function validateOutputFields(value: unknown, path: string): string[] {
+  if (!Array.isArray(value)) {
+    return [`${path} 必须是数组`]
+  }
+
+  const errors: string[] = []
+  value.forEach((field, index) => {
+    const fieldPath = `${path}[${index}]`
+    if (!isRecord(field)) {
+      errors.push(`${fieldPath} 必须是对象`)
+      return
+    }
+
+    if (typeof field.key !== 'string' || field.key.trim() === '') {
+      errors.push(`${fieldPath}.key 必须是非空字符串`)
+    }
+
+    if (typeof field.type !== 'string' || !OUTPUT_FIELD_TYPES.has(field.type)) {
+      errors.push(`${fieldPath}.type 必须是 string/number/boolean/object/any 之一`)
+      return
+    }
+
+    if (field.type === 'object') {
+      if ('value' in field && field.value !== undefined) {
+        errors.push(`${fieldPath}.value 在 object 类型下不应设置`)
+      }
+      if (field.children !== undefined) {
+        errors.push(...validateOutputFields(field.children, `${fieldPath}.children`))
+      }
+      return
+    }
+
+    if ('children' in field && field.children !== undefined) {
+      errors.push(`${fieldPath}.children 仅 object 类型可设置`)
+    }
+
+    if ('value' in field && field.value !== undefined && typeof field.value !== 'string') {
+      errors.push(`${fieldPath}.value 必须是字符串`)
+      return
+    }
+
+    if (typeof field.value === 'string') {
+      const variableError = findInvalidVariableTemplate(field.value)
+      if (variableError) {
+        errors.push(`${fieldPath}.value ${variableError}`)
+      }
+    }
+  })
+
+  return errors
 }
 
 interface WorkflowTarget {
@@ -310,6 +372,54 @@ export class ChatWorkflowToolExecutor {
       nodes: nextNodes,
       edges: ctx.edges,
     }
+  }
+
+  private validateUpdateNodeData(node: WorkflowNode, data: unknown): string[] {
+    if (!isRecord(data)) {
+      return ['data 必须是对象']
+    }
+
+    const errors: string[] = []
+    const nodeDef = this.getAllNodeTypeDefinitions().find((def) => def.type === node.type)
+    const propertyKeys = new Set(nodeDef?.properties.map((prop) => prop.key) ?? [])
+
+    for (const [key, value] of Object.entries(data)) {
+      if (typeof value === 'string') {
+        const variableError = findInvalidVariableTemplate(value)
+        if (variableError) errors.push(`data.${key} ${variableError}`)
+      }
+
+      if ((key === 'outputs' || key === 'inputFields') && value !== undefined) {
+        errors.push(...validateOutputFields(value, `data.${key}`))
+        continue
+      }
+
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => {
+          if (typeof item === 'string') {
+            const variableError = findInvalidVariableTemplate(item)
+            if (variableError) errors.push(`data.${key}[${index}] ${variableError}`)
+          }
+        })
+        continue
+      }
+
+      if (isRecord(value)) {
+        for (const [nestedKey, nestedValue] of Object.entries(value)) {
+          if (typeof nestedValue !== 'string') continue
+          const variableError = findInvalidVariableTemplate(nestedValue)
+          if (variableError) errors.push(`data.${key}.${nestedKey} ${variableError}`)
+        }
+      }
+
+      if (key === 'outputs' || key === 'inputFields' || key === 'bodyWorkflow' || propertyKeys.has(key)) continue
+
+      if (node.type === 'end') {
+        errors.push(`结束节点不支持字段 data.${key}；请把返回值写到 data.outputs`)
+      }
+    }
+
+    return errors
   }
 
   private createNodesByDefinition(
@@ -483,6 +593,20 @@ export class ChatWorkflowToolExecutor {
         }
         const idx = target.nodes.findIndex((n) => n.id === nodeId)
         if (idx === -1) return { result: { success: false, message: `节点 ${nodeId} 不存在` }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
+        if (data !== undefined) {
+          const errors = this.validateUpdateNodeData(target.nodes[idx], data)
+          if (errors.length) {
+            return {
+              result: {
+                success: false,
+                message: `update_node 参数校验失败:\n- ${errors.join('\n- ')}`,
+              },
+              mutated: false,
+              nodes: ctx.nodes,
+              edges: ctx.edges,
+            }
+          }
+        }
         if (ctx.args?.label) target.nodes[idx].label = ctx.args.label
         if (data) target.nodes[idx].data = { ...target.nodes[idx].data, ...data }
         let nextNodes = ctx.nodes

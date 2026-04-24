@@ -1117,35 +1117,35 @@ if (typeof main === 'function') return main({ params, context })`)
       return result ?? ''
     }
 
-    const dataMatch = value.match(/^\s*\{\{\s*__data__\["([^"]+)"\]\.([^}]+?)\s*\}\}\s*$/)
+    const dataMatch = value.match(/^\s*\{\{\s*__data__\[(["'])([^"']+)\1\]\.([^}]+?)\s*\}\}\s*$/)
     if (dataMatch) {
-      const data = this.getNodeExecutionData(session, dataMatch[1])
+      const data = this.getNodeExecutionData(session, dataMatch[2])
       if (data != null) {
-        const result = this.getNestedValue(data, dataMatch[2])
+        const result = this.getNestedValue(data, dataMatch[3])
         if (result !== undefined) return result
       }
       return ''
     }
 
-    const inputMatch = value.match(/^\s*\{\{\s*__inputs__\["([^"]+)"\]\.([^}]+?)\s*\}\}\s*$/)
+    const inputMatch = value.match(/^\s*\{\{\s*__inputs__\[(["'])([^"']+)\1\]\.([^}]+?)\s*\}\}\s*$/)
     if (inputMatch) {
-      const inputData = session.context.__inputs__?.[inputMatch[1]]
+      const inputData = session.context.__inputs__?.[inputMatch[2]]
       if (inputData != null) {
-        const result = this.getNestedValue(inputData, inputMatch[2])
+        const result = this.getNestedValue(inputData, inputMatch[3])
         if (result !== undefined) return result
       }
       return ''
     }
 
-    const configMatch = value.match(/^\s*\{\{\s*__config__\["([^"]+)"\]\["([^"]+)"\](?:\.(\w+(?:\.\w+)*))?\s*\}\}\s*$/)
+    const configMatch = value.match(/^\s*\{\{\s*__config__\[(["'])([^"']+)\1\]\[(["'])([^"']+)\3\](?:\.(\w+(?:\.\w+)*))?\s*\}\}\s*$/)
     if (configMatch) {
-      const pluginConfig = session.context.__config__?.[configMatch[1]]
+      const pluginConfig = session.context.__config__?.[configMatch[2]]
       if (pluginConfig != null) {
-        let raw: any = pluginConfig[configMatch[2]]
-        if (configMatch[3] && typeof raw === 'string') {
+        let raw: any = pluginConfig[configMatch[4]]
+        if (configMatch[5] && typeof raw === 'string') {
           try { raw = JSON.parse(raw) } catch { /* ignore */ }
         }
-        const result = configMatch[3] ? this.getNestedValue(raw, configMatch[3]) : raw
+        const result = configMatch[5] ? this.getNestedValue(raw, configMatch[5]) : raw
         if (result !== undefined) return result
       }
       return ''
@@ -1168,8 +1168,8 @@ if (typeof main === 'function') return main({ params, context })`)
     )
 
     text = text.replace(
-      /\{\{\s*__data__\["([^"]+)"\]\.([^}]+?)\s*\}\}/g,
-      (_match, nodeId, fieldPath) => {
+      /\{\{\s*__data__\[(["'])([^"']+)\1\]\.([^}]+?)\s*\}\}/g,
+      (_match, _quote, nodeId, fieldPath) => {
         const data = this.getNodeExecutionData(session, nodeId)
         if (data == null) return ''
         return String(this.getNestedValue(data, fieldPath) ?? '')
@@ -1177,8 +1177,8 @@ if (typeof main === 'function') return main({ params, context })`)
     )
 
     text = text.replace(
-      /\{\{\s*__inputs__\["([^"]+)"\]\.([^}]+?)\s*\}\}/g,
-      (_match, nodeId, fieldPath) => {
+      /\{\{\s*__inputs__\[(["'])([^"']+)\1\]\.([^}]+?)\s*\}\}/g,
+      (_match, _quote, nodeId, fieldPath) => {
         const inputData = session.context.__inputs__?.[nodeId]
         if (inputData == null) return ''
         return String(this.getNestedValue(inputData, fieldPath) ?? '')
@@ -1186,8 +1186,8 @@ if (typeof main === 'function') return main({ params, context })`)
     )
 
     text = text.replace(
-      /\{\{\s*__config__\["([^"]+)"\]\["([^"]+)"\](?:\.(\w+(?:\.\w+)*))?\s*\}\}/g,
-      (_match, pluginId, key, dotPath) => {
+      /\{\{\s*__config__\[(["'])([^"']+)\1\]\[(["'])([^"']+)\3\](?:\.(\w+(?:\.\w+)*))?\s*\}\}/g,
+      (_match, _pluginQuote, pluginId, _keyQuote, key, dotPath) => {
         const pluginConfig = session.context.__config__?.[pluginId]
         if (pluginConfig == null) return ''
         let raw: any = pluginConfig[key]
