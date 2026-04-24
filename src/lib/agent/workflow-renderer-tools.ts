@@ -2,7 +2,7 @@ import { useTabStore } from '@/stores/tab'
 import type { WorkflowStore } from '@/stores/workflow'
 import type { Workflow, ExecutionLog } from '@/lib/workflow/types'
 import { createWorkflowDomainApi } from '@/lib/backend-api/workflow-domain'
-import type { EngineStatus } from '@/lib/workflow/engine'
+import type { EngineStatus } from '@shared/workflow-types'
 
 interface ToolResult {
   success: boolean

@@ -16,6 +16,8 @@ import type {
   ExecutionEventMap,
   ExecutionRecoveryRequest,
   ExecutionRecoveryResponse,
+  WorkflowDebugNodeRequest,
+  WorkflowDebugNodeResponse,
   WorkflowExecuteRequest,
   WorkflowExecuteResponse,
 } from '../../shared/execution-events'
@@ -110,15 +112,93 @@ export class BackendWorkflowExecutionManager {
     }
 
     const executionId = randomUUID()
-    const session: ExecutionSession = {
+    const session = this.createSession(executionId, workflow, ownerClientId, request.input || {}, request.snapshot)
+
+    this.sessions.set(executionId, session)
+    void this.run(session)
+    return { executionId, status: 'running' }
+  }
+
+  async debugNode(request: WorkflowDebugNodeRequest, ownerClientId: string): Promise<WorkflowDebugNodeResponse> {
+    const startedAt = Date.now()
+    const workflow = this.deps.workflowStore.getWorkflow(request.workflowId)
+    if (!workflow) {
+      throw createErrorShape('NOT_FOUND', `宸ヤ綔娴佷笉瀛樺湪: ${request.workflowId}`)
+    }
+
+    const snapshotNodes = request.snapshot?.nodes ? clone(request.snapshot.nodes) : clone(workflow.nodes)
+    const snapshotEdges = request.snapshot?.edges ? clone(request.snapshot.edges) : clone(workflow.edges)
+    const embeddedNode = request.embeddedNode ? clone(request.embeddedNode) : null
+    const nodes = embeddedNode
+      ? snapshotNodes.some((node) => node.id === request.nodeId)
+        ? snapshotNodes.map((node) => node.id === request.nodeId ? embeddedNode : node)
+        : [...snapshotNodes, embeddedNode]
+      : snapshotNodes
+    const targetNode = nodes.find((node) => node.id === request.nodeId)
+
+    if (!targetNode) {
+      return {
+        status: 'error',
+        error: `Debug node not found: ${request.nodeId}`,
+        duration: Date.now() - startedAt,
+      }
+    }
+
+    const session = this.createSession(
+      `debug-${randomUUID()}`,
+      workflow,
+      ownerClientId,
+      request.input || {},
+      { nodes, edges: snapshotEdges },
+      request.context,
+    )
+
+    try {
+      session.context.__config__ = await this.loadPluginConfigs(workflow)
+      session.status = 'running'
+      await this.executeNode(session, targetNode)
+      const step = session.steps[session.steps.length - 1]
+
+      if (step?.status === 'error') {
+        return {
+          status: 'error',
+          error: step.error || session.lastErrorMessage || 'Debug node execution failed',
+          duration: Date.now() - startedAt,
+        }
+      }
+
+      return {
+        status: 'completed',
+        output: step?.output,
+        duration: Date.now() - startedAt,
+      }
+    } catch (error) {
+      return {
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+        duration: Date.now() - startedAt,
+      }
+    }
+  }
+
+  private createSession(
+    executionId: string,
+    workflow: Workflow,
+    ownerClientId: string,
+    input: Record<string, unknown>,
+    snapshot?: { nodes: WorkflowNode[]; edges: WorkflowEdge[] },
+    context?: Record<string, unknown>,
+  ): ExecutionSession {
+    return {
       id: executionId,
       workflow,
       ownerClientId,
-      nodes: request.snapshot?.nodes ? clone(request.snapshot.nodes) : clone(workflow.nodes),
-      edges: request.snapshot?.edges ? clone(request.snapshot.edges) : clone(workflow.edges),
+      nodes: snapshot?.nodes ? clone(snapshot.nodes) : clone(workflow.nodes),
+      edges: snapshot?.edges ? clone(snapshot.edges) : clone(workflow.edges),
       context: {
-        __data__: {},
-        __input__: request.input || {},
+        ...(context ? clone(context) : {}),
+        __data__: context?.__data__ && typeof context.__data__ === 'object' ? clone(context.__data__) : {},
+        __input__: input,
       },
       status: 'idle',
       executionOrder: [],
@@ -134,10 +214,6 @@ export class BackendWorkflowExecutionManager {
       recentEvents: [],
       loopStack: [],
     }
-
-    this.sessions.set(executionId, session)
-    void this.run(session)
-    return { executionId, status: 'running' }
   }
 
   getExecutionRecovery(request: ExecutionRecoveryRequest, ownerClientId: string): ExecutionRecoveryResponse {

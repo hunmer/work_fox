@@ -69,6 +69,7 @@ export const backendChannelMetadata: Record<BackendChannel, ChannelMetadata> = {
   'operationHistory:clear': mutation('operationHistory:clear', 'Clear operation history'),
 
   'workflow:execute': execution('workflow:execute', 'Start workflow execution'),
+  'workflow:debug-node': execution('workflow:debug-node', 'Debug a single workflow node'),
   'workflow:get-execution-recovery': execution('workflow:get-execution-recovery', 'Recover workflow execution snapshot and recent backlog'),
   'workflow:pause': execution('workflow:pause', 'Pause workflow execution'),
   'workflow:resume': execution('workflow:resume', 'Resume workflow execution'),

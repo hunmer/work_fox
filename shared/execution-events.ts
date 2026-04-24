@@ -146,3 +146,19 @@ export interface WorkflowExecuteResponse {
   executionId: string
   status: EngineStatus
 }
+
+export interface WorkflowDebugNodeRequest {
+  workflowId: string
+  nodeId: string
+  input?: Record<string, unknown>
+  context?: Record<string, unknown>
+  snapshot?: ExecutionSnapshot
+  embeddedNode?: WorkflowNode
+}
+
+export interface WorkflowDebugNodeResponse {
+  status: 'completed' | 'error'
+  output?: unknown
+  error?: string
+  duration: number
+}

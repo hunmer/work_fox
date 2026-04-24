@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch, inject, provide, type Ref, type App } from 'vue'
 import type { Workflow, WorkflowFolder, WorkflowNode, ExecutionLog, EmbeddedWorkflow } from '@/lib/workflow/types'
-import { WorkflowEngine, type EngineStatus } from '@/lib/workflow/engine'
+import type { EngineStatus } from '@shared/workflow-types'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { executeRendererWorkflowTool } from '@/lib/agent/workflow-renderer-tools'
 import { ensureWorkflowInteractionHandler } from '@/lib/backend-api/interaction'
@@ -993,7 +993,6 @@ function createDebugActions(
   const debugNodeStatus = ref<'idle' | 'running' | 'completed' | 'error'>('idle')
   const debugNodeResult = ref<{ status: 'completed' | 'error'; output?: any; error?: string; duration: number } | null>(null)
   const debugNodeId = ref<string | null>(null)
-  let debugEngine: WorkflowEngine | null = null
 
   async function debugSingleNode(nodeId: string, embeddedNode?: WorkflowNode): Promise<void> {
     if (!currentWorkflow.value) return
@@ -1004,28 +1003,20 @@ function createDebugActions(
     debugNodeResult.value = null
     debugNodeId.value = nodeId
 
-    const debugNodes = node.type === LOOP_NODE_TYPE ? currentWorkflow.value.nodes : [node]
-    const debugEdges = node.type === LOOP_NODE_TYPE ? currentWorkflow.value.edges : []
-
-    debugEngine = new WorkflowEngine(debugNodes, debugEdges, undefined, {
-      workflowId: currentWorkflow.value.id,
-      workflowName: currentWorkflow.value.name,
-      workflowDescription: currentWorkflow.value.description,
-      enabledPlugins: currentWorkflow.value.enabledPlugins || [],
-      pluginConfigSchemes: currentWorkflow.value.pluginConfigSchemes || {},
+    const result = await createWorkflowDomainApi().workflow.debugNode(currentWorkflow.value.id, nodeId, {
+      context: executionContext.value,
+      snapshot: {
+        nodes: currentWorkflow.value.nodes,
+        edges: currentWorkflow.value.edges,
+      },
+      embeddedNode,
     })
-    const result = await debugEngine.debugSingleNode(node, executionContext.value)
-    debugEngine = null
 
     debugNodeResult.value = result
     debugNodeStatus.value = result.status
   }
 
   function cancelDebug() {
-    if (debugEngine) {
-      debugEngine.stop()
-      debugEngine = null
-    }
     debugNodeStatus.value = 'idle'
     debugNodeResult.value = null
     debugNodeId.value = null

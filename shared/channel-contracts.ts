@@ -4,6 +4,8 @@ import type {
   ExecutionControlRequest,
   WorkflowExecuteRequest,
   WorkflowExecuteResponse,
+  WorkflowDebugNodeRequest,
+  WorkflowDebugNodeResponse,
 } from './execution-events'
 import type {
   ExecutionLog,
@@ -232,6 +234,7 @@ export interface BackendChannelMap {
   'operationHistory:clear': ChannelContract<OperationHistoryClearRequest, EmptyResponse>
 
   'workflow:execute': ChannelContract<WorkflowExecuteRequest, WorkflowExecuteResponse>
+  'workflow:debug-node': ChannelContract<WorkflowDebugNodeRequest, WorkflowDebugNodeResponse>
   'workflow:get-execution-recovery': ChannelContract<ExecutionRecoveryRequest, ExecutionRecoveryResponse>
   'workflow:pause': ChannelContract<ExecutionControlRequest, WorkflowExecuteResponse>
   'workflow:resume': ChannelContract<ExecutionControlRequest, WorkflowExecuteResponse>

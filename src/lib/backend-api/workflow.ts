@@ -1,5 +1,5 @@
 import { wsBridge } from '../ws-bridge'
-import type { Workflow } from '@shared/workflow-types'
+import type { Workflow, WorkflowNode } from '@shared/workflow-types'
 
 export const workflowBackendApi = {
   list(folderId?: string | null) {
@@ -34,6 +34,21 @@ export const workflowBackendApi = {
   },
   execute(workflowId: string, input?: Record<string, unknown>) {
     return wsBridge.invoke('workflow:execute', { workflowId, input })
+  },
+  debugNode(
+    workflowId: string,
+    nodeId: string,
+    options?: {
+      context?: Record<string, unknown>
+      snapshot?: { nodes: WorkflowNode[]; edges: Workflow['edges'] }
+      embeddedNode?: WorkflowNode
+    },
+  ) {
+    return wsBridge.invoke('workflow:debug-node', {
+      workflowId,
+      nodeId,
+      ...options,
+    })
   },
   getExecutionRecovery(workflowId: string, executionId?: string | null) {
     return wsBridge.invoke('workflow:get-execution-recovery', { workflowId, executionId })
