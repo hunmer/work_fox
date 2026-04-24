@@ -261,16 +261,18 @@ export interface BackendChannelMap {
   'aiProvider:test': ChannelContract<{ id: string }, { success: boolean; error?: string }>
 
   // --- Chat History ---
-  'chatHistory:listSessions': ChannelContract<{ workflowId: string }, any[]>
-  'chatHistory:createSession': ChannelContract<{ workflowId: string; session: any }, any>
-  'chatHistory:updateSession': ChannelContract<{ workflowId: string; sessionId: string; updates: any }, EmptyResponse>
-  'chatHistory:deleteSession': ChannelContract<{ workflowId: string; sessionId: string }, EmptyResponse>
-  'chatHistory:listMessages': ChannelContract<{ workflowId: string; sessionId: string }, any[]>
-  'chatHistory:addMessage': ChannelContract<{ workflowId: string; sessionId: string; message: any }, any>
-  'chatHistory:updateMessage': ChannelContract<{ workflowId: string; sessionId: string; messageId: string; updates: any }, EmptyResponse>
-  'chatHistory:deleteMessage': ChannelContract<{ workflowId: string; sessionId: string; messageId: string }, EmptyResponse>
-  'chatHistory:deleteMessages': ChannelContract<{ workflowId: string; sessionId: string; messageIds: string[] }, EmptyResponse>
-  'chatHistory:clearMessages': ChannelContract<{ workflowId: string; sessionId: string }, EmptyResponse>
+  'chatHistory:listSessions': ChannelContract<{ scopeKey: string }, any[]>
+  'chatHistory:createSession': ChannelContract<{ scopeKey: string; session: any }, any>
+  'chatHistory:updateSession': ChannelContract<{ scopeKey: string; sessionId: string; updates: any }, EmptyResponse>
+  'chatHistory:deleteSession': ChannelContract<{ scopeKey: string; sessionId: string }, EmptyResponse>
+  'chatHistory:listMessages': ChannelContract<{ scopeKey: string; sessionId: string }, any[]>
+  'chatHistory:addMessage': ChannelContract<{ scopeKey: string; sessionId: string; message: any }, any>
+  'chatHistory:updateMessage': ChannelContract<{ scopeKey: string; sessionId: string; messageId: string; updates: any }, EmptyResponse>
+  'chatHistory:deleteMessage': ChannelContract<{ scopeKey: string; sessionId: string; messageId: string }, EmptyResponse>
+  'chatHistory:deleteMessages': ChannelContract<{ scopeKey: string; sessionId: string; messageIds: string[] }, EmptyResponse>
+  'chatHistory:clearMessages': ChannelContract<{ scopeKey: string; sessionId: string }, EmptyResponse>
+  'chatHistory:importData': ChannelContract<{ scopeKey: string; data: { sessions: any[]; messages: any[] } }, EmptyResponse>
+  'chatHistory:listAllScopeKeys': ChannelContract<EmptyRequest, string[]>
 
   // --- Agent Settings ---
   'agentSettings:get': ChannelContract<EmptyRequest, any>

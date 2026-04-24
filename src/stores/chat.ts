@@ -12,6 +12,7 @@ import {
   deleteMessage as dbDeleteMessage,
   deleteMessages as dbDeleteMessages,
   clearMessages as dbClearMessages,
+  resolveScopeKey,
 } from '@/lib/chat-db'
 import { useAIProviderStore } from './ai-provider'
 import { useChatUIStore } from './chat-ui'
@@ -22,13 +23,15 @@ import { wsBridge } from '@/lib/ws-bridge'
 
 // ====== 辅助函数 ======
 
-/** 将消息更新持久化到 DB 和本地数组 */
+/** 将消息更新持久化到 backend 和本地数组 */
 async function persistMessageUpdate(
   messageId: string,
   messages: { value: ChatMessage[] },
   updates: Partial<ChatMessage>,
+  scopeKey: string,
+  sessionId: string,
 ) {
-  await dbUpdateMessage(messageId, updates)
+  await dbUpdateMessage(messageId, updates, scopeKey, sessionId)
   const idx = messages.value.findIndex((m) => m.id === messageId)
   if (idx !== -1) messages.value[idx] = { ...messages.value[idx], ...updates }
 }
@@ -99,20 +102,17 @@ function buildWorkflowOptions(
 
 // ====== 会话管理 ======
 
-function createSessionActions(scope: string, sessions: Ref<ChatSession[]>, currentSessionId: Ref<string | null>, messages: Ref<ChatMessage[]>) {
+function createSessionActions(
+  scope: string,
+  sessions: Ref<ChatSession[]>,
+  currentSessionId: Ref<string | null>,
+  messages: Ref<ChatMessage[]>,
+  getScopeKey: () => string | null,
+) {
   async function loadSessions() {
-    if (scope === 'workflow') {
-      // workflow scope: 按当前 workflowId 从文件加载
-      const workflowStore = useTabStore().activeStore
-      const workflowId = workflowStore?.currentWorkflow?.id
-      if (workflowId) {
-        sessions.value = await wsBridge.invoke('chatHistory:listSessions', { workflowId })
-      } else {
-        sessions.value = []
-      }
-    } else {
-      sessions.value = await dbListSessionsByScope(scope)
-    }
+    const scopeKey = getScopeKey()
+    if (!scopeKey) { sessions.value = []; return }
+    sessions.value = await dbListSessionsByScope(scope, scope === 'workflow' ? scopeKey.replace('workflow-', '') : null)
   }
 
   async function createSession() {
@@ -137,18 +137,24 @@ function createSessionActions(scope: string, sessions: Ref<ChatSession[]>, curre
   }
 
   async function deleteSessionById(id: string) {
-    await dbDeleteSession(id)
+    const scopeKey = getScopeKey()
+    if (!scopeKey) return
+    await dbDeleteSession(id, scopeKey)
     sessions.value = sessions.value.filter((s) => s.id !== id)
     if (currentSessionId.value === id) { currentSessionId.value = null; messages.value = [] }
   }
 
   async function switchSession(id: string) {
+    const scopeKey = getScopeKey()
+    if (!scopeKey) return
     currentSessionId.value = id
-    messages.value = await dbListMessages(id)
+    messages.value = await dbListMessages(id, scopeKey)
   }
 
   async function clearSessionMessages(id: string) {
-    await dbClearMessages(id)
+    const scopeKey = getScopeKey()
+    if (!scopeKey) return
+    await dbClearMessages(id, scopeKey)
     if (currentSessionId.value === id) messages.value = []
     const session = sessions.value.find((s) => s.id === id)
     if (session) session.messageCount = 0
@@ -156,15 +162,15 @@ function createSessionActions(scope: string, sessions: Ref<ChatSession[]>, curre
 
   async function switchToWorkflowSession(workflowId: string | undefined) {
     if (!workflowId) return
-    // 先加载该 workflow 的会话列表
-    const fileSessions = await wsBridge.invoke('chatHistory:listSessions', { workflowId })
+    const scopeKey = resolveScopeKey('workflow', workflowId)
+    const fileSessions = await wsBridge.invoke('chatHistory:listSessions', { scopeKey })
     sessions.value = fileSessions
 
     const existing = sessions.value.find((s) => s.workflowId === workflowId)
     if (existing) {
       if (currentSessionId.value === existing.id) return
       currentSessionId.value = existing.id
-      messages.value = await dbListMessages(existing.id)
+      messages.value = await dbListMessages(existing.id, scopeKey)
       return
     }
     const providerStore = useAIProviderStore()
@@ -194,6 +200,8 @@ function createStreamCallbacks(
   retryStatus: Ref<{ attempt: number; maxRetries: number; delayMs: number; status: number } | null>,
   resetStreamState: () => void,
   pauseForUserQuestion: () => void,
+  getScopeKey: () => string | null,
+  getSessionId: () => string | null,
 ) {
   let streamingRenderOrder = 0
   let pausedForUserQuestion = false
@@ -314,12 +322,16 @@ function createStreamCallbacks(
     onDone: async () => {
       try {
         const updates = buildStreamUpdates(streamingToken, streamingToolCalls, streamingThinkingBlocks, streamingUsage)
-        await persistMessageUpdate(assistantMsg.id, messages, updates)
+        const sk = getScopeKey()
+        const sid = getSessionId()
+        if (sk && sid) await persistMessageUpdate(assistantMsg.id, messages, updates, sk, sid)
       } finally { resetStreamState() }
     },
     onError: async (error: Error) => {
       try {
-        await persistMessageUpdate(assistantMsg.id, messages, { content: streamingToken.value || `[错误] ${error.message}` })
+        const sk = getScopeKey()
+        const sid = getSessionId()
+        if (sk && sid) await persistMessageUpdate(assistantMsg.id, messages, { content: streamingToken.value || `[错误] ${error.message}` }, sk, sid)
       } finally { resetStreamState() }
     },
   }
@@ -332,21 +344,31 @@ function createMessageActions(
   isStreaming: Ref<boolean>,
   currentSessionId: Ref<string | null>,
   currentSession: Ref<ChatSession | null>,
+  getScopeKey: () => string | null,
 ) {
   async function deleteMessageById(messageId: string) {
-    await dbDeleteMessage(messageId)
+    const scopeKey = getScopeKey()
+    const sessionId = currentSessionId.value
+    if (!scopeKey || !sessionId) return
+    await dbDeleteMessage(messageId, scopeKey, sessionId)
     messages.value = messages.value.filter((m) => m.id !== messageId)
   }
 
   async function deleteMessageAndAfter(messageId: string) {
+    const scopeKey = getScopeKey()
+    const sessionId = currentSessionId.value
+    if (!scopeKey || !sessionId) return
     const index = messages.value.findIndex((m) => m.id === messageId)
     if (index === -1) return
-    await dbDeleteMessages(messages.value.slice(index).map((m) => m.id))
+    await dbDeleteMessages(messages.value.slice(index).map((m) => m.id), scopeKey, sessionId)
     messages.value = messages.value.slice(0, index)
   }
 
   async function retryMessage(messageId: string, streamAssistantReply: (content: string, images?: string[]) => Promise<void>) {
     if (isStreaming.value) return
+    const scopeKey = getScopeKey()
+    const sessionId = currentSessionId.value
+    if (!scopeKey || !sessionId) return
     const index = messages.value.findIndex((m) => m.id === messageId)
     if (index === -1) return
     let userMsgIndex = -1
@@ -355,19 +377,22 @@ function createMessageActions(
     }
     if (userMsgIndex === -1) return
     const userMsg = messages.value[userMsgIndex]
-    await dbDeleteMessages(messages.value.slice(index).map((m) => m.id))
+    await dbDeleteMessages(messages.value.slice(index).map((m) => m.id), scopeKey, sessionId)
     messages.value = messages.value.slice(0, index)
     await streamAssistantReply(userMsg.content, userMsg.images)
   }
 
   async function editMessage(messageId: string, newContent: string, streamAssistantReply: (content: string, images?: string[]) => Promise<void>) {
     if (isStreaming.value) return
+    const scopeKey = getScopeKey()
+    const sessionId = currentSessionId.value
+    if (!scopeKey || !sessionId) return
     const index = messages.value.findIndex((m) => m.id === messageId)
     if (index === -1) return
-    await dbUpdateMessage(messageId, { content: newContent })
+    await dbUpdateMessage(messageId, { content: newContent }, scopeKey, sessionId)
     messages.value[index] = { ...messages.value[index], content: newContent }
     if (index < messages.value.length - 1) {
-      await dbDeleteMessages(messages.value.slice(index + 1).map((m) => m.id))
+      await dbDeleteMessages(messages.value.slice(index + 1).map((m) => m.id), scopeKey, sessionId)
       messages.value = messages.value.slice(0, index + 1)
     }
     await streamAssistantReply(newContent, messages.value[index].images)
@@ -375,6 +400,9 @@ function createMessageActions(
 
   async function rerunTool(messageId: string, toolCallId: string) {
     if (isStreaming.value) return
+    const scopeKey = getScopeKey()
+    const sessionId = currentSessionId.value
+    if (!scopeKey || !sessionId) return
     const msgIndex = messages.value.findIndex((m) => m.id === messageId)
     if (msgIndex === -1) return
     const msg = messages.value[msgIndex]
@@ -403,7 +431,7 @@ function createMessageActions(
         error: hasError ? (result as { error: string }).error : undefined,
         completedAt: Date.now(),
       }
-      await persistMessageUpdate(messageId, messages, { toolCalls: JSON.parse(JSON.stringify(toRaw(finalCalls))) })
+      await persistMessageUpdate(messageId, messages, { toolCalls: JSON.parse(JSON.stringify(toRaw(finalCalls))) }, scopeKey, sessionId)
     } catch (err) {
       const finalCalls = [...updatedCalls]
       finalCalls[tcIndex] = {
@@ -412,7 +440,7 @@ function createMessageActions(
         error: err instanceof Error ? err.message : String(err),
         completedAt: Date.now(),
       }
-      await persistMessageUpdate(messageId, messages, { toolCalls: JSON.parse(JSON.stringify(toRaw(finalCalls))) })
+      await persistMessageUpdate(messageId, messages, { toolCalls: JSON.parse(JSON.stringify(toRaw(finalCalls))) }, scopeKey, sessionId)
     }
   }
 
@@ -443,6 +471,20 @@ export function createChatStore(scope: string) {
       sessions.value.find((s) => s.id === currentSessionId.value) ?? null,
     )
 
+    // scopeKey: 统一计算 backend 存储键
+    const scopeKey = computed(() => {
+      if (scope === 'workflow') {
+        const workflowStore = useTabStore().activeStore
+        const workflowId = workflowStore?.currentWorkflow?.id
+        return workflowId ? `workflow-${workflowId}` : null
+      }
+      return 'agent-global'
+    })
+
+    function getScopeKey(): string | null {
+      return scopeKey.value
+    }
+
     // ===== 重置流式状态 =====
     function resetStreamState() {
       retryStatus.value = null
@@ -454,8 +496,8 @@ export function createChatStore(scope: string) {
     }
 
     // ===== 组合子 =====
-    const sessionActions = createSessionActions(scope, sessions, currentSessionId, messages)
-    const messageActions = createMessageActions(messages, isStreaming, currentSessionId, currentSession)
+    const sessionActions = createSessionActions(scope, sessions, currentSessionId, messages, getScopeKey)
+    const messageActions = createMessageActions(messages, isStreaming, currentSessionId, currentSession, getScopeKey)
 
     // ===== 消息发送 =====
 
@@ -473,7 +515,9 @@ export function createChatStore(scope: string) {
       if (msgId) {
         const updates = buildStreamUpdates(streamingToken, streamingToolCalls, streamingThinkingBlocks, streamingUsage)
         delete updates.usage
-        await persistMessageUpdate(msgId, messages, updates)
+        const sk = getScopeKey()
+        const sid = currentSessionId.value
+        if (sk && sid) await persistMessageUpdate(msgId, messages, updates, sk, sid)
       }
 
       isStreaming.value = false
@@ -483,13 +527,14 @@ export function createChatStore(scope: string) {
 
     async function streamAssistantReply(content: string, images?: string[]) {
       const sessionId = currentSessionId.value!
+      const sk = getScopeKey()!
       const providerStore = useAIProviderStore()
       const uiStore = useChatUIStore()
 
       const assistantMsg = await dbAddMessage({
         sessionId, role: 'assistant', content: '', createdAt: Date.now(),
         modelId: providerStore.currentModel?.id,
-      })
+      }, sk)
       messages.value.push(assistantMsg)
       streamingMessageId.value = assistantMsg.id
 
@@ -512,6 +557,7 @@ export function createChatStore(scope: string) {
           assistantMsg, messages, streamingToken, streamingToolCalls,
           streamingThinkingBlocks, streamingUsage, retryStatus, resetStreamState,
           () => { pauseGenerationForUserQuestion().catch(() => {}) },
+          getScopeKey, () => currentSessionId.value,
         )
         const result = await runAgentStream(
           history, content, images, callbacks,
@@ -525,7 +571,8 @@ export function createChatStore(scope: string) {
         if (idx !== -1) {
           const errorContent = error instanceof Error ? error.message : String(error)
           messages.value[idx] = { ...messages.value[idx], content: `[错误] ${errorContent}` }
-          await dbUpdateMessage(assistantMsg.id, { content: `[错误] ${errorContent}` })
+          const sk = getScopeKey()
+          if (sk) await dbUpdateMessage(assistantMsg.id, { content: `[错误] ${errorContent}` }, sk, sessionId)
         }
       }
     }
@@ -534,14 +581,15 @@ export function createChatStore(scope: string) {
       if (isStreaming.value) return
       if (!currentSessionId.value) await sessionActions.createSession()
       const sessionId = currentSessionId.value!
+      const sk = getScopeKey()!
 
-      const userMsg = await dbAddMessage({ sessionId, role: 'user', content, images, createdAt: Date.now() })
+      const userMsg = await dbAddMessage({ sessionId, role: 'user', content, images, createdAt: Date.now() }, sk)
       messages.value.push(userMsg)
 
       const session = sessions.value.find((s) => s.id === sessionId)
       if (session && session.messageCount <= 1) {
         const title = content.slice(0, 50) + (content.length > 50 ? '...' : '')
-        await dbUpdateSessionTitle(sessionId, title)
+        await dbUpdateSessionTitle(sessionId, title, sk)
         session.title = title
       }
       await streamAssistantReply(content, images)
@@ -561,13 +609,18 @@ export function createChatStore(scope: string) {
       if (msgId) {
         const updates = buildStreamUpdates(streamingToken, streamingToolCalls, streamingThinkingBlocks, streamingUsage)
         delete updates.usage
-        await persistMessageUpdate(msgId, messages, updates)
+        const sk = getScopeKey()
+        const sid = currentSessionId.value
+        if (sk && sid) await persistMessageUpdate(msgId, messages, updates, sk, sid)
       }
 
       if (currentSessionId.value) {
-        messages.value.push(await dbAddMessage({
-          sessionId: currentSessionId.value, role: 'system', content: '用户已中断操作', createdAt: Date.now(),
-        }))
+        const sk = getScopeKey()
+        if (sk) {
+          messages.value.push(await dbAddMessage({
+            sessionId: currentSessionId.value, role: 'system', content: '用户已中断操作', createdAt: Date.now(),
+          }, sk))
+        }
       }
       isStreaming.value = false
       streamingMessageId.value = null

@@ -104,6 +104,8 @@ export const backendChannelMetadata: Record<BackendChannel, ChannelMetadata> = {
   'chatHistory:deleteMessage': mutation('chatHistory:deleteMessage', 'Delete chat message'),
   'chatHistory:deleteMessages': mutation('chatHistory:deleteMessages', 'Delete multiple chat messages'),
   'chatHistory:clearMessages': mutation('chatHistory:clearMessages', 'Clear all messages in session'),
+  'chatHistory:importData': mutation('chatHistory:importData', 'Import chat history data (migration)'),
+  'chatHistory:listAllScopeKeys': crud('chatHistory:listAllScopeKeys', 'List all chat history scope keys'),
 
   // --- Agent Settings ---
   'agentSettings:get': crud('agentSettings:get', 'Get agent settings'),

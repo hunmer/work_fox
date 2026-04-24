@@ -65,42 +65,49 @@ export function registerAppChannels(router: WSRouter, services: AppServices): vo
   })
 
   // --- Chat History ---
-  router.register('chatHistory:listSessions', ({ workflowId }) =>
-    chatHistoryStore.listSessions(workflowId),
+  router.register('chatHistory:listSessions', ({ scopeKey }) =>
+    chatHistoryStore.listSessions(scopeKey),
   )
-  router.register('chatHistory:createSession', ({ workflowId, session }) =>
-    chatHistoryStore.createSession(workflowId, session),
+  router.register('chatHistory:createSession', ({ scopeKey, session }) =>
+    chatHistoryStore.createSession(scopeKey, session),
   )
-  router.register('chatHistory:updateSession', async ({ workflowId, sessionId, updates }) => {
-    await chatHistoryStore.updateSession(workflowId, sessionId, updates)
+  router.register('chatHistory:updateSession', async ({ scopeKey, sessionId, updates }) => {
+    await chatHistoryStore.updateSession(scopeKey, sessionId, updates)
     return undefined
   })
-  router.register('chatHistory:deleteSession', async ({ workflowId, sessionId }) => {
-    await chatHistoryStore.deleteSession(workflowId, sessionId)
+  router.register('chatHistory:deleteSession', async ({ scopeKey, sessionId }) => {
+    await chatHistoryStore.deleteSession(scopeKey, sessionId)
     return undefined
   })
-  router.register('chatHistory:listMessages', ({ workflowId, sessionId }) =>
-    chatHistoryStore.listMessages(workflowId, sessionId),
+  router.register('chatHistory:listMessages', ({ scopeKey, sessionId }) =>
+    chatHistoryStore.listMessages(scopeKey, sessionId),
   )
-  router.register('chatHistory:addMessage', ({ workflowId, sessionId, message }) =>
-    chatHistoryStore.addMessage(workflowId, sessionId, message),
+  router.register('chatHistory:addMessage', ({ scopeKey, sessionId, message }) =>
+    chatHistoryStore.addMessage(scopeKey, sessionId, message),
   )
-  router.register('chatHistory:updateMessage', async ({ workflowId, sessionId, messageId, updates }) => {
-    await chatHistoryStore.updateMessage(workflowId, sessionId, messageId, updates)
+  router.register('chatHistory:updateMessage', async ({ scopeKey, sessionId, messageId, updates }) => {
+    await chatHistoryStore.updateMessage(scopeKey, sessionId, messageId, updates)
     return undefined
   })
-  router.register('chatHistory:deleteMessage', async ({ workflowId, sessionId, messageId }) => {
-    await chatHistoryStore.deleteMessage(workflowId, sessionId, messageId)
+  router.register('chatHistory:deleteMessage', async ({ scopeKey, sessionId, messageId }) => {
+    await chatHistoryStore.deleteMessage(scopeKey, sessionId, messageId)
     return undefined
   })
-  router.register('chatHistory:deleteMessages', async ({ workflowId, sessionId, messageIds }) => {
-    await chatHistoryStore.deleteMessages(workflowId, sessionId, messageIds)
+  router.register('chatHistory:deleteMessages', async ({ scopeKey, sessionId, messageIds }) => {
+    await chatHistoryStore.deleteMessages(scopeKey, sessionId, messageIds)
     return undefined
   })
-  router.register('chatHistory:clearMessages', async ({ workflowId, sessionId }) => {
-    await chatHistoryStore.clearMessages(workflowId, sessionId)
+  router.register('chatHistory:clearMessages', async ({ scopeKey, sessionId }) => {
+    await chatHistoryStore.clearMessages(scopeKey, sessionId)
     return undefined
   })
+  router.register('chatHistory:importData', async ({ scopeKey, data }) => {
+    await chatHistoryStore.importData(scopeKey, data)
+    return undefined
+  })
+  router.register('chatHistory:listAllScopeKeys', () =>
+    chatHistoryStore.listAllScopeKeys(),
+  )
 
   // --- Agent Settings ---
   router.register('agentSettings:get', () => agentSettingsStore.get())
