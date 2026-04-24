@@ -38,14 +38,14 @@ const categories = computed(() => {
 const filteredNodes = computed(() => {
   void pluginNodesVersion.value
   if (searchQuery.value.trim()) {
-    return searchNodeDefinitions(searchQuery.value)
+    return searchNodeDefinitions(searchQuery.value).filter((node) => node.manualCreate !== false)
   }
   if (selectedCategory.value) {
     const grouped = getNodeDefinitionsByCategory()
-    return grouped[selectedCategory.value] || []
+    return (grouped[selectedCategory.value] || []).filter((node) => node.manualCreate !== false)
   }
   const grouped = getNodeDefinitionsByCategory()
-  return Object.values(grouped).flat()
+  return Object.values(grouped).flat().filter((node) => node.manualCreate !== false)
 })
 
 function getIcon(name: string) {

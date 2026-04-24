@@ -34,6 +34,18 @@ const definition = computed(() => {
   return getNodeDefinition(store.selectedNode.type)
 })
 
+const visibleProperties = computed(() => {
+  if (!definition.value || !store.selectedNode) return []
+  return definition.value.properties.filter((prop) => {
+    const rule = prop.visibleWhen
+    if (!rule) return true
+    const actual = store.selectedNode?.data?.[rule.key]
+    if (rule.in?.length) return rule.in.includes(actual)
+    if ('equals' in rule) return actual === rule.equals
+    return true
+  })
+})
+
 const IconComponent = computed(() => {
   if (!definition.value) return null
   return resolveLucideIcon(definition.value.icon)
@@ -329,7 +341,7 @@ function confirmImport() {
           </div>
 
           <div
-            v-for="prop in definition.properties"
+            v-for="prop in visibleProperties"
             :key="prop.key"
             class="space-y-1"
           >
@@ -519,11 +531,17 @@ function confirmImport() {
                   添加资源
                 </Button>
               </div>
+
+              <OutputFieldEditor
+                v-else-if="prop.type === 'output_fields'"
+                :model-value="getFieldValue(prop.key) || []"
+                @update:model-value="setFieldValue(prop.key, $event)"
+              />
             </template>
           </div>
 
           <div
-            v-if="definition.properties.length === 0"
+            v-if="visibleProperties.length === 0"
             class="text-xs text-muted-foreground text-center py-4"
           >
             该节点无配置参数

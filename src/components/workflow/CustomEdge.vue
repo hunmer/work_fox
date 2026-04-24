@@ -26,12 +26,12 @@ const labelX = computed(() => pathData.value[1])
 const labelY = computed(() => pathData.value[2])
 
 const emit = defineEmits<{
-  'insert-node': [edgeId: string, sourceId: string, targetId: string]
+  'insert-node': [edgeId: string, sourceId: string, targetId: string, sourceHandle: string | null]
 }>()
 
 function onPlusClick(event: MouseEvent) {
   event.stopPropagation()
-  emit('insert-node', props.id, props.source, props.target)
+  emit('insert-node', props.id, props.source, props.target, props.sourceHandle ?? null)
 }
 </script>
 

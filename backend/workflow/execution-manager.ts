@@ -20,6 +20,15 @@ import type {
 } from '../../shared/execution-events'
 import { createErrorShape } from '../../shared/errors'
 import type { AgentChatInteractionSchema, NodeExecutionInteractionSchema, TableConfirmInteractionSchema } from '../../shared/ws-protocol'
+import {
+  findCompositeChildByRole,
+  findWorkflowNode,
+  getCompositeParentId,
+  getNodesForExecutionScope,
+  LOOP_BODY_ROLE,
+  LOOP_NEXT_SOURCE_HANDLE,
+  LOOP_NODE_TYPE,
+} from '../../shared/workflow-composite'
 import { isLocalBridgeWorkflowNode } from '../../shared/workflow-local-bridge'
 import type { BackendWorkflowStore } from '../storage/workflow-store'
 import type { BackendExecutionLogStore } from '../storage/execution-log-store'
@@ -57,6 +66,7 @@ interface ExecutionSession {
   lastUpdatedAt: number
   eventSequence: number
   recentEvents: ExecutionBacklogEvent[]
+  loopStack: LoopExecutionFrame[]
 }
 
 interface FinishedExecutionRecovery {
@@ -64,6 +74,20 @@ interface FinishedExecutionRecovery {
   workflowId: string
   recovery: NonNullable<ExecutionRecoveryResponse['execution']>
   expiresAt: number
+}
+
+interface LoopExecutionFrame {
+  loopNodeId: string
+  parentData?: Record<string, unknown>
+  bodyAnchorId: string
+  variables: Record<string, unknown>
+  metadata: {
+    index: number
+    count: number
+    item: unknown
+    isFirst: boolean
+    isLast: boolean
+  }
 }
 
 const MAX_RECENT_EVENTS = 100
@@ -104,6 +128,7 @@ export class BackendWorkflowExecutionManager {
       lastUpdatedAt: Date.now(),
       eventSequence: 0,
       recentEvents: [],
+      loopStack: [],
     }
 
     this.sessions.set(executionId, session)
@@ -438,6 +463,8 @@ export class BackendWorkflowExecutionManager {
         }
       case 'switch':
         return this.executeSwitch(session, resolvedData.conditions || [])
+      case LOOP_NODE_TYPE:
+        return this.executeLoopNode(session, node, resolvedData, appendNodeLog)
       case 'agent_run':
         return this.executeAgentRun(session, node, resolvedData, appendNodeLog)
       default:
@@ -571,6 +598,129 @@ export class BackendWorkflowExecutionManager {
       }
     }
     return { __branch__: 'default', matchedIndex: -1 }
+  }
+
+  private async executeLoopNode(
+    session: ExecutionSession,
+    node: WorkflowNode,
+    resolvedData: Record<string, any>,
+    appendNodeLog: (level: ExecutionLogEntry['level'], message: string) => void,
+  ): Promise<any> {
+    const bodyNode = findCompositeChildByRole(session.nodes, node.id, LOOP_BODY_ROLE)
+    if (!bodyNode) {
+      throw new Error('循环节点缺少循环体节点')
+    }
+
+    const loopType = typeof resolvedData.loopType === 'string' ? resolvedData.loopType : 'count'
+    const iterations = this.resolveLoopIterations(loopType, resolvedData)
+    const sharedVariables = this.initializeLoopSharedVariables(resolvedData.sharedVariables)
+    const items: unknown[] = []
+
+    appendNodeLog('info', `开始执行循环，共 ${iterations.count} 次`)
+    for (let index = 0; index < iterations.count; index++) {
+      session.loopStack.push({
+        loopNodeId: node.id,
+        parentData: session.context.__data__,
+        bodyAnchorId: bodyNode.id,
+        variables: sharedVariables,
+        metadata: {
+          index,
+          count: iterations.count,
+          item: iterations.items[index],
+          isFirst: index === 0,
+          isLast: index === iterations.count - 1,
+        },
+      })
+
+      try {
+        this.syncLoopContext(session)
+        appendNodeLog('info', `循环第 ${index + 1}/${iterations.count} 次`)
+        const result = await this.executeLoopBody(session, bodyNode)
+        items.push(result)
+      } finally {
+        session.loopStack.pop()
+        this.syncLoopContext(session)
+      }
+    }
+
+    appendNodeLog('info', '循环执行完成')
+    return { items }
+  }
+
+  private resolveLoopIterations(loopType: string, resolvedData: Record<string, any>): { count: number; items: unknown[] } {
+    if (loopType === 'array') {
+      const items = Array.isArray(resolvedData.arrayPath) ? resolvedData.arrayPath : []
+      return { count: items.length, items }
+    }
+
+    if (loopType === 'infinite') {
+      throw new Error('当前版本暂不支持无限循环，请先使用按次数循环或数组循环')
+    }
+
+    const count = Math.max(0, Math.floor(Number(resolvedData.count) || 0))
+    return {
+      count,
+      items: Array.from({ length: count }, () => undefined),
+    }
+  }
+
+  private initializeLoopSharedVariables(sharedVariables: unknown): Record<string, unknown> {
+    if (!Array.isArray(sharedVariables)) return {}
+
+    const build = (fields: Array<Record<string, any>>): Record<string, unknown> => {
+      const result: Record<string, unknown> = {}
+      for (const field of fields) {
+        if (!field?.key) continue
+        if (field.type === 'object') {
+          result[field.key] = build(Array.isArray(field.children) ? field.children : [])
+          continue
+        }
+        result[field.key] = field.value ?? ''
+      }
+      return result
+    }
+
+    return build(sharedVariables as Array<Record<string, any>>)
+  }
+
+  private async executeLoopBody(session: ExecutionSession, bodyNode: WorkflowNode): Promise<unknown> {
+    const scopeNodes = getNodesForExecutionScope(session.nodes, bodyNode.id)
+    const scopeNodeIds = new Set(scopeNodes.map((node) => node.id))
+    const bodyEdges = session.edges.filter((edge) => {
+      if (edge.sourceHandle === LOOP_NEXT_SOURCE_HANDLE) return false
+      const sourceIsEntry = edge.source === bodyNode.id && scopeNodeIds.has(edge.target)
+      const scopedEdge = scopeNodeIds.has(edge.source) && scopeNodeIds.has(edge.target)
+      return sourceIsEntry || scopedEdge
+    })
+
+    const adjacency = new Map<string, WorkflowEdge[]>()
+    for (const edge of bodyEdges) {
+      const edges = adjacency.get(edge.source) || []
+      edges.push(edge)
+      adjacency.set(edge.source, edges)
+    }
+
+    const visited = new Set<string>()
+    const executeFrom = async (nodeId: string): Promise<unknown> => {
+      const outgoing = adjacency.get(nodeId) || []
+      let lastResult: unknown
+      for (const edge of outgoing) {
+        const activeHandle = session.activeBranches.get(edge.source)
+        if (activeHandle !== undefined && edge.sourceHandle !== activeHandle) continue
+        const nextNode = findWorkflowNode(scopeNodes, edge.target)
+        if (!nextNode || visited.has(nextNode.id)) continue
+        visited.add(nextNode.id)
+        await this.executeNode(session, nextNode)
+        lastResult = session.context.__data__?.[nextNode.id]
+        const downstream = await executeFrom(nextNode.id)
+        if (downstream !== undefined) {
+          lastResult = downstream
+        }
+      }
+      return lastResult
+    }
+
+    return executeFrom(bodyNode.id)
   }
 
   private evaluateCondition(variable: any, value: any, operator: string): boolean {
@@ -709,9 +859,21 @@ export class BackendWorkflowExecutionManager {
   }
 
   private resolveStringValue(session: ExecutionSession, value: string): any {
+    const loopVarMatch = value.match(/^\s*\{\{\s*__loop__\.vars\.([^}]+?)\s*\}\}\s*$/)
+    if (loopVarMatch) {
+      const result = this.getLoopVariableValue(session, loopVarMatch[1])
+      return result ?? ''
+    }
+
+    const loopMetaMatch = value.match(/^\s*\{\{\s*__loop__\.(index|count|item|isFirst|isLast)\s*\}\}\s*$/)
+    if (loopMetaMatch) {
+      const result = this.getLoopMetaValue(session, loopMetaMatch[1])
+      return result ?? ''
+    }
+
     const dataMatch = value.match(/^\s*\{\{\s*__data__\["([^"]+)"\]\.([^}]+?)\s*\}\}\s*$/)
     if (dataMatch) {
-      const data = session.context.__data__?.[dataMatch[1]]
+      const data = this.getNodeExecutionData(session, dataMatch[1])
       if (data != null) {
         const result = this.getNestedValue(data, dataMatch[2])
         if (result !== undefined) return result
@@ -740,9 +902,19 @@ export class BackendWorkflowExecutionManager {
     }
 
     let text = value.replace(
+      /\{\{\s*__loop__\.vars\.([^}]+?)\s*\}\}/g,
+      (_match, path) => String(this.getLoopVariableValue(session, path) ?? ''),
+    )
+
+    text = text.replace(
+      /\{\{\s*__loop__\.(index|count|item|isFirst|isLast)\s*\}\}/g,
+      (_match, key) => String(this.getLoopMetaValue(session, key) ?? ''),
+    )
+
+    text = text.replace(
       /\{\{\s*__data__\["([^"]+)"\]\.([^}]+?)\s*\}\}/g,
       (_match, nodeId, fieldPath) => {
-        const data = session.context.__data__?.[nodeId]
+        const data = this.getNodeExecutionData(session, nodeId)
         if (data == null) return ''
         return String(this.getNestedValue(data, fieldPath) ?? '')
       },
@@ -785,6 +957,58 @@ export class BackendWorkflowExecutionManager {
       current = current[part]
     }
     return current
+  }
+
+  private getLoopFrame(session: ExecutionSession): LoopExecutionFrame | null {
+    return session.loopStack[session.loopStack.length - 1] || null
+  }
+
+  private syncLoopContext(session: ExecutionSession): void {
+    const frame = this.getLoopFrame(session)
+    if (!frame) {
+      delete session.context.__loop__
+      return
+    }
+    session.context.__loop__ = {
+      vars: frame.variables,
+      index: frame.metadata.index,
+      count: frame.metadata.count,
+      item: frame.metadata.item,
+      isFirst: frame.metadata.isFirst,
+      isLast: frame.metadata.isLast,
+    }
+  }
+
+  private getLoopVariableValue(session: ExecutionSession, path: string): unknown {
+    const frame = this.getLoopFrame(session)
+    if (!frame) return undefined
+    return this.getNestedValue(frame.variables, path)
+  }
+
+  private getLoopMetaValue(session: ExecutionSession, key: string): unknown {
+    const frame = this.getLoopFrame(session)
+    if (!frame) return undefined
+    return frame.metadata[key as keyof LoopExecutionFrame['metadata']]
+  }
+
+  private getNodeExecutionData(session: ExecutionSession, nodeId: string): any {
+    const frame = this.getLoopFrame(session)
+    if (!frame) {
+      return session.context.__data__?.[nodeId]
+    }
+
+    if (nodeId === frame.bodyAnchorId || nodeId === frame.loopNodeId) {
+      return {
+        $index: frame.metadata.index,
+        $count: frame.metadata.count,
+        $item: frame.metadata.item,
+        $isFirst: frame.metadata.isFirst,
+        $isLast: frame.metadata.isLast,
+        ...frame.variables,
+      }
+    }
+
+    return session.context.__data__?.[nodeId] ?? frame.parentData?.[nodeId]
   }
 
   private currentContext(session: ExecutionSession): Record<string, unknown> {

@@ -13,6 +13,18 @@ import type {
   ExecutionEventMap,
   ExecutionRecoveryState,
 } from '@shared/execution-events'
+import {
+  findCompositeChildByRole,
+  findWorkflowNode,
+  getCompositeParentId,
+  getCompositeRootId,
+  isGeneratedWorkflowNode,
+  isHiddenWorkflowEdge,
+  isHiddenWorkflowNode,
+  isLockedWorkflowEdge,
+  LOOP_BODY_ROLE,
+  LOOP_BODY_SOURCE_HANDLE,
+} from '@shared/workflow-composite'
 
 export interface WorkflowChanges {
   upsertNodes: any[]
@@ -341,6 +353,243 @@ function createEditActions(
   executionContext: Ref<Record<string, any>>,
   undoRedo: ReturnType<typeof createUndoRedoManager>,
 ) {
+  interface AddNodeOptions {
+    sourceNodeId?: string | null
+    sourceHandle?: string | null
+    scopeNodeId?: string | null
+  }
+
+  function cloneData<T>(value: T): T {
+    return JSON.parse(JSON.stringify(value)) as T
+  }
+
+  function getNode(nodeId: string): WorkflowNode | undefined {
+    return currentWorkflow.value?.nodes.find((node) => node.id === nodeId)
+  }
+
+  function getEdge(edgeId: string) {
+    return currentWorkflow.value?.edges.find((edge) => edge.id === edgeId)
+  }
+
+  function isNodeManaged(nodeId: string): boolean {
+    const node = getNode(nodeId)
+    return !!node && isGeneratedWorkflowNode(node)
+  }
+
+  function canDeleteNode(nodeId: string): boolean {
+    const node = getNode(nodeId)
+    if (!node) return false
+    return !isGeneratedWorkflowNode(node)
+  }
+
+  function canCloneNode(nodeId: string): boolean {
+    return canDeleteNode(nodeId)
+  }
+
+  function canEditNodeLabel(nodeId: string): boolean {
+    const node = getNode(nodeId)
+    if (!node) return false
+    return !node.composite?.generated
+  }
+
+  function canDeleteEdge(edgeId: string): boolean {
+    const edge = getEdge(edgeId)
+    if (!edge) return false
+    return !isLockedWorkflowEdge(edge)
+  }
+
+  function canCreateNode(type: string): boolean {
+    const def = getNodeDefinition(type)
+    return def?.manualCreate !== false
+  }
+
+  function createNodeData(type: string): Record<string, any> {
+    const def = getNodeDefinition(type)
+    const data: Record<string, any> = {}
+    if (def?.properties?.length) {
+      for (const prop of def.properties) {
+        if (prop.default !== undefined) data[prop.key] = cloneData(prop.default)
+      }
+    }
+    if (def?.outputs?.length) data.outputs = cloneData(def.outputs)
+    return data
+  }
+
+  function getScopeOwnerNode(nodeId: string): WorkflowNode | null {
+    const node = getNode(nodeId)
+    if (!node) return null
+
+    let current: WorkflowNode | undefined = node
+    while (current) {
+      const parentId = getCompositeParentId(current)
+      if (!parentId) return current
+      const parent = getNode(parentId)
+      if (!parent) return current
+      if (isGeneratedWorkflowNode(parent) && isHiddenWorkflowNode(parent)) {
+        return parent
+      }
+      current = parent
+    }
+
+    return node
+  }
+
+  function getScopeOwnerId(nodeId: string): string | null {
+    return getScopeOwnerNode(nodeId)?.id ?? null
+  }
+
+  function getInsertScopeNode(sourceNodeId?: string | null, sourceHandle?: string | null, scopeNodeId?: string | null): WorkflowNode | null {
+    if (scopeNodeId) {
+      return getNode(scopeNodeId) || null
+    }
+    if (!sourceNodeId) return null
+    if (sourceHandle === LOOP_BODY_SOURCE_HANDLE) {
+      return findLoopBodyNode(sourceNodeId) || null
+    }
+    return getScopeOwnerNode(sourceNodeId)
+  }
+
+  function getConnectionScopeOwnerId(sourceId: string, sourceHandle: string | null = null): string | null {
+    const scopedNode = getInsertScopeNode(sourceId, sourceHandle, null)
+    if (scopedNode) return scopedNode.id
+    return getScopeOwnerId(sourceId)
+  }
+
+  function canConnectNodes(sourceId: string, targetId: string, sourceHandle: string | null = null): { ok: boolean; reason?: string } {
+    const source = getNode(sourceId)
+    const target = getNode(targetId)
+    if (!source || !target) return { ok: false, reason: '连线节点不存在' }
+
+    const sourceScopeId = getConnectionScopeOwnerId(sourceId, sourceHandle)
+    const targetScopeId = getScopeOwnerId(targetId)
+    if (sourceScopeId !== targetScopeId) {
+      return { ok: false, reason: '不能跨循环体边界连线' }
+    }
+
+    if (target.composite?.generated && target.id !== source.id) {
+      return { ok: false, reason: '内部锚点节点不允许手动作为连线目标' }
+    }
+
+    return { ok: true }
+  }
+
+  function appendNode(node: WorkflowNode): WorkflowNode {
+    currentWorkflow.value!.nodes.push(node)
+    return node
+  }
+
+  function appendEdge(edge: Workflow['edges'][number]): void {
+    currentWorkflow.value!.edges.push(edge)
+  }
+
+  function createCompoundNodes(
+    type: string,
+    position: { x: number; y: number },
+    options?: AddNodeOptions,
+  ): WorkflowNode[] {
+    const def = getNodeDefinition(type)
+    if (!def?.compound) {
+      const scopeNode = getInsertScopeNode(options?.sourceNodeId, options?.sourceHandle, options?.scopeNodeId)
+      const node: WorkflowNode = {
+        id: crypto.randomUUID(),
+        type,
+        label: def?.label || type,
+        position,
+        data: createNodeData(type),
+        composite: scopeNode
+          ? {
+              rootId: scopeNode.composite?.rootId || scopeNode.id,
+              parentId: scopeNode.id,
+              generated: false,
+              hidden: false,
+            }
+          : undefined,
+      }
+      appendNode(node)
+      return [node]
+    }
+
+    const roleMap = new Map<string, WorkflowNode>()
+    const rootRole = def.compound.rootRole || def.compound.children[0]?.role
+    if (!rootRole) return []
+
+    for (const childDef of def.compound.children) {
+      const isRoot = childDef.role === rootRole
+      const nodeType = childDef.type
+      const nodeDefinition = getNodeDefinition(nodeType)
+      const baseLabel = childDef.label || nodeDefinition?.label || nodeType
+      const offset = childDef.offset || { x: 0, y: 0 }
+      const node: WorkflowNode = {
+        id: crypto.randomUUID(),
+        type: nodeType,
+        label: isRoot ? (def.label || baseLabel) : baseLabel,
+        position: {
+          x: position.x + offset.x,
+          y: position.y + offset.y,
+        },
+        data: {
+          ...createNodeData(nodeType),
+          ...(childDef.data ? cloneData(childDef.data) : {}),
+        },
+        composite: {
+          role: childDef.role,
+          generated: !isRoot,
+          hidden: !!childDef.hidden,
+        },
+      }
+      roleMap.set(childDef.role, appendNode(node))
+    }
+
+    const rootNode = roleMap.get(rootRole)
+    if (!rootNode) return []
+    rootNode.composite = {
+      ...(rootNode.composite || {}),
+      rootId: rootNode.id,
+      parentId: null,
+      generated: false,
+      hidden: false,
+    }
+
+    for (const childDef of def.compound.children) {
+      const node = roleMap.get(childDef.role)
+      if (!node || node.id === rootNode.id) continue
+      const parentRole = childDef.parentRole || rootRole
+      const parentNode = roleMap.get(parentRole)
+      node.composite = {
+        ...(node.composite || {}),
+        rootId: rootNode.id,
+        parentId: parentNode?.id || rootNode.id,
+      }
+    }
+
+    for (const edgeDef of def.compound.edges || []) {
+      const sourceNode = roleMap.get(edgeDef.sourceRole)
+      const targetNode = roleMap.get(edgeDef.targetRole)
+      if (!sourceNode || !targetNode) continue
+      appendEdge({
+        id: `e-${sourceNode.id}-${edgeDef.sourceHandle ?? 'default'}-${targetNode.id}-${edgeDef.targetHandle ?? 'default'}`,
+        source: sourceNode.id,
+        target: targetNode.id,
+        sourceHandle: edgeDef.sourceHandle ?? null,
+        targetHandle: edgeDef.targetHandle ?? null,
+        composite: {
+          rootId: rootNode.id,
+          parentId: sourceNode.id,
+          generated: true,
+          hidden: !!edgeDef.hidden,
+          locked: !!edgeDef.locked,
+        },
+      })
+    }
+
+    return [rootNode, ...currentWorkflow.value!.nodes.filter((node) => node.composite?.rootId === rootNode.id && node.id !== rootNode.id)]
+  }
+
+  function findLoopBodyNode(loopNodeId: string): WorkflowNode | undefined {
+    if (!currentWorkflow.value) return undefined
+    return findCompositeChildByRole(currentWorkflow.value.nodes, loopNodeId, LOOP_BODY_ROLE)
+  }
+
   function newWorkflow(folderId: string | null, name = '新工作流') {
     const startNodeId = crypto.randomUUID()
     const endNodeId = crypto.randomUUID()
@@ -364,42 +613,62 @@ function createEditActions(
     executionContext.value = {}
   }
 
-  function addNode(type: string, position: { x: number; y: number }): WorkflowNode {
+  function addNode(type: string, position: { x: number; y: number }, options?: AddNodeOptions): WorkflowNode {
     undoRedo.pushUndo(`添加节点: ${type}`)
-    const def = getNodeDefinition(type)
-    const label = def?.label || type
-    const data: Record<string, any> = {}
-    // Apply property default values from node definition
-    if (def?.properties?.length) {
-      for (const prop of def.properties) {
-        if (prop.default !== undefined) data[prop.key] = prop.default
-      }
+    if (!canCreateNode(type)) {
+      throw new Error(`节点类型 ${type} 不允许手动创建`)
     }
-    if (def?.outputs?.length) data.outputs = JSON.parse(JSON.stringify(def.outputs))
-    const node: WorkflowNode = { id: crypto.randomUUID(), type, label, position, data }
-    currentWorkflow.value!.nodes.push(node)
-    return node
+    const createdNodes = createCompoundNodes(type, position, options)
+    const rootNode = createdNodes[0]
+    if (!rootNode) {
+      throw new Error(`节点类型 ${type} 创建失败`)
+    }
+    return rootNode
   }
 
   function removeNode(nodeId: string): void {
     if (!currentWorkflow.value) return
+    if (!canDeleteNode(nodeId)) return
     undoRedo.pushUndo('删除节点')
-    currentWorkflow.value.nodes = currentWorkflow.value.nodes.filter((n) => n.id !== nodeId)
-    currentWorkflow.value.edges = currentWorkflow.value.edges.filter(
-      (e) => e.source !== nodeId && e.target !== nodeId,
+    const rootNode = getNode(nodeId)
+    if (!rootNode) return
+    const rootId = getCompositeRootId(rootNode)
+    const deleteNodeIds = new Set(
+      currentWorkflow.value.nodes
+        .filter((node) => getCompositeRootId(node) === rootId)
+        .map((node) => node.id),
     )
-    selectedNodeIds.value = selectedNodeIds.value.filter((id) => id !== nodeId)
+    currentWorkflow.value.nodes = currentWorkflow.value.nodes.filter((node) => !deleteNodeIds.has(node.id))
+    currentWorkflow.value.edges = currentWorkflow.value.edges.filter(
+      (edge) => !deleteNodeIds.has(edge.source) && !deleteNodeIds.has(edge.target) && edge.composite?.rootId !== rootId,
+    )
+    selectedNodeIds.value = selectedNodeIds.value.filter((id) => !deleteNodeIds.has(id))
   }
 
   function cloneNode(nodeId: string): WorkflowNode | null {
     if (!currentWorkflow.value) return null
+    if (!canCloneNode(nodeId)) return null
     undoRedo.pushUndo('克隆节点')
     const source = currentWorkflow.value.nodes.find((n) => n.id === nodeId)
     if (!source) return null
+    const def = getNodeDefinition(source.type)
+    if (def?.compound) {
+      const cloned = createCompoundNodes(source.type, {
+        x: source.position.x + 30,
+        y: source.position.y + 30,
+      })[0]
+      if (!cloned) return null
+      cloned.data = cloneData(source.data)
+      cloned.label = source.label
+      return cloned
+    }
     const cloned: WorkflowNode = {
-      id: crypto.randomUUID(), type: source.type, label: source.label,
+      id: crypto.randomUUID(),
+      type: source.type,
+      label: source.label,
       position: { x: source.position.x + 30, y: source.position.y + 30 },
-      data: JSON.parse(JSON.stringify(source.data)),
+      data: cloneData(source.data),
+      composite: source.composite ? cloneData(source.composite) : undefined,
     }
     currentWorkflow.value.nodes.push(cloned)
     return cloned
@@ -417,6 +686,7 @@ function createEditActions(
   }
 
   function updateNodeLabel(nodeId: string, label: string): void {
+    if (!canEditNodeLabel(nodeId)) return
     undoRedo.pushUndo('修改节点标签')
     const node = currentWorkflow.value?.nodes.find((n) => n.id === nodeId)
     if (node) node.label = label
@@ -430,6 +700,8 @@ function createEditActions(
 
   function addEdge(source: string, target: string, sourceHandle: string | null = null, targetHandle: string | null = null): void {
     if (!currentWorkflow.value) return
+    const connectCheck = canConnectNodes(source, target, sourceHandle)
+    if (!connectCheck.ok) return
     if (currentWorkflow.value.edges.some(
       (e) => e.source === source && e.target === target
         && (e.sourceHandle ?? null) === sourceHandle && (e.targetHandle ?? null) === targetHandle,
@@ -443,11 +715,31 @@ function createEditActions(
 
   function removeEdge(edgeId: string): void {
     if (!currentWorkflow.value) return
+    if (!canDeleteEdge(edgeId)) return
     undoRedo.pushUndo('删除连线')
     currentWorkflow.value.edges = currentWorkflow.value.edges.filter((e) => e.id !== edgeId)
   }
 
-  return { newWorkflow, addNode, removeNode, cloneNode, updateNodeData, updateNodePosition, updateNodeLabel, updateNodeState, addEdge, removeEdge }
+  return {
+    newWorkflow,
+    addNode,
+    removeNode,
+    cloneNode,
+    updateNodeData,
+    updateNodePosition,
+    updateNodeLabel,
+    updateNodeState,
+    addEdge,
+    removeEdge,
+    canDeleteNode,
+    canCloneNode,
+    canEditNodeLabel,
+    canDeleteEdge,
+    canConnectNodes,
+    canCreateNode,
+    isNodeManaged,
+    findLoopBodyNode,
+  }
 }
 
 // ====== 执行控制 ======

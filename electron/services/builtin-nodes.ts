@@ -1,4 +1,12 @@
 import type { PluginWorkflowNode } from './plugin-types'
+import {
+  LOOP_BODY_NODE_TYPE,
+  LOOP_BODY_ROLE,
+  LOOP_BODY_SOURCE_HANDLE,
+  LOOP_NEXT_SOURCE_HANDLE,
+  LOOP_NODE_TYPE,
+  LOOP_ROOT_ROLE,
+} from '../../shared/workflow-composite'
 
 export const builtinNodeDefinitions: PluginWorkflowNode[] = [
   // 流程控制
@@ -65,6 +73,107 @@ export const builtinNodeDefinitions: PluginWorkflowNode[] = [
     properties: [
       { key: 'conditions', label: '条件列表', type: 'conditions' as const, tooltip: '按顺序评估条件，匹配则走对应分支，全部不匹配走默认分支' },
     ],
+  },
+  {
+    type: LOOP_NODE_TYPE,
+    label: '循环节点',
+    category: '流程控制',
+    icon: 'RotateCw',
+    description: '按次数、数组长度或循环体逻辑重复执行一组节点，输出循环体末节点结果数组。',
+    properties: [
+      {
+        key: 'loopType',
+        label: '循环类型',
+        type: 'select',
+        default: 'count',
+        required: true,
+        options: [
+          { label: '按次数循环', value: 'count' },
+          { label: '使用数组循环', value: 'array' },
+          { label: '无限循环', value: 'infinite' },
+        ],
+        tooltip: '如果引用数组，循环次数为数组长度；如果指定次数，循环次数为指定值；无限循环需后续配合终止循环节点。',
+      },
+      {
+        key: 'count',
+        label: '循环次数',
+        type: 'number',
+        default: 1,
+        required: true,
+        tooltip: '仅在“按次数循环”时生效。',
+        visibleWhen: { key: 'loopType', equals: 'count' } as any,
+      },
+      {
+        key: 'arrayPath',
+        label: '数组变量',
+        type: 'text',
+        required: true,
+        tooltip: '仅在“使用数组循环”时生效，循环次数取数组长度。',
+        visibleWhen: { key: 'loopType', equals: 'array' } as any,
+      },
+      {
+        key: 'sharedVariables',
+        label: '中间变量',
+        type: 'output_fields' as any,
+        default: [],
+        tooltip: '在循环体内共享的中间变量定义。循环体内部选择变量时，将优先使用这些变量。',
+      },
+    ] as any,
+    handles: {
+      target: true,
+      source: false,
+      sourceHandles: [
+        { id: LOOP_BODY_SOURCE_HANDLE, label: '循环体' },
+        { id: LOOP_NEXT_SOURCE_HANDLE, label: '完成后' },
+      ],
+    } as any,
+    outputs: [{ key: 'items', type: 'any' }],
+    compound: {
+      rootRole: LOOP_ROOT_ROLE,
+      children: [
+        { role: LOOP_ROOT_ROLE, type: LOOP_NODE_TYPE },
+        {
+          role: LOOP_BODY_ROLE,
+          type: LOOP_BODY_NODE_TYPE,
+          label: '循环体节点',
+          offset: { x: 260, y: 0 },
+          hidden: true,
+          parentRole: LOOP_ROOT_ROLE,
+          data: {
+            outputs: [
+              { key: '$index', type: 'number' },
+              { key: '$count', type: 'number' },
+              { key: '$item', type: 'any' },
+              { key: '$isFirst', type: 'boolean' },
+              { key: '$isLast', type: 'boolean' },
+            ],
+          },
+        },
+      ],
+      edges: [
+        {
+          sourceRole: LOOP_ROOT_ROLE,
+          targetRole: LOOP_BODY_ROLE,
+          sourceHandle: LOOP_BODY_SOURCE_HANDLE,
+          targetHandle: 'target',
+          hidden: true,
+          locked: true,
+        },
+      ],
+    } as any,
+  },
+  {
+    type: LOOP_BODY_NODE_TYPE,
+    label: '循环体节点',
+    category: '流程控制',
+    icon: 'Ghost',
+    description: '循环节点自动生成的内部锚点，用户不可手动创建。',
+    properties: [],
+    handles: {
+      target: true,
+      source: true,
+    } as any,
+    manualCreate: false as any,
   },
   // AI
   {

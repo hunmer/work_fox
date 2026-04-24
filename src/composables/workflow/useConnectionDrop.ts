@@ -41,7 +41,10 @@ export function useConnectionDrop(
       x: sourceNode.position.x + 250,
       y: sourceNode.position.y,
     }
-    const newNode = store.addNode(type, position)
+    const newNode = store.addNode(type, position, {
+      sourceNodeId: connectSource.nodeId,
+      sourceHandle: connectSource.handleId,
+    })
     store.addEdge(connectSource.nodeId, newNode.id, connectSource.handleId, null)
     connectSource = null
     connectDropPosition = null

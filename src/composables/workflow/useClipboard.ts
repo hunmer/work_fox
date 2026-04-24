@@ -1,5 +1,6 @@
 import type { WorkflowStore } from '@/stores/workflow'
 import { useNotification } from '@/composables/useNotification'
+import { isHiddenWorkflowNode, isLockedWorkflowEdge } from '@shared/workflow-composite'
 
 interface ClipboardNode {
   id: string
@@ -51,7 +52,7 @@ export function useClipboard(
       nodeType: (n.data as any)?.nodeType ?? '',
     }))
     clipboardEdges = (store.currentWorkflow?.edges ?? [])
-      .filter((e) => selectedIds.has(e.source) && selectedIds.has(e.target))
+      .filter((e) => selectedIds.has(e.source) && selectedIds.has(e.target) && !isLockedWorkflowEdge(e))
       .map((e) => ({
         source: e.source,
         target: e.target,
@@ -136,12 +137,16 @@ export function useClipboard(
     const selectedEdges = deps.getSelectedEdges.value
     let count = 0
     for (const edge of selectedEdges) {
-      store.removeEdge(edge.id)
-      count++
+      if (store.canDeleteEdge(edge.id)) {
+        store.removeEdge(edge.id)
+        count++
+      }
     }
     for (const node of selectedNodes) {
-      store.removeNode(node.id)
-      count++
+      if (store.canDeleteNode(node.id) && !isHiddenWorkflowNode(store.currentWorkflow?.nodes.find((n) => n.id === node.id) as any)) {
+        store.removeNode(node.id)
+        count++
+      }
     }
     if (count > 0) {
       notify.success(`已删除 ${count} 个元素`)

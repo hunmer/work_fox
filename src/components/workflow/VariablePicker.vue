@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import VariableFieldMenu from './VariableFieldMenu.vue'
+import { getCompositeParentId, isGeneratedWorkflowNode } from '@shared/workflow-composite'
 
 const props = defineProps<{
   excludeNodeId: string
@@ -54,7 +55,31 @@ function handleSelectConfigField(pluginId: string, key: string) {
 /** 获取画布上除当前节点外的所有节点 */
 const otherNodes = computed(() => {
   if (!store.currentWorkflow) return []
-  return store.currentWorkflow.nodes.filter((n) => n.id !== props.excludeNodeId)
+  const scopedParentId = scopedParentVariableNode.value?.id
+  return store.currentWorkflow.nodes.filter((n) => n.id !== props.excludeNodeId && n.id !== scopedParentId)
+})
+
+const scopedParentVariableNode = computed(() => {
+  if (!store.currentWorkflow) return null
+  const currentNode = store.currentWorkflow.nodes.find((node) => node.id === props.excludeNodeId)
+  if (!currentNode) return null
+
+  const parentId = getCompositeParentId(currentNode)
+  if (!parentId) return null
+
+  const parentNode = store.currentWorkflow.nodes.find((node) => node.id === parentId)
+  if (!parentNode || !isGeneratedWorkflowNode(currentNode)) return null
+
+  const fields = Array.isArray(parentNode.data?.sharedVariables)
+    ? parentNode.data.sharedVariables as OutputField[]
+    : []
+  if (!fields.length) return null
+
+  return {
+    id: parentNode.id,
+    label: `${getNodeLabel(parentNode)} / 中间变量`,
+    fields,
+  }
 })
 
 /** 获取节点图标组件 */
@@ -109,6 +134,18 @@ function handleSelectField(nodeId: string, fieldPath: string) {
           <span>节点属性</span>
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent class="w-56">
+          <DropdownMenuSub v-if="scopedParentVariableNode">
+            <DropdownMenuSubTrigger class="text-xs">
+              <span class="truncate">{{ scopedParentVariableNode.label }}</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent class="min-w-[180px]">
+              <VariableFieldMenu
+                :fields="scopedParentVariableNode.fields"
+                :node-id="scopedParentVariableNode.id"
+                @select="handleSelectField"
+              />
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
           <template v-if="otherNodes.length === 0">
             <div class="px-2 py-1.5 text-xs text-muted-foreground">
               画布上没有其他节点

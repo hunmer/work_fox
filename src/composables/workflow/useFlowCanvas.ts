@@ -1,6 +1,7 @@
 import { computed, watch, nextTick, onUnmounted } from 'vue'
 import { useVueFlow, MarkerType } from '@vue-flow/core'
 import type { WorkflowStore } from '@/stores/workflow'
+import { isHiddenWorkflowEdge, isHiddenWorkflowNode } from '@shared/workflow-composite'
 
 export function useFlowCanvas(store: WorkflowStore, flowId: string) {
   const flowStore = useVueFlow(flowId)
@@ -24,7 +25,9 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
 
     for (const change of changes) {
       if (change.type === 'remove') {
-        store.removeNode(change.id)
+        if (store.canDeleteNode(change.id)) {
+          store.removeNode(change.id)
+        }
       } else if (change.type === 'position' && change.position) {
         store.updateNodePosition(change.id, change.position)
       } else if (change.type === 'select') {
@@ -46,7 +49,9 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     if (store.isPreview) return
     for (const change of changes) {
       if (change.type === 'remove') {
-        store.removeEdge(change.id)
+        if (store.canDeleteEdge(change.id)) {
+          store.removeEdge(change.id)
+        }
       }
     }
   })
@@ -86,17 +91,21 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
   })
 
   const nodes = computed(() =>
-    (store.currentWorkflow?.nodes || []).map((n) => ({
+    (store.currentWorkflow?.nodes || [])
+      .filter((n) => !isHiddenWorkflowNode(n))
+      .map((n) => ({
       id: n.id,
       type: 'custom',
       position: n.position,
       selected: store.selectedNodeIds.includes(n.id),
       data: { ...n.data, label: n.label, nodeType: n.type },
-    })),
+      })),
   )
 
   const edges = computed(() =>
-    (store.currentWorkflow?.edges || []).map((e) => ({
+    (store.currentWorkflow?.edges || [])
+      .filter((e) => !isHiddenWorkflowEdge(e))
+      .map((e) => ({
       id: e.id,
       type: 'custom',
       source: e.source,
@@ -105,7 +114,7 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
       targetHandle: e.targetHandle,
       animated: true,
       markerEnd: MarkerType.ArrowClosed,
-    })),
+      })),
   )
 
   function handleConnect(params: any) {

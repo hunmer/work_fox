@@ -178,6 +178,7 @@ const categories = computed(() => {
   const merged = [...base, ...pluginNodes.value]
   const grouped: Record<string, any[]> = {}
   for (const def of merged) {
+    if (def.manualCreate === false) continue
     if (!grouped[def.category]) grouped[def.category] = []
     grouped[def.category].push(def)
   }

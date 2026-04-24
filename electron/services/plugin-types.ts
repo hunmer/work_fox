@@ -194,12 +194,17 @@ export interface PluginWorkflowNode {
   properties?: Array<{
     key: string
     label: string
-    type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'code' | 'array' | 'conditions'
+    type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'code' | 'array' | 'conditions' | 'output_fields'
     required?: boolean
     default?: any
     options?: Array<{ label: string; value: string }>
     tooltip?: string
     placeholder?: string
+    visibleWhen?: {
+      key: string
+      equals?: any
+      in?: any[]
+    }
     itemTemplate?: Record<string, any>
     fields?: Array<{
       key: string
@@ -215,6 +220,7 @@ export interface PluginWorkflowNode {
   handles?: {
     source?: boolean
     target?: boolean
+    sourceHandles?: Array<{ id: string; label?: string }>
     dynamicSource?: { dataKey: string; extraCount?: number }
   }
   outputs?: Array<{
@@ -223,6 +229,27 @@ export interface PluginWorkflowNode {
     value?: string
     children?: any[]
   }>
+  manualCreate?: boolean
+  compound?: {
+    rootRole?: string
+    children: Array<{
+      role: string
+      type: string
+      label?: string
+      offset?: { x: number; y: number }
+      hidden?: boolean
+      parentRole?: string
+      data?: Record<string, any>
+    }>
+    edges?: Array<{
+      sourceRole: string
+      targetRole: string
+      sourceHandle?: string | null
+      targetHandle?: string | null
+      hidden?: boolean
+      locked?: boolean
+    }>
+  }
   handler?: (ctx: PluginNodeContext, args: Record<string, any>) => Promise<PluginToolResult>
 }
 

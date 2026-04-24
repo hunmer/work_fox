@@ -31,6 +31,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { LOOP_BODY_SOURCE_HANDLE } from '@shared/workflow-composite'
 
 const props = defineProps<NodeProps>()
 defineEmits<{ (e: 'updateNodeInternals'): void }>()
@@ -47,6 +48,7 @@ const IconComponent = computed(() => resolveLucideIcon(definition.value?.icon ||
 /** 是否显示输入/输出连接点 */
 const showTargetHandle = computed(() => definition.value?.handles?.target !== false)
 const showSourceHandle = computed(() => definition.value?.handles?.source !== false)
+const staticSourceHandles = computed(() => definition.value?.handles?.sourceHandles || [])
 
 /** 是否为流程边界节点（开始/结束） */
 const isBoundaryNode = computed(() => definition.value?.type === 'start' || definition.value?.type === 'end')
@@ -133,10 +135,12 @@ function finishEdit() {
 }
 
 function handleDelete() {
+  if (!store.canDeleteNode(String(props.id))) return
   store.removeNode(String(props.id))
 }
 
 function handleClone() {
+  if (!store.canCloneNode(String(props.id))) return
   store.cloneNode(String(props.id))
 }
 
@@ -320,7 +324,7 @@ async function copyNodeInfo() {
 
         <!-- 悬浮删除按钮（开始/结束节点隐藏，预览模式下隐藏） -->
         <button
-          v-if="!isBoundaryNode && !store.isPreview"
+          v-if="!isBoundaryNode && !store.isPreview && store.canDeleteNode(String(props.id))"
           class="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-opacity hover:bg-destructive/80 z-10"
           @click.stop="handleDelete"
         >
@@ -404,14 +408,35 @@ async function copyNodeInfo() {
         </div>
 
         <!-- 输出连接点 -->
-        <Handle
-          v-if="showSourceHandle && !dynamicHandles"
-          id="source"
-          type="source"
-          :position="Position.Right"
-          :connectable="props.connectable"
-          class="!z-10 !w-3 !h-3 !bg-emerald-500 !border-2 !border-emerald-300"
-        />
+        <template v-if="showSourceHandle && !dynamicHandles">
+          <Handle
+            v-if="staticSourceHandles.length === 0"
+            id="source"
+            type="source"
+            :position="Position.Right"
+            :connectable="props.connectable"
+            class="!z-10 !w-3 !h-3 !bg-emerald-500 !border-2 !border-emerald-300"
+          />
+          <template v-else>
+            <div
+              v-for="(h, index) in staticSourceHandles"
+              :key="h.id"
+              class="absolute right-0 flex items-center"
+              :style="{ top: getHandleTop(index, staticSourceHandles.length), transform: 'translateY(-50%)' }"
+            >
+              <span class="text-[9px] text-muted-foreground mr-1 whitespace-nowrap">{{ h.label || h.id }}</span>
+              <Handle
+                :id="h.id"
+                type="source"
+                :position="Position.Right"
+                :connectable="props.connectable"
+                class="!relative !top-0 !translate-y-0 !z-10 !w-2.5 !h-2.5"
+                :class="h.id === LOOP_BODY_SOURCE_HANDLE ? '!bg-blue-500 !border-blue-300' : '!bg-emerald-500 !border-emerald-300'"
+                :style="{ borderWidth: '2px' }"
+              />
+            </div>
+          </template>
+        </template>
 
         <!-- 动态输出连接点（switch 节点） -->
         <template v-if="dynamicHandles">
@@ -455,10 +480,11 @@ async function copyNodeInfo() {
           <Info class="w-4 h-4 mr-2" />
           查看节点信息
         </ContextMenuItem>
-        <ContextMenuItem @click="handleClone">
+        <ContextMenuItem v-if="store.canCloneNode(String(props.id))" @click="handleClone">
           复制节点
         </ContextMenuItem>
         <ContextMenuItem
+          v-if="store.canDeleteNode(String(props.id))"
           class="text-destructive"
           @click="handleDelete"
         >
