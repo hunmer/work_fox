@@ -20,6 +20,8 @@ const MIN_CONTAINER_SIZE = {
   height: 260,
 }
 
+const resizingNodeIds = new Set<string>()
+
 export function useFlowCanvas(store: WorkflowStore, flowId: string) {
   const flowStore = useVueFlow(flowId)
   const {
@@ -78,6 +80,26 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     }
   }
 
+  function updateNodeSize(nodeId: string, dimensions: { width?: number; height?: number }, resizing?: boolean): void {
+    const node = store.currentWorkflow?.nodes.find((n) => n.id === nodeId)
+    if (!node) return
+
+    if (!resizingNodeIds.has(nodeId)) {
+      store.pushUndo('调整节点大小')
+      resizingNodeIds.add(nodeId)
+    }
+
+    node.data = {
+      ...node.data,
+      ...(typeof dimensions.width === 'number' ? { width: dimensions.width } : {}),
+      ...(typeof dimensions.height === 'number' ? { height: dimensions.height } : {}),
+    }
+
+    if (resizing === false) {
+      resizingNodeIds.delete(nodeId)
+    }
+  }
+
   // HMR 清理：销毁 VueFlow 全局 store，防止 HMR 后节点位置混乱
   onUnmounted(() => {
     flowStore.$destroy?.()
@@ -100,6 +122,15 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
         const movedNode = store.currentWorkflow?.nodes.find((node) => node.id === change.id)
         const parentId = movedNode ? getCompositeParentId(movedNode) : null
         if (parentId) syncScopeBoundaryLayout(parentId)
+      } else if (change.type === 'dimensions') {
+        if (change.dimensions) {
+          updateNodeSize(change.id, change.dimensions, change.resizing)
+          const resizedNode = store.currentWorkflow?.nodes.find((node) => node.id === change.id)
+          const parentId = resizedNode ? getCompositeParentId(resizedNode) : null
+          if (parentId) syncScopeBoundaryLayout(parentId)
+        } else if (change.resizing === false) {
+          resizingNodeIds.delete(change.id)
+        }
       } else if (change.type === 'select') {
         if (!nextSelectedNodeIds) nextSelectedNodeIds = [...store.selectedNodeIds]
         if (change.selected) {

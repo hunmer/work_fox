@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-22T12:58:04+08:00",
+  "timestamp": "2026-04-25T00:24:36+08:00",
   "project": "work-fox",
   "version": "0.0.12",
   "description": "Workflow + AI Agent 桌面应用，基于 Electron + Vue 3 构建",
@@ -10,7 +10,7 @@
       "claudeMd": "src/CLAUDE.md",
       "language": "TypeScript / Vue",
       "entry": "src/main.ts",
-      "description": "渲染进程（Vue 3 SPA）-- 前端 UI 层，含 Web 模式支持",
+      "description": "渲染进程（Vue 3 SPA）-- 前端 UI 层，含 Web 模式、复合节点编辑、嵌入式子工作流支持",
       "keyFiles": [
         "src/main.ts",
         "src/web/web-entry.ts",
@@ -24,25 +24,47 @@
         "src/stores/tab.ts",
         "src/stores/plugin.ts",
         "src/stores/agent-settings.ts",
+        "src/stores/shortcut.ts",
+        "src/stores/chat-ui.ts",
+        "src/stores/theme.ts",
+        "src/stores/userProfile.ts",
         "src/lib/agent/agent.ts",
         "src/lib/agent/stream.ts",
         "src/lib/agent/tools.ts",
+        "src/lib/agent/system-prompt.ts",
         "src/lib/agent/workflow-tools.ts",
         "src/lib/agent/workflow-renderer-tools.ts",
+        "src/lib/agent/workflow-prompt.ts",
         "src/lib/workflow/engine.ts",
         "src/lib/workflow/nodeRegistry.ts",
         "src/lib/workflow/agent-run.ts",
         "src/lib/workflow/types.ts",
+        "src/lib/workflow/nodes/index.ts",
+        "src/lib/workflow/nodes/flowControl.ts",
+        "src/lib/workflow/nodes/ai.ts",
+        "src/lib/workflow/nodes/display.ts",
         "src/lib/ws-bridge.ts",
         "src/lib/chat-db.ts",
-        "src/lib/backend-api/workflow.ts",
         "src/lib/backend-api/workflow-domain.ts",
+        "src/lib/backend-api/workflow.ts",
+        "src/lib/backend-api/workflow-folder.ts",
+        "src/lib/backend-api/workflow-version.ts",
+        "src/lib/backend-api/execution-log.ts",
+        "src/lib/backend-api/operation-history.ts",
+        "src/lib/backend-api/plugin.ts",
+        "src/lib/backend-api/plugin-domain.ts",
         "src/lib/backend-api/interaction.ts",
-        "src/lib/backend-api/plugin.ts"
+        "src/lib/backend-api/fs.ts",
+        "src/lib/plugins/web-client-runtime.ts",
+        "src/lib/utils.ts",
+        "src/lib/lucide-resolver.ts"
       ],
       "interfaces": [
         "src/components/chat/ChatPanel.vue",
         "src/components/workflow/WorkflowEditor.vue",
+        "src/components/workflow/EmbeddedWorkflowEditor.vue",
+        "src/components/workflow/LoopBodyContainer.vue",
+        "src/components/workflow/TableViewComponent.vue",
         "src/components/settings/SettingsDialog.vue",
         "src/components/command-palette/CommandPaletteDialog.vue"
       ],
@@ -58,6 +80,8 @@
         "composablesListed": true,
         "backendApiScanned": true,
         "wsBridgeScanned": true,
+        "embeddedWorkflowComponentsScanned": true,
+        "compoundNodeComponentsScanned": true,
         "gaps": []
       }
     },
@@ -69,27 +93,29 @@
       "description": "Electron 主进程 -- 桌面后端服务层，含 Backend 子进程管理和 Claude Agent 运行时",
       "keyFiles": [
         "electron/main.ts",
-        "electron/services/claude-agent-runtime.ts",
-        "electron/services/claude-tool-adapter.ts",
         "electron/services/backend-process.ts",
         "electron/services/workflow-store.ts",
+        "electron/services/workflow-node-registry.ts",
+        "electron/services/workflow-browser-node-runtime.ts",
+        "electron/services/builtin-nodes.ts",
         "electron/services/plugin-manager.ts",
         "electron/services/plugin-catalog.ts",
         "electron/services/plugin-runtime-host.ts",
-        "electron/services/workflow-node-registry.ts",
-        "electron/services/builtin-nodes.ts",
+        "electron/services/plugin-context.ts",
+        "electron/services/plugin-event-bus.ts",
+        "electron/services/plugin-storage.ts",
+        "electron/services/plugin-fs-api.ts",
+        "electron/services/plugin-fetch-api.ts",
+        "electron/services/plugin-types.ts",
         "electron/services/store.ts",
-        "electron/services/chat-history-store.ts",
-        "electron/services/workflow-tool-dispatcher.ts",
-        "electron/services/workflow-browser-node-runtime.ts"
+        "electron/services/shortcut-manager.ts",
+        "electron/services/window-manager.ts"
       ],
       "interfaces": [
         "electron/ipc/chat.ts",
         "electron/ipc/workflow.ts",
         "electron/ipc/plugin.ts",
         "electron/ipc/shortcut.ts",
-        "electron/ipc/tabs.ts",
-        "electron/ipc/agent-settings.ts",
         "electron/ipc/backend.ts",
         "electron/ipc/fs.ts"
       ],
@@ -111,7 +137,7 @@
       "claudeMd": "backend/CLAUDE.md",
       "language": "TypeScript",
       "entry": "backend/main.ts",
-      "description": "Backend 服务（Node.js 子进程）-- WS 服务器、工作流执行引擎、插件注册、Chat 运行时",
+      "description": "Backend 服务（Node.js 子进程）-- WS 服务器、工作流执行引擎、插件注册、Chat 运行时、工具适配器",
       "keyFiles": [
         "backend/main.ts",
         "backend/app/config.ts",
@@ -133,15 +159,26 @@
         "backend/plugins/builtin-fetch-api.ts",
         "backend/chat/chat-runtime.ts",
         "backend/chat/chat-event-sender.ts",
+        "backend/chat/chat-tool-adapter.ts",
+        "backend/chat/chat-workflow-tool-executor.ts",
+        "backend/chat/client-node-cache.ts",
         "backend/storage/workflow-store.ts",
-        "backend/storage/paths.ts"
+        "backend/storage/workflow-version-store.ts",
+        "backend/storage/execution-log-store.ts",
+        "backend/storage/operation-history-store.ts",
+        "backend/storage/ai-provider-store.ts",
+        "backend/storage/chat-history-store.ts",
+        "backend/storage/settings-store.ts",
+        "backend/storage/paths.ts",
+        "backend/storage/json-store.ts"
       ],
       "interfaces": [
         "backend/ws/storage-channels.ts",
         "backend/ws/execution-channels.ts",
         "backend/ws/plugin-channels.ts",
         "backend/ws/app-channels.ts",
-        "backend/ws/chat-channels.ts"
+        "backend/ws/chat-channels.ts",
+        "backend/ws/fs-channels.ts"
       ],
       "testDir": null,
       "configFiles": [],
@@ -153,6 +190,9 @@
         "interactionManagerScanned": true,
         "pluginRegistryScanned": true,
         "chatRuntimeScanned": true,
+        "chatToolAdapterScanned": true,
+        "chatWorkflowToolExecutorScanned": true,
+        "clientNodeCacheScanned": true,
         "storageScanned": true,
         "allChannelHandlersListed": true,
         "gaps": []
@@ -163,7 +203,7 @@
       "claudeMd": "shared/CLAUDE.md",
       "language": "TypeScript",
       "entry": "shared/index.ts",
-      "description": "共享协议与类型 -- WS 契约、执行事件、工作流模型、插件类型、错误处理",
+      "description": "共享协议与类型 -- WS 契约、执行事件、工作流模型、复合节点、嵌入式工作流、插件类型、错误处理、快捷键",
       "keyFiles": [
         "shared/index.ts",
         "shared/channel-contracts.ts",
@@ -171,6 +211,9 @@
         "shared/ws-protocol.ts",
         "shared/execution-events.ts",
         "shared/workflow-types.ts",
+        "shared/workflow-composite.ts",
+        "shared/embedded-workflow.ts",
+        "shared/shortcut-types.ts",
         "shared/plugin-types.ts",
         "shared/plugin-entry.ts",
         "shared/plugin-capability-loader.ts",
@@ -180,7 +223,10 @@
       "interfaces": [
         "shared/channel-contracts.ts",
         "shared/execution-events.ts",
-        "shared/ws-protocol.ts"
+        "shared/ws-protocol.ts",
+        "shared/workflow-composite.ts",
+        "shared/embedded-workflow.ts",
+        "shared/shortcut-types.ts"
       ],
       "testDir": null,
       "configFiles": [],
@@ -190,6 +236,9 @@
         "executionEventsScanned": true,
         "wsProtocolScanned": true,
         "workflowTypesScanned": true,
+        "workflowCompositeScanned": true,
+        "embeddedWorkflowScanned": true,
+        "shortcutTypesScanned": true,
         "pluginTypesScanned": true,
         "errorsScanned": true,
         "gaps": []
@@ -219,15 +268,17 @@
       "claudeMd": "resources/CLAUDE.md",
       "language": "JavaScript",
       "entry": "resources/plugins/plugins.json",
-      "description": "内置资源与插件（window-manager / file-system / fetch / jimeng / fish-audio）",
+      "description": "内置资源与插件（window-manager / file-system / fetch / jimeng / fish-audio / aliyun-ai / openai / epub-parser / test-plugin）",
       "keyFiles": [
         "resources/plugins/plugins.json",
-        "resources/plugins/window-manager/main.js",
-        "resources/plugins/file-system/main.js",
-        "resources/plugins/fetch/main.js",
-        "resources/plugins/jimeng/main.js",
-        "resources/plugins/fish-audio/main.js",
-        "resources/plugins/fish-audio/info.json"
+        "resources/plugins/window-manager/info.json",
+        "resources/plugins/file-system/info.json",
+        "resources/plugins/fetch/info.json",
+        "resources/plugins/jimeng/info.json",
+        "resources/plugins/fish-audio/info.json",
+        "resources/plugins/aliyun-ai/info.json",
+        "resources/plugins/openai/info.json",
+        "resources/plugins/epub-parser/info.json"
       ],
       "interfaces": [],
       "testDir": null,
@@ -236,6 +287,7 @@
         "allPluginsListed": true,
         "infoJsonSampled": true,
         "pluginStructureDocumented": true,
+        "newPluginsDocumented": true,
         "gaps": ["未读取各插件 main.js/workflow.js/tools.js 的详细实现"]
       }
     }
@@ -252,10 +304,10 @@
     ".gitignore"
   ],
   "coverage": {
-    "totalSourceFiles": 280,
-    "scannedFiles": 95,
-    "coveragePercent": 34,
-    "note": "UI 组件库（src/components/ui/ ~150 文件）为 shadcn-vue 生成物，仅列出目录结构。关键业务文件全部已扫描。新增 backend/ 和 shared/ 模块扫描。",
+    "totalSourceFiles": 310,
+    "scannedFiles": 120,
+    "coveragePercent": 39,
+    "note": "UI 组件库（src/components/ui/ ~213 文件）为 shadcn-vue 生成物，仅列出目录结构。关键业务文件全部已扫描。epub-parser/node_modules 被忽略。",
     "modulesCovered": 6,
     "modulesTotal": 6
   },
@@ -264,6 +316,7 @@
     "outDir": true,
     "distApp": true,
     "distWeb": true,
+    "epubParserNodeModules": true,
     "reason": ".gitignore 配置了 node_modules/、out/、dist-app/、.tmp-userdata-exec/、dist-web/"
   },
   "gaps": [
@@ -275,28 +328,64 @@
     },
     {
       "module": "src/components/ui/",
-      "gap": "shadcn-vue 基础组件库 ~150 个 Vue 文件未逐个读取",
+      "gap": "shadcn-vue 基础组件库 ~213 个 Vue 文件未逐个读取",
       "priority": "low",
       "reason": "第三方生成物，非业务逻辑"
     },
     {
       "module": "src/components/workflow/",
-      "gap": "部分工作流编辑器组件未逐个读取内容",
+      "gap": "部分新增工作流组件（VariableFieldMenu/NodeSelectorDailog/workflowCanvasContext/workflowLayoutContext）未逐个读取内容",
       "priority": "medium",
-      "reason": "建议后续补扫以了解具体组件交互逻辑"
+      "reason": "建议后续补扫以了解具体交互逻辑"
     },
     {
-      "module": "src/components/chat/",
-      "gap": "Chat 组件集内部实现未全部读取",
-      "priority": "medium",
-      "reason": "建议补扫 Tiptap 集成和消息渲染逻辑"
+      "module": "docs/",
+      "gap": "docs/superpowers 下的设计文档和计划文档未全部读取",
+      "priority": "low",
+      "reason": "文档类，非代码逻辑"
     }
   ],
   "truncated": false,
+  "changesFromLastScan": {
+    "previousTimestamp": "2026-04-22T12:58:04+08:00",
+    "newFiles": [
+      "shared/embedded-workflow.ts",
+      "shared/workflow-composite.ts",
+      "shared/shortcut-types.ts",
+      "backend/chat/chat-tool-adapter.ts",
+      "backend/chat/chat-workflow-tool-executor.ts",
+      "backend/chat/client-node-cache.ts",
+      "resources/plugins/aliyun-ai/",
+      "resources/plugins/openai/",
+      "resources/plugins/epub-parser/",
+      "src/components/workflow/EmbeddedWorkflowEditor.vue",
+      "src/components/workflow/EmbeddedWorkflowNode.vue",
+      "src/components/workflow/EmbeddedWorkflowEdge.vue",
+      "src/components/workflow/LoopBodyContainer.vue",
+      "src/components/workflow/TableViewComponent.vue",
+      "src/components/workflow/VariableFieldMenu.vue",
+      "src/components/workflow/VariablePicker.vue",
+      "src/components/workflow/SubWorkflowSelector.vue",
+      "src/components/workflow/RightProperties.vue",
+      "src/components/workflow/RightVersion.vue",
+      "src/components/workflow/RightOperations.vue",
+      "src/components/workflow/RightAssistant.vue",
+      "src/components/workflow/ActivityBar.vue",
+      "src/components/workflow/WelcomePage.vue",
+      "src/components/workflow/workflowCanvasContext.ts",
+      "src/components/workflow/workflowLayoutContext.ts",
+      "src/composables/workflow/useEditorLayout.ts",
+      "src/composables/useShortcutActions.ts"
+    ],
+    "updatedChannels": [
+      "workflow:debug-node",
+      "chat:register-client-nodes",
+      "chat:register-client-agent-tools"
+    ]
+  },
   "nextSteps": [
-    "src/components/workflow/ -- 建议补扫工作流编辑器各组件，了解画布交互、节点拖放、属性面板绑定等",
-    "src/components/chat/ -- 建议补扫 Chat 组件集，了解 Tiptap 集成和消息渲染逻辑",
+    "src/components/workflow/ -- 建议补扫新增组件（VariableFieldMenu/SubWorkflowSelector/workflowCanvasContext/workflowLayoutContext）",
     "resources/plugins/ -- 建议在需要修改或新增插件时再读取具体实现",
-    "backend/ws/*-channels.ts -- 建议在新增通道时再逐个阅读 handler 实现"
+    "docs/superpowers/ -- 建议在需要了解设计决策时再读取"
   ]
 }

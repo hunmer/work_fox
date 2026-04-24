@@ -120,6 +120,44 @@ function emptyChanges(): WorkflowChanges {
   }
 }
 
+function previewJson(value: unknown, maxLength = 500): string {
+  try {
+    const text = JSON.stringify(value)
+    if (!text) return String(value)
+    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text
+  } catch {
+    return String(value)
+  }
+}
+
+function buildBatchOperationHelp(operation: unknown, index: number, tool: string): { message: string, data: Record<string, unknown> } {
+  const operationKeys = operation && typeof operation === 'object' ? Object.keys(operation as Record<string, unknown>) : []
+  const reason = !tool
+    ? '当前操作缺少 tool 字段，或 tool 不是字符串。'
+    : `当前操作的 tool=${tool} 不允许在 batch_update 中执行。`
+  const message = [
+    `批量操作中断: 第 ${index + 1} 个操作不支持 (${tool || 'empty'})。`,
+    reason,
+    '请使用格式 { "tool": "create_node|update_node|delete_node|create_edge|delete_edge", "args": { ... } }。',
+    '如果使用旧格式，请改传 createNodes/deleteNodeIds/createEdges/deleteEdgeIds。',
+  ].join(' ')
+
+  return {
+    message,
+    data: {
+      failedOperationIndex: index,
+      failedOperationNumber: index + 1,
+      receivedTool: tool || null,
+      receivedOperationType: Array.isArray(operation) ? 'array' : typeof operation,
+      receivedOperationKeys: operationKeys,
+      receivedOperationPreview: previewJson(operation),
+      expectedOperationExample: { tool: 'update_node', args: { nodeId: '节点ID', data: { key: 'value' } } },
+      supportedToolExamples: ['create_node', 'update_node', 'delete_node', 'create_edge', 'delete_edge'],
+      unsupportedToolsInBatch: ['batch_update', 'get_workflow', 'get_current_workflow'],
+    },
+  }
+}
+
 function autoLayout(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowNode[] {
   const g = new dagre.graphlib.Graph()
   g.setDefaultEdgeLabel(() => ({}))
@@ -804,11 +842,12 @@ export class ChatWorkflowToolExecutor {
         const batchChanges = emptyChanges()
         const batchResults: ToolResult[] = []
 
-        for (const operation of operations) {
+        for (const [index, operation] of operations.entries()) {
           const tool = typeof operation?.tool === 'string' ? operation.tool : ''
           if (!tool || tool === 'batch_update' || tool === 'get_workflow' || tool === 'get_current_workflow') {
+            const help = buildBatchOperationHelp(operation, index, tool)
             return {
-              result: { success: false, message: `批量操作中断: 不支持的操作 ${String(tool || '(empty)')}`, data: { results: batchResults } },
+              result: { success: false, message: help.message, data: { results: batchResults, ...help.data } },
               mutated: false,
               nodes: ctx.nodes,
               edges: ctx.edges,

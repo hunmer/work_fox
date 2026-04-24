@@ -6,9 +6,9 @@
 
 WorkFox 是一款桌面端工作流自动化工具，核心定位：
 
-- **可视化工作流编辑器**：基于 Vue Flow 的拖拽式 DAG 编辑器，支持多种节点类型（流程控制、AI 执行、浏览器交互、展示等）
-- **AI Agent 集成**：通过 Claude Agent SDK（@anthropic-ai/claude-agent-sdk）在主进程中运行 AI Agent，支持流式输出、工具调用、thinking blocks
-- **插件系统**：支持 `server` / `client` / Web CDN manifest 三类插件扩展，可注册自定义工作流节点、工具和视图
+- **可视化工作流编辑器**：基于 Vue Flow 的拖拽式 DAG 编辑器，支持多种节点类型（流程控制、AI 执行、浏览器交互、展示等），含复合节点（loop 等）和嵌入式子工作流
+- **AI Agent 集成**：通过 Claude Agent SDK（@anthropic-ai/claude-agent-sdk）在主进程和 backend 中运行 AI Agent，支持流式输出、工具调用、thinking blocks、MCP Server 工具桥接
+- **插件系统**：支持 `server` / `client` / Web CDN manifest 三类插件扩展，可注册自定义工作流节点、工具和视图；client 插件可通过 WS 通道注册到 backend
 - **多标签页**：多工作流并行编辑，每个标签页独立维护工作流状态和 Chat 会话
 - **Web 模式**：支持脱离 Electron 在纯浏览器中运行，通过 WebSocket 连接 backend 服务
 
@@ -50,7 +50,7 @@ Main (Electron)
           |-- store.ts                  electron-store 全局配置（AI providers / shortcuts / tabs）
           |-- chat-history-store.ts     Chat 历史（IndexedDB 跨进程代理或文件存储）
           |-- workflow-node-registry.ts 工作流节点注册表（内置 + 插件）
-          |-- builtin-nodes.ts          内置节点定义（start/end/run_code/toast/switch）
+          |-- builtin-nodes.ts          内置节点定义（start/end/run_code/toast/switch/loop/sub_workflow）
           |-- ...
   |
 Backend (Node.js 子进程)
@@ -61,7 +61,7 @@ Backend (Node.js 子进程)
       |-- workflow/             execution-manager / interaction-manager
       |-- storage/              workflow / version / execution-log / operation-history / ai-provider / chat-history / settings
       |-- plugins/              plugin-registry / builtin-fs-api / builtin-fetch-api
-      |-- chat/                 chat-runtime (Claude Agent SDK wrapper for web mode)
+      |-- chat/                 chat-runtime / chat-tool-adapter / chat-workflow-tool-executor / client-node-cache
   |
 Shared
   |-- shared/                  前后端共享协议、执行事件、插件入口与能力定义
@@ -69,7 +69,10 @@ Shared
       |-- channel-metadata.ts   通道元数据（超时/优先级/幂等性）
       |-- execution-events.ts   工作流执行事件协议
       |-- ws-protocol.ts        WS 消息协议（request/response/event/interaction）
-      |-- workflow-types.ts     工作流核心类型定义
+      |-- workflow-types.ts     工作流核心类型定义（含复合节点/嵌入式工作流）
+      |-- workflow-composite.ts 复合节点查询工具（loop 节点树遍历/scope/过滤）
+      |-- embedded-workflow.ts  嵌入式子工作流创建与规范化
+      |-- shortcut-types.ts     快捷键类型定义
       |-- workflow-local-bridge.ts  主进程桥接节点定义（delay）
       |-- plugin-types.ts       插件类型定义
       |-- plugin-entry.ts       插件入口文件解析
@@ -128,10 +131,18 @@ graph TD
     BACKEND --> BACKEND_PLUGINS["plugins/"]
     BACKEND --> BACKEND_CHAT["chat/"]
 
+    BACKEND_CHAT --> CHAT_RT["chat-runtime.ts"]
+    BACKEND_CHAT --> CHAT_ADAPTER["chat-tool-adapter.ts"]
+    BACKEND_CHAT --> CHAT_EXECUTOR["chat-workflow-tool-executor.ts"]
+    BACKEND_CHAT --> CLIENT_CACHE["client-node-cache.ts"]
+
     SHARED --> SHARED_CONTRACTS["channel-contracts.ts"]
     SHARED --> SHARED_EVENTS["execution-events.ts"]
     SHARED --> SHARED_PROTOCOL["ws-protocol.ts"]
     SHARED --> SHARED_WF_TYPES["workflow-types.ts"]
+    SHARED --> SHARED_COMPOSITE["workflow-composite.ts"]
+    SHARED --> SHARED_EMBEDDED["embedded-workflow.ts"]
+    SHARED --> SHARED_SHORTCUT["shortcut-types.ts"]
 
     RESOURCES --> PLUGINS_BUILTIN["plugins/"]
 
@@ -152,7 +163,7 @@ graph TD
 | `src/lib/workflow/` | 工作流本地 fallback 执行引擎 | TypeScript | `engine.ts` |
 | `src/lib/backend-api/` | Backend WS 通道客户端适配层 | TypeScript | `workflow-domain.ts` |
 | `src/components/chat/` | Chat 对话面板组件集 | Vue / TS | - |
-| `src/components/workflow/` | 工作流编辑器组件集（画布、节点、属性面板） | Vue / TS | - |
+| `src/components/workflow/` | 工作流编辑器组件集（画布、节点、属性面板、嵌入式子工作流） | Vue / TS | - |
 | `src/components/settings/` | 设置对话框组件 | Vue / TS | - |
 | `src/stores/` | Pinia 状态管理 | TypeScript | - |
 | `src/types/` | 全局类型定义 | TypeScript | `index.ts` |
@@ -165,8 +176,8 @@ graph TD
 | `backend/workflow/` | 工作流执行管理器与交互管理器 | TypeScript | `execution-manager.ts` |
 | `backend/storage/` | 后端数据持久化层 | TypeScript | - |
 | `backend/plugins/` | 后端插件注册表 | TypeScript | `plugin-registry.ts` |
-| `backend/chat/` | Chat 运行时（web 模式） | TypeScript | `chat-runtime.ts` |
-| `shared/` | 前后端共享协议、类型与工具 | TypeScript | `shared/index.ts` |
+| `backend/chat/` | Chat 运行时、工具适配器、工作流工具执行器、客户端节点缓存 | TypeScript | `chat-runtime.ts` |
+| `shared/` | 前后端共享协议、类型与工具（含复合节点/嵌入式工作流/快捷键） | TypeScript | `shared/index.ts` |
 | `resources/plugins/` | 内置插件与商店元数据（含 Web client manifest 示例） | JavaScript / JSON | 各 `main.js` / `web-plugin.json` |
 
 ## 运行与开发
@@ -235,9 +246,13 @@ WorkFox 支持两种运行模式：
   - `workfox.fetch` -> `server`
   - `workfox.jimeng` -> `server`
   - `workfox.fish-audio` -> `server`
+  - `workfox.aliyun-ai` -> `server`
+  - `workfox.openai` -> `server`
+  - `workfox.epub-parser` -> `server`
 - 工作流节点执行分流：
   - backend 可执行插件节点通过 backend `agent:execTool` / `pluginRegistry.executeWorkflowNode()`
   - 本地桥接节点（如 `delay`）通过 Electron `window.api.agent.execTool(...)`
+- Client 插件可通过 `chat:register-client-nodes` / `chat:register-client-agent-tools` WS 通道注册节点定义和工具到 backend
 
 ## Backend Migration Status
 
@@ -246,6 +261,9 @@ WorkFox 支持两种运行模式：
 - `agent_run`、`window-manager`、`delay` 这类本地能力通过 interaction bridge 回到 Electron 执行
 - renderer 不再保留已迁移 domain 的旧 IPC / 本地执行 fallback；仅单节点调试和明确的桌面本地能力继续留在 Electron
 - Web 模式下 chat 流式输出通过 backend `ChatRuntime` 直接驱动，无需 Electron 中转
+- Chat 工具体系通过 `ChatToolAdapter` 桥接到 Claude Agent SDK MCP Server 模式
+- `ChatWorkflowToolExecutor` 支持在 Chat 对话中直接操作工作流图结构（含复合节点和嵌入式子工作流）
+- `ClientNodeCache` 管理来自客户端注册的插件节点和工具
 
 ### Feature Flag
 
@@ -264,6 +282,19 @@ pnpm build
 更细的验证说明见：
 
 - `docs/superpowers/plans/2026-04-22-workfox-backend-migration-verification.md`
+
+## 复合节点与嵌入式工作流
+
+- **复合节点（Compound Node）**：通过 `CompoundNodeDefinition` 定义，创建时自动生成多个子节点和内部连线
+  - 典型例子：`loop` 节点（生成 loop 根节点 + loop_body 子节点）
+  - 子节点通过 `WorkflowNodeCompositeMeta`（rootId/parentId/role/generated/hidden/scopeBoundary）关联
+  - 查询工具在 `shared/workflow-composite.ts`
+- **嵌入式子工作流（Embedded Workflow）**：节点内部包含独立的 nodes + edges 子图
+  - 存储在 `WorkflowNode.data.bodyWorkflow`（类型为 `EmbeddedWorkflow`）
+  - 创建/规范化工具在 `shared/embedded-workflow.ts`
+  - 渲染端通过 `EmbeddedWorkflowEditor` 组件（独立 VueFlow 实例）编辑
+  - `LoopBodyContainer` 是 loop_body 节点的专用容器
+- **执行端支持**：`ExecutionManager` 支持递归执行嵌入式子工作流；`ChatWorkflowToolExecutor` 支持通过 `embeddedInNodeId` 参数操作子工作流
 
 ## 测试策略
 
@@ -294,16 +325,19 @@ pnpm build
 1. 用户在 Chat 面板输入消息 -> `stores/chat.ts` -> `lib/agent/agent.ts`（构造请求）
 2. 通过 `window.api.chat.completions()` 发送到 Electron 主进程 IPC（桌面模式）或 WS backend（Web 模式）
 3. 主进程 `claude-agent-runtime.ts` / 后端 `chat-runtime.ts` 使用 Claude Agent SDK 创建流式会话
-4. 流式事件通过 IPC `chat:stream:*` 或 WS `chat:chunk/thinking/usage/done/error` 回传
-5. 渲染进程 `lib/agent/stream.ts` 解析事件，更新 Pinia store，驱动 UI 更新
+4. Backend 中 `ChatToolAdapter` 将工具桥接到 MCP Server（workflow / plugin / browser 三类）
+5. `ChatWorkflowToolExecutor` 允许 AI 直接操作工作流图结构
+6. 流式事件通过 IPC `chat:stream:*` 或 WS `chat:chunk/thinking/usage/done/error` 回传
+7. 渲染进程 `lib/agent/stream.ts` 解析事件，更新 Pinia store，驱动 UI 更新
 
 ### 工作流执行
 
 1. backend `execution-manager` 负责工作流执行、pause/resume/stop、execution recovery、execution log 持久化
-2. renderer workflow store 订阅 `workflow:*` / `node:*` / `execution:*` 事件更新 UI
-3. `agent_run` 与本地 bridge 节点通过 `interaction-manager` 发起 WS interaction 回到 Electron 执行
-4. Node.js 内可闭环的插件节点直接在 backend `plugin-registry` 中执行
-5. 断线重连时通过 `execution-recovery` 协议恢复执行状态
+2. 支持复合节点展开和嵌入式子工作流递归执行
+3. renderer workflow store 订阅 `workflow:*` / `node:*` / `execution:*` 事件更新 UI
+4. `agent_run` 与本地 bridge 节点通过 `interaction-manager` 发起 WS interaction 回到 Electron 执行
+5. Node.js 内可闭环的插件节点直接在 backend `plugin-registry` 中执行
+6. 断线重连时通过 `execution-recovery` 协议恢复执行状态
 
 ### 插件系统
 
@@ -311,6 +345,7 @@ pnpm build
 - 每个插件包含 `info.json`（元信息）+ `main.js`（入口）+ 可选 `workflow.js` / `tools.js` / `api.js`
 - 插件可提供：自定义工作流节点、AI Agent 工具、独立视图
 - 插件运行时类型：`server`（后端执行）、`client`（Electron 主进程桥接）、`both`
+- Client 插件可通过 WS 通道将节点和工具注册到 backend（`ClientNodeCache` 管理）
 - 事件总线：`plugin-event-bus.ts`（EventEmitter2）
 - 插件配置：支持全局配置（`plugin:get-config`）和工作流级配置方案（`workflow:*-plugin-scheme`）
 
@@ -321,6 +356,7 @@ pnpm build
 - WS 路由器（`backend/ws/router.ts`）根据通道名 dispatch 到注册的 handler
 - ConnectionManager 管理客户端会话、心跳、token 验证
 - 支持交互式操作（`interaction_required` / `interaction_response`）用于需要客户端参与的执行步骤
+- 支持 `chat_tool` 交互类型，用于 AI 工具调用需要客户端渲染端参与的场景
 
 ### 修改代码时的注意事项
 
@@ -332,11 +368,14 @@ pnpm build
   - backend 可直接执行的 server/plugin 节点
   - 需要 interaction bridge 的 Electron-local 节点（标记 `runtime: 'main_process_bridge'`）
   - renderer-only 编辑态节点
+  - 如果是复合节点，需要在 `shared/workflow-types.ts` 中定义 `CompoundNodeDefinition`
 - Web 模式下所有 `window.api` 调用走 `BrowserAPIAdapter`，新增 IPC 接口时需同步适配
+- 新增 Chat 工具时，需要在 `backend/chat/chat-tool-adapter.ts` 或 `backend/chat/chat-workflow-tool-executor.ts` 中注册
 
 ## 变更记录 (Changelog)
 
 | 日期 | 操作 | 说明 |
 |---|---|---|
+| 2026-04-25 | 增量更新 | 补充复合节点/嵌入式子工作流、Chat 工具适配器/执行器/客户端节点缓存、MCP Server 桥接、新增内置插件（aliyun-ai/openai/epub-parser）、新增 shared 文件（workflow-composite/embedded-workflow/shortcut-types）|
 | 2026-04-22 | 增量更新 | 补充 backend/ChatRuntime/web 模式/WS 通道架构/交互协议/fish-audio 插件；更新模块结构图与索引 |
 | 2026-04-20 | 初始化 | 首次生成项目架构文档，完成全仓扫描 |

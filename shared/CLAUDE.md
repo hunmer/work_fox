@@ -9,11 +9,14 @@
 1. **类型安全契约**：`channel-contracts.ts` 定义所有 backend WS 通道的请求/响应类型映射（`BackendChannelMap`）
 2. **WS 消息协议**：`ws-protocol.ts` 定义 WS 消息格式（request/response/event/error/interaction）
 3. **执行事件协议**：`execution-events.ts` 定义工作流执行全生命周期事件类型和 recovery 协议
-4. **工作流类型**：`workflow-types.ts` 定义工作流核心数据模型（Workflow/Node/Edge/ExecutionLog 等）
+4. **工作流类型**：`workflow-types.ts` 定义工作流核心数据模型（Workflow/Node/Edge/ExecutionLog 等），包括复合节点和嵌入式子工作流
 5. **插件类型**：`plugin-types.ts` 定义插件元信息、配置、工具、节点类型，以及 `server/client/both` 运行时语义
 6. **错误处理**：`errors.ts` 定义统一的 `BackendErrorShape` 和错误码
 7. **通道元数据**：`channel-metadata.ts` 定义所有 WS 通道的超时、优先级、幂等性、流式标记
 8. **插件加载**：`plugin-entry.ts` 和 `plugin-capability-loader.ts` 定义插件入口文件解析和能力模块加载
+9. **嵌入式工作流**：`embedded-workflow.ts` 定义嵌入式子工作流的创建和规范化
+10. **复合节点**：`workflow-composite.ts` 定义复合节点的查询工具（loop 节点的树形遍历、scope 边界、生成节点过滤等）
+11. **快捷键类型**：`shortcut-types.ts` 定义快捷键分组、动作定义、绑定合并逻辑
 
 ## 入口与启动
 
@@ -30,12 +33,15 @@
 | `channel-metadata.ts` | `backendChannelMetadata`, `ChannelMetadata` | backend/ws/router.ts |
 | `ws-protocol.ts` | `WSRequest`, `WSResponse`, `WSEvent`, `WSError`, `InteractionRequest`, `InteractionResponse`, `WSClientHello` | backend/ws/connection-manager.ts, src/lib/ws-bridge.ts |
 | `execution-events.ts` | `ExecutionEventChannel`, `ExecutionEventMap`, `ExecutionRecoveryState`, `WorkflowExecuteRequest` | backend/workflow/*, src/stores/workflow.ts, src/lib/workflow/engine.ts |
-| `workflow-types.ts` | `Workflow`, `WorkflowNode`, `WorkflowEdge`, `ExecutionLog`, `NodeTypeDefinition` | 全项目 |
+| `workflow-types.ts` | `Workflow`, `WorkflowNode`, `WorkflowEdge`, `ExecutionLog`, `NodeTypeDefinition`, `CompoundNodeDefinition`, `EmbeddedWorkflow` | 全项目 |
 | `plugin-types.ts` | `PluginInfo`, `PluginMeta`, `AgentToolDefinition`, `PluginConfigField` | electron/services/*, backend/plugins/*, src/types/plugin.ts |
 | `errors.ts` | `BackendErrorShape`, `BackendErrorCode`, `createErrorShape` | backend/*, shared/workflow-local-bridge.ts |
 | `plugin-entry.ts` | `PluginEntryKind`, `resolvePluginEntryFile` | shared/plugin-capability-loader.ts |
 | `plugin-capability-loader.ts` | `loadPluginWorkflowModule`, `loadPluginToolsModule`, `loadPluginApiModule`, `isMainProcessBridgePlugin` | electron/services/*, backend/plugins/* |
 | `workflow-local-bridge.ts` | `LOCAL_BRIDGE_WORKFLOW_NODES`, `isLocalBridgeWorkflowNode` | backend/workflow/execution-manager.ts, electron/services/* |
+| `embedded-workflow.ts` | `createDefaultEmbeddedWorkflow`, `normalizeEmbeddedWorkflow` | backend/chat/chat-workflow-tool-executor.ts, src/components/workflow/LoopBodyContainer.vue, electron/services/builtin-nodes.ts |
+| `workflow-composite.ts` | `LOOP_NODE_TYPE`, `LOOP_BODY_NODE_TYPE`, `findWorkflowNode`, `getCompositeRootId`, `findCompositeChildren`, `getNodesForExecutionScope`, `isNodeDescendantOf` | backend/chat/chat-workflow-tool-executor.ts, backend/workflow/execution-manager.ts, electron/services/builtin-nodes.ts |
+| `shortcut-types.ts` | `ShortcutAction`, `ShortcutBinding`, `SHORTCUT_ACTIONS`, `SHORTCUT_GROUPS`, `getMergedBindings` | backend/ws/app-channels.ts, src/stores/shortcut.ts, electron/services/store.ts |
 
 ### WS 通道列表（`BackendChannelMap`）
 
@@ -46,32 +52,33 @@
 - **工作流插件配置**: `workflow:list-plugin-schemes/read-plugin-scheme/create-plugin-scheme/save-plugin-scheme/delete-plugin-scheme`
 - **文件夹**: `workflowFolder:list/create/update/delete`
 - **版本**: `workflowVersion:list/add/get/delete/clear/nextName`
-- **执行日志**: `executionLog:list/save/delete/clear`
+- **执行日志**: `executionLog:list/save/delete/clear/getPath`
 - **操作历史**: `operationHistory:load/save/clear`
-- **执行控制**: `workflow:execute`, `workflow:pause/resume/stop`, `workflow:get-execution-recovery`
+- **执行控制**: `workflow:execute`, `workflow:debug-node`, `workflow:pause/resume/stop`, `workflow:get-execution-recovery`
 - **插件**: `plugin:list/enable/disable/install/uninstall/get-workflow-nodes/list-workflow-plugins/get-agent-tools/get-config/save-config`
 - **AI Provider**: `aiProvider:list/create/update/delete/test`
 - **聊天历史**: `chatHistory:listSessions/createSession/updateSession/deleteSession/listMessages/addMessage/updateMessage/deleteMessage/deleteMessages/clearMessages`
 - **设置**: `agentSettings:get/set`, `shortcut:list/update/toggle/clear/reset`, `tabs:load/save`
 - **应用**: `app:getVersion`
 - **文件系统**: `fs:listDir/delete/createFile/createDir/rename`
-- **Chat**: `chat:completions`, `chat:abort`
+- **Chat**: `chat:completions`, `chat:abort`, `chat:register-client-nodes`, `chat:register-client-agent-tools`
 - **工具**: `agent:execTool`
 
-### 插件相关共享约定
+### 复合节点系统
 
-- `PluginInfo.type`
-  - `server`
-  - `client`
-  - `both`
-- `plugin-entry.ts`
-  - 支持 `main/server/client/workflow/tools/api/view`
-- `agent:execTool`
-  - 当前不是 Electron 独占概念
-  - 同时存在：
-    - Electron IPC 版本
-    - backend WS 版本
-  - 在渲染层语义上更接近统一工具执行入口
+`workflow-composite.ts` 提供复合节点的查询工具函数：
+
+- **LOOP**：`LOOP_NODE_TYPE = 'loop'`，`LOOP_BODY_NODE_TYPE = 'loop_body'`
+- **树遍历**：`findCompositeChildren`、`isNodeDescendantOf`
+- **Scope**：`getNearestScopeAnchorId`、`getNodesForExecutionScope`
+- **过滤**：`isGeneratedWorkflowNode`、`isHiddenWorkflowNode`、`isGeneratedWorkflowEdge`
+
+### 嵌入式工作流
+
+`embedded-workflow.ts` 提供嵌入式子工作流工具：
+
+- `createDefaultEmbeddedWorkflow()` -- 创建 start + end 的最小子工作流
+- `normalizeEmbeddedWorkflow(value)` -- 安全校验并返回有效的 EmbeddedWorkflow
 
 ### 执行事件列表（`ExecutionEventChannel`）
 
@@ -92,13 +99,16 @@
 
 核心类型定义见 `workflow-types.ts`：
 
-- **Workflow**: 完整工作流（含 nodes/edges/enabledPlugins/agentConfig/pluginConfigSchemes）
-- **WorkflowNode**: 工作流节点（含 type/label/position/data/nodeState）
-- **WorkflowEdge**: 工作流连线（含 source/target/sourceHandle/targetHandle）
-- **NodeTypeDefinition**: 节点类型定义（含 properties/handles/outputs）
+- **Workflow**: 完整工作流（含 nodes/edges/enabledPlugins/agentConfig/pluginConfigSchemes/layoutSnapshot）
+- **WorkflowNode**: 工作流节点（含 type/label/position/data/nodeState/composite 元信息）
+- **WorkflowEdge**: 工作流连线（含 source/target/sourceHandle/targetHandle/composite 元信息）
+- **NodeTypeDefinition**: 节点类型定义（含 properties/handles/outputs/compound 定义）
+- **CompoundNodeDefinition**: 复合节点定义（含 rootRole/children/edges）
+- **EmbeddedWorkflow**: 嵌入式子工作流（nodes + edges）
 - **ExecutionLog / ExecutionStep**: 执行日志与步骤
 - **WorkflowVersion**: 版本快照
 - **OperationEntry**: 操作历史条目
+- **ShortcutAction / ShortcutBinding**: 快捷键动作与绑定
 
 ## 测试与质量
 
@@ -120,6 +130,12 @@ A: 两者都有。Electron 下可用于本地桥接节点执行；backend 下也
 **Q: LocalBridge 节点是什么？**
 A: `workflow-local-bridge.ts` 定义必须在 Electron 主进程执行的节点（如 `delay`）。Backend 执行到这类节点时通过 InteractionManager 发起 WS 交互请求，回到客户端执行。
 
+**Q: 复合节点（Compound）是什么？**
+A: `CompoundNodeDefinition` 允许一个节点类型在创建时自动生成多个子节点和内部连线（如 loop 节点同时创建 loop + loop_body）。`workflow-composite.ts` 提供查询这些复合节点关系的工具函数。
+
+**Q: 嵌入式工作流（Embedded）是什么？**
+A: `EmbeddedWorkflow` 允许节点内部包含独立的子工作流（如 loop_body 节点内有独立画布）。`embedded-workflow.ts` 提供创建和规范化工具。
+
 ## 相关文件清单
 
 ```
@@ -129,11 +145,14 @@ shared/
   channel-metadata.ts                  通道元数据（超时/优先级/幂等性）
   ws-protocol.ts                       WS 消息协议（request/response/event/interaction）
   execution-events.ts                  执行事件协议与 recovery 类型
-  workflow-types.ts                    工作流核心数据模型
+  workflow-types.ts                    工作流核心数据模型（含复合节点/嵌入式工作流）
   plugin-types.ts                      插件类型（PluginInfo/PluginMeta/AgentToolDefinition）
   plugin-entry.ts                      插件入口文件路径解析
   plugin-capability-loader.ts          插件能力模块加载器
   workflow-local-bridge.ts             主进程桥接节点定义
+  embedded-workflow.ts                 嵌入式子工作流创建与规范化
+  workflow-composite.ts                复合节点查询工具（loop 节点树遍历/scope/过滤）
+  shortcut-types.ts                    快捷键类型（ShortcutAction/ShortcutBinding/SHORTCUT_ACTIONS）
   errors.ts                            后端错误码与错误构造器
 ```
 
@@ -141,5 +160,6 @@ shared/
 
 | 日期 | 操作 | 说明 |
 |---|---|---|
+| 2026-04-25 | 增量更新 | 新增 embedded-workflow.ts、workflow-composite.ts、shortcut-types.ts；补充复合节点/嵌入式子工作流类型；新增 chat:register-client-nodes/agent-tools 通道；补充 workflow:debug-node 通道 |
 | 2026-04-23 | 增量更新 | 同步插件运行时约定、插件入口类型、`agent:execTool` 双实现 |
 | 2026-04-22 | 初始化 | 首次生成 shared 模块文档 |

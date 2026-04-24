@@ -328,7 +328,9 @@ function setOuterViewport(nextViewport: { x: number; y: number; zoom: number }) 
 }
 
 function syncOuterZoom() {
-  outerZoom.value = getOuterViewport()?.zoom || 1
+  outerZoom.value = fullscreenSnapshot.value
+    ? (getOuterViewport()?.zoom || 1)
+    : 1
 }
 
 function toggleFullscreen() {
@@ -373,8 +375,17 @@ watch(
   () => props.hostNodeId,
   () => {
     fullscreenSnapshot.value = null
+    outerZoom.value = 1
   },
 )
+
+watch(isFullscreen, (value) => {
+  if (value) {
+    syncOuterZoom()
+    return
+  }
+  outerZoom.value = 1
+})
 
 onMounted(() => {
   syncOuterZoom()
