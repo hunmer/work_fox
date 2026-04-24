@@ -1096,6 +1096,11 @@ export function createWorkflowStore(tabId: string) {
     const workflowFolders = ref<WorkflowFolder[]>([])
     const currentWorkflow = ref<Workflow | null>(null)
     const selectedNodeIds = ref<string[]>([])
+    const selectedEmbeddedNode = ref<{
+      hostNodeId: string
+      nodeId: string
+      node: WorkflowNode
+    } | null>(null)
     const rightPanelTab = ref('properties')
     const executionStatus = ref<EngineStatus>('idle')
     const executionLog = ref<ExecutionLog | null>(null)
@@ -1144,9 +1149,11 @@ export function createWorkflowStore(tabId: string) {
     )
     const selectedNodeId = computed(() => selectedNodeIds.value[0] ?? null)
     const selectedNode = computed(() => {
+      if (selectedEmbeddedNode.value) return selectedEmbeddedNode.value.node
       if (!selectedNodeId.value || !currentWorkflow.value) return null
       return currentWorkflow.value.nodes.find((n) => n.id === selectedNodeId.value) || null
     })
+    const effectiveSelectedNodeId = computed(() => selectedEmbeddedNode.value?.nodeId ?? selectedNodeId.value)
     const selectedNodes = computed(() => {
       if (!selectedNodeIds.value.length || !currentWorkflow.value) return []
       return selectedNodeIds.value
@@ -1164,6 +1171,7 @@ export function createWorkflowStore(tabId: string) {
     })
 
     watch(() => currentWorkflow.value?.id, () => {
+      selectedEmbeddedNode.value = null
       execLogMgr.loadExecutionLogs()
       versionMgr.loadVersions()
       undoRedo.reset()
@@ -1174,6 +1182,8 @@ export function createWorkflowStore(tabId: string) {
       tabId,
       rightPanelTab,
       workflows, workflowFolders, currentWorkflow, selectedNodeId, selectedNodeIds,
+      selectedEmbeddedNode,
+      effectiveSelectedNodeId,
       rootFolders, selectedNode, selectedNodes, executionValidationError,
       executionStatus, executionLog, executionContext,
       executionLogs: execLogMgr.executionLogs,

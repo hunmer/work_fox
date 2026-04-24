@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { markRaw, ref, watch } from 'vue'
+import { computed, markRaw, onMounted, onUnmounted, ref, watch } from 'vue'
 import { VueFlow, useVueFlow, MarkerType, ConnectionMode } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
+import { Maximize2, Minimize2 } from 'lucide-vue-next'
 import type { EmbeddedWorkflow, WorkflowEdge, WorkflowNode } from '@/lib/workflow/types'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
+import { useWorkflowStore } from '@/stores/workflow'
+import { createWorkflowShortcutHandler } from '@/composables/workflow/useEditorShortcuts'
 import { WORKFLOW_NODE_DRAG_MIME } from './dragDrop'
 import EmbeddedWorkflowNode from './EmbeddedWorkflowNode.vue'
 import EmbeddedWorkflowEdge from './EmbeddedWorkflowEdge.vue'
@@ -12,20 +15,49 @@ import NodeSelectDialog from './NodeSelectDialog.vue'
 const props = defineProps<{
   modelValue: EmbeddedWorkflow
   flowId: string
+  hostNodeId?: string
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: EmbeddedWorkflow]
 }>()
 
+const store = useWorkflowStore()
 const nodeTypes = { embedded: markRaw(EmbeddedWorkflowNode) }
 const edgeTypes = { embedded: markRaw(EmbeddedWorkflowEdge) }
 
-const { project } = useVueFlow({ id: props.flowId })
+const {
+  addSelectedNodes,
+  getSelectedEdges,
+  getSelectedNodes,
+  project,
+  setViewport,
+  viewport,
+  vueFlowRef,
+  zoomIn,
+  zoomOut,
+  zoomTo,
+} = useVueFlow({ id: props.flowId })
 const nodeSelectOpen = ref(false)
+const editorRef = ref<HTMLElement | null>(null)
 const pendingInsert = ref<{ sourceId: string; targetId?: string; position?: { x: number; y: number } } | null>(null)
 const flowNodes = ref<Array<Record<string, any>>>([])
 const flowEdges = ref<Array<Record<string, any>>>([])
+const clipboardNodes = ref<WorkflowNode[]>([])
+const clipboardEdges = ref<WorkflowEdge[]>([])
+const outerZoom = ref(1)
+const fullscreenSnapshot = ref<{
+  innerViewport: { x: number; y: number; zoom: number }
+  outerViewport: { x: number; y: number; zoom: number } | null
+  hostNode: WorkflowNode
+} | null>(null)
+const isFullscreen = computed(() => !!fullscreenSnapshot.value)
+const flowStyle = computed(() => ({
+  width: outerZoom.value === 1 ? '100%' : `${100 / outerZoom.value}%`,
+  height: outerZoom.value === 1 ? '100%' : `${100 / outerZoom.value}%`,
+  transform: outerZoom.value === 1 ? undefined : `scale(${outerZoom.value})`,
+  transformOrigin: 'top left',
+}))
 
 function cloneWorkflow(): EmbeddedWorkflow {
   return JSON.parse(JSON.stringify(props.modelValue)) as EmbeddedWorkflow
@@ -90,6 +122,12 @@ watch(
   (workflow) => {
     flowNodes.value = workflow.nodes.map(mapWorkflowNode)
     flowEdges.value = workflow.edges.map(mapWorkflowEdge)
+    const selected = store.selectedEmbeddedNode
+    if (selected?.hostNodeId === props.hostNodeId) {
+      const node = workflow.nodes.find((item) => item.id === selected.nodeId)
+      if (node) selected.node = JSON.parse(JSON.stringify(node))
+      else store.selectedEmbeddedNode = null
+    }
   },
   { immediate: true, deep: true },
 )
@@ -113,6 +151,248 @@ function addNodeAt(type: string, position: { x: number; y: number }): WorkflowNo
   return node
 }
 
+function replaceWorkflow(nextWorkflow: EmbeddedWorkflow) {
+  syncLocalState(nextWorkflow)
+  emitWorkflow(nextWorkflow)
+}
+
+function copySelectedNodes() {
+  const selectedNodeIds = new Set(getSelectedNodes.value.map((node) => String(node.id)))
+  if (!selectedNodeIds.size) return
+  clipboardNodes.value = props.modelValue.nodes
+    .filter((node) => selectedNodeIds.has(node.id))
+    .map((node) => JSON.parse(JSON.stringify(node)))
+  clipboardEdges.value = props.modelValue.edges
+    .filter((edge) => selectedNodeIds.has(edge.source) && selectedNodeIds.has(edge.target))
+    .map((edge) => JSON.parse(JSON.stringify(edge)))
+}
+
+function pasteClipboardNodes() {
+  if (!clipboardNodes.value.length) return
+
+  const nextWorkflow = cloneWorkflow()
+  const idMap = new Map<string, string>()
+  const pastedNodes = clipboardNodes.value.map((node) => {
+    const nextId = crypto.randomUUID()
+    idMap.set(node.id, nextId)
+    return {
+      ...JSON.parse(JSON.stringify(node)),
+      id: nextId,
+      position: {
+        x: node.position.x + 30,
+        y: node.position.y + 30,
+      },
+    }
+  })
+  const pastedEdges = clipboardEdges.value
+    .map((edge) => {
+      const source = idMap.get(edge.source)
+      const target = idMap.get(edge.target)
+      if (!source || !target) return null
+      return {
+        ...JSON.parse(JSON.stringify(edge)),
+        id: `e-${source}-${edge.sourceHandle ?? 'default'}-${target}-${edge.targetHandle ?? 'default'}`,
+        source,
+        target,
+      }
+    })
+    .filter(Boolean) as WorkflowEdge[]
+
+  nextWorkflow.nodes.push(...pastedNodes)
+  nextWorkflow.edges.push(...pastedEdges)
+  replaceWorkflow(nextWorkflow)
+  addSelectedNodes(pastedNodes.map(mapWorkflowNode))
+}
+
+function deleteSelected() {
+  const selectedNodeIds = new Set(getSelectedNodes.value.map((node) => String(node.id)))
+  const selectedEdgeIds = new Set(getSelectedEdges.value.map((edge) => String(edge.id)))
+  if (!selectedNodeIds.size && !selectedEdgeIds.size) return
+
+  const nextWorkflow = cloneWorkflow()
+  nextWorkflow.nodes = nextWorkflow.nodes.filter((node) => !selectedNodeIds.has(node.id) || node.type === 'start' || node.type === 'end')
+  const deletedNodeIds = new Set(props.modelValue.nodes
+    .filter((node) => selectedNodeIds.has(node.id) && node.type !== 'start' && node.type !== 'end')
+    .map((node) => node.id))
+  nextWorkflow.edges = nextWorkflow.edges.filter((edge) => (
+    !selectedEdgeIds.has(edge.id)
+    && !deletedNodeIds.has(edge.source)
+    && !deletedNodeIds.has(edge.target)
+  ))
+  replaceWorkflow(nextWorkflow)
+}
+
+function selectEmbeddedNode(nodeId: string, additive = false) {
+  if (!props.hostNodeId) return
+  const node = props.modelValue.nodes.find((item) => item.id === nodeId)
+  if (!node) return
+
+  if (!additive) {
+    store.selectedNodeIds = []
+  }
+  store.selectedEmbeddedNode = {
+    hostNodeId: props.hostNodeId,
+    nodeId,
+    node: JSON.parse(JSON.stringify(node)),
+  }
+  store.rightPanelTab = 'properties'
+}
+
+function clearEmbeddedSelection() {
+  if (store.selectedEmbeddedNode?.hostNodeId === props.hostNodeId) {
+    store.selectedEmbeddedNode = null
+  }
+}
+
+function selectAllNodes() {
+  addSelectedNodes(flowNodes.value)
+  clearEmbeddedSelection()
+}
+
+const handleKeyDown = createWorkflowShortcutHandler({
+  hasWorkflow: () => !!props.modelValue,
+  isPreview: () => store.isPreview,
+  saveWorkflow: () => {
+    if (store.currentWorkflow) void store.saveWorkflow(store.currentWorkflow)
+  },
+  undo: store.undo,
+  redo: store.redo,
+  copySelectedNodes,
+  pasteClipboardNodes,
+  deleteSelected,
+  selectAllNodes,
+})
+
+function onWorkflowZoomIn(event: Event) {
+  if (!isEventInsideEditor(event)) return
+  zoomIn()
+  event.preventDefault()
+}
+
+function onWorkflowZoomOut(event: Event) {
+  if (!isEventInsideEditor(event)) return
+  zoomOut()
+  event.preventDefault()
+}
+
+function onWorkflowZoomReset(event: Event) {
+  if (!isEventInsideEditor(event)) return
+  zoomTo(1)
+  event.preventDefault()
+}
+
+function isEventInsideEditor(event: Event) {
+  const target = event.target
+  if (!(target instanceof Node)) return false
+  return !target || !vueFlowRef.value || vueFlowRef.value.contains(target)
+}
+
+function getHostNode() {
+  if (!props.hostNodeId) return null
+  return store.currentWorkflow?.nodes.find((node) => node.id === props.hostNodeId) ?? null
+}
+
+function getOuterCanvasState() {
+  const hostElement = editorRef.value?.closest('.vue-flow__node') as HTMLElement | null
+  const flowElement = hostElement?.closest('.vue-flow') as HTMLElement | null
+  const viewportElement = flowElement?.querySelector('.vue-flow__transformationpane') as HTMLElement | null
+  if (!flowElement || !viewportElement) return null
+
+  const bounds = flowElement.getBoundingClientRect()
+  const matrix = new DOMMatrixReadOnly(getComputedStyle(viewportElement).transform)
+  const zoom = matrix.a || 1
+  const padding = 16
+
+  return {
+    position: {
+      x: Math.floor((padding - matrix.e) / zoom),
+      y: Math.floor((padding - matrix.f) / zoom),
+    },
+    size: {
+      width: Math.max(520, Math.floor((bounds.width - padding * 2) / zoom)),
+      height: Math.max(260, Math.floor((bounds.height - padding * 2) / zoom)),
+    },
+  }
+}
+
+function getOuterViewport() {
+  const flowElement = editorRef.value?.closest('.vue-flow') as HTMLElement | null
+  const viewportElement = flowElement?.querySelector('.vue-flow__transformationpane') as HTMLElement | null
+  if (!viewportElement) return null
+  const matrix = new DOMMatrixReadOnly(getComputedStyle(viewportElement).transform)
+  return { x: matrix.e, y: matrix.f, zoom: matrix.a || 1 }
+}
+
+function setOuterViewport(nextViewport: { x: number; y: number; zoom: number }) {
+  window.dispatchEvent(new CustomEvent('workflow:embedded-set-viewport', { detail: nextViewport }))
+}
+
+function syncOuterZoom() {
+  outerZoom.value = getOuterViewport()?.zoom || 1
+}
+
+function toggleFullscreen() {
+  const hostNode = getHostNode()
+  if (!hostNode) return
+
+  if (fullscreenSnapshot.value) {
+    const snapshot = fullscreenSnapshot.value
+    fullscreenSnapshot.value = null
+    store.updateNodeData(hostNode.id, {
+      width: snapshot.hostNode.data?.width,
+      height: snapshot.hostNode.data?.height,
+    })
+    store.updateNodePosition(hostNode.id, snapshot.hostNode.position)
+    if (snapshot.outerViewport) setOuterViewport(snapshot.outerViewport)
+    void setViewport(snapshot.innerViewport)
+    return
+  }
+
+  const outerCanvasState = getOuterCanvasState()
+  if (!outerCanvasState) return
+  fullscreenSnapshot.value = {
+    innerViewport: { ...viewport.value },
+    outerViewport: getOuterViewport(),
+    hostNode: JSON.parse(JSON.stringify(hostNode)),
+  }
+  store.updateNodePosition(hostNode.id, outerCanvasState.position)
+  store.updateNodeData(hostNode.id, outerCanvasState.size)
+  setOuterViewport({ x: 0, y: 0, zoom: 1 })
+  void setViewport({
+    x: outerCanvasState.size.width / 2 - 260,
+    y: outerCanvasState.size.height / 2 - 130,
+    zoom: 1,
+  })
+}
+
+function focusEditor() {
+  editorRef.value?.focus()
+}
+
+watch(
+  () => props.hostNodeId,
+  () => {
+    fullscreenSnapshot.value = null
+  },
+)
+
+onMounted(() => {
+  syncOuterZoom()
+  window.addEventListener('workflow:zoom-in', onWorkflowZoomIn)
+  window.addEventListener('workflow:zoom-out', onWorkflowZoomOut)
+  window.addEventListener('workflow:zoom-reset', onWorkflowZoomReset)
+  window.addEventListener('wheel', syncOuterZoom, true)
+  window.addEventListener('pointerup', syncOuterZoom, true)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('workflow:zoom-in', onWorkflowZoomIn)
+  window.removeEventListener('workflow:zoom-out', onWorkflowZoomOut)
+  window.removeEventListener('workflow:zoom-reset', onWorkflowZoomReset)
+  window.removeEventListener('wheel', syncOuterZoom, true)
+  window.removeEventListener('pointerup', syncOuterZoom, true)
+})
+
 function onConnect(params: { source?: string | null; target?: string | null; sourceHandle?: string | null; targetHandle?: string | null }) {
   if (!params.source || !params.target) return
   const nextWorkflow = cloneWorkflow()
@@ -132,6 +412,16 @@ function onConnect(params: { source?: string | null; target?: string | null; sou
   })
   syncLocalState(nextWorkflow)
   emitWorkflow(nextWorkflow)
+}
+
+function onNodeClick({ node, event }: any) {
+  const nodeId = node?.id
+  if (!nodeId) return
+  selectEmbeddedNode(String(nodeId), !!event?.shiftKey || !!event?.metaKey)
+}
+
+function onPaneClick() {
+  clearEmbeddedSelection()
 }
 
 function onNodesChange(changes: Array<any>) {
@@ -154,6 +444,9 @@ function onNodesChange(changes: Array<any>) {
     if (change.type === 'remove') {
       const node = props.modelValue.nodes.find((item) => item.id === change.id)
       if (!node || node.type === 'start' || node.type === 'end') continue
+      if (store.selectedEmbeddedNode?.hostNodeId === props.hostNodeId && store.selectedEmbeddedNode.nodeId === change.id) {
+        store.selectedEmbeddedNode = null
+      }
       if (!nextWorkflow) nextWorkflow = cloneWorkflow()
       nextWorkflow.nodes = nextWorkflow.nodes.filter((item) => item.id !== change.id)
       nextWorkflow.edges = nextWorkflow.edges.filter((edge) => edge.source !== change.id && edge.target !== change.id)
@@ -197,8 +490,8 @@ function onDrop(event: DragEvent) {
   if (!bounds) return
 
   const position = project({
-    x: event.clientX - bounds.left,
-    y: event.clientY - bounds.top,
+    x: (event.clientX - bounds.left) / Math.max(outerZoom.value, 0.1),
+    y: (event.clientY - bounds.top) / Math.max(outerZoom.value, 0.1),
   })
   if (type) {
     addNodeAt(type, position)
@@ -262,7 +555,16 @@ function handleSelectDialogOpenChange(open: boolean) {
 </script>
 
 <template>
-  <div class="h-full w-full" data-embedded-workflow="true" @dragover="onDragOver" @drop="onDrop">
+  <div
+    ref="editorRef"
+    class="embedded-workflow-editor relative h-full w-full nodrag nopan"
+    data-embedded-workflow="true"
+    tabindex="0"
+    @pointerdown="focusEditor"
+    @dragover="onDragOver"
+    @drop="onDrop"
+    @keydown="handleKeyDown"
+  >
     <VueFlow
       :id="flowId"
       :nodes="flowNodes"
@@ -274,12 +576,16 @@ function handleSelectDialogOpenChange(open: boolean) {
       :fit-view-on-init="true"
       :connection-mode="ConnectionMode.Loose"
       class="h-full w-full"
+      :style="flowStyle"
       :nodes-draggable="true"
       :nodes-connectable="true"
       :pan-on-drag="true"
+      no-pan-class-name="embedded-workflow-nopan"
       :select-nodes-on-drag="false"
       :elements-selectable="true"
       @connect="onConnect"
+      @node-click="onNodeClick"
+      @pane-click="onPaneClick"
       @nodes-change="onNodesChange"
       @edges-change="onEdgesChange"
     >
@@ -293,6 +599,17 @@ function handleSelectDialogOpenChange(open: boolean) {
       </template>
     </VueFlow>
 
+    <button
+      v-if="hostNodeId"
+      type="button"
+      class="embedded-workflow-fullscreen-button nodrag nopan"
+      :title="isFullscreen ? '退出全屏显示' : '全屏显示当前节点'"
+      @click.stop="toggleFullscreen"
+    >
+      <Minimize2 v-if="isFullscreen" class="h-4 w-4" />
+      <Maximize2 v-else class="h-4 w-4" />
+    </button>
+
     <NodeSelectDialog
       :open="nodeSelectOpen"
       @update:open="handleSelectDialogOpenChange"
@@ -300,3 +617,32 @@ function handleSelectDialogOpenChange(open: boolean) {
     />
   </div>
 </template>
+
+<style scoped>
+.embedded-workflow-editor {
+  overflow: hidden;
+}
+
+.embedded-workflow-fullscreen-button {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 8px;
+  color: rgb(71, 85, 105);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+  cursor: pointer;
+}
+
+.embedded-workflow-fullscreen-button:hover {
+  color: rgb(15, 23, 42);
+  background: rgba(248, 250, 252, 0.98);
+}
+</style>

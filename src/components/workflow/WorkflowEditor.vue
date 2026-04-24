@@ -82,6 +82,7 @@ const FLOW_ID = `workflow-editor-flow-${props.tab.id}`
 
 const {
   project,
+  setViewport,
   vueFlowRef,
   zoomIn,
   zoomOut,
@@ -303,11 +304,13 @@ function onNodeClick({ node, event }: any) {
   } else {
     store.selectedNodeIds = [nodeId]
   }
+  store.selectedEmbeddedNode = null
   store.rightPanelTab = 'properties'
 }
 
 function onPaneClick() {
   store.selectedNodeIds = []
+  store.selectedEmbeddedNode = null
 }
 
 function onDragOver(event: DragEvent) {
@@ -429,7 +432,15 @@ let cleanupFileUpdates: (() => void) | null = null
 let cleanupWorkflowToolRequests: (() => void) | null = null
 let autoSaveTimer: ReturnType<typeof setInterval> | null = null
 let cleanupTableConfirm: (() => void) | null = null
+
+function onEmbeddedSetViewport(event: Event) {
+  const viewport = (event as CustomEvent<{ x: number; y: number; zoom: number }>).detail
+  if (!viewport) return
+  void setViewport(viewport)
+}
+
 onMounted(() => {
+  window.addEventListener('workflow:embedded-set-viewport', onEmbeddedSetViewport)
   agentSettings.init()
   cleanupFileUpdates = store.listenForFileUpdates()
   cleanupWorkflowToolRequests = store.listenForWorkflowToolRequests()
@@ -444,6 +455,7 @@ onMounted(() => {
   }, 10_000)
 })
 onUnmounted(() => {
+  window.removeEventListener('workflow:embedded-set-viewport', onEmbeddedSetViewport)
   cleanupFileUpdates?.()
   cleanupWorkflowToolRequests?.()
   cleanupTableConfirm?.()

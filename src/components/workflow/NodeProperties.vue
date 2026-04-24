@@ -28,6 +28,7 @@ import {
 const store = useWorkflowStore()
 
 const props = defineProps<{ embedded?: boolean }>()
+const selectedNodeId = computed(() => store.effectiveSelectedNodeId)
 
 const definition = computed(() => {
   if (!store.selectedNode) return null
@@ -79,6 +80,21 @@ function getFieldValue(key: string): any {
 }
 
 function setFieldValue(key: string, value: any) {
+  if (store.selectedEmbeddedNode) {
+    const embedded = store.selectedEmbeddedNode
+    const hostNode = store.currentWorkflow?.nodes.find((node) => node.id === embedded.hostNodeId)
+    const bodyWorkflow = hostNode?.data?.bodyWorkflow
+    if (!hostNode || !bodyWorkflow) return
+
+    const nextWorkflow = JSON.parse(JSON.stringify(bodyWorkflow))
+    const node = nextWorkflow.nodes?.find((item: any) => item.id === embedded.nodeId)
+    if (!node) return
+    node.data = { ...node.data, [key]: value }
+    embedded.node = node
+    store.updateEmbeddedWorkflow(embedded.hostNodeId, nextWorkflow, { pushUndo: false })
+    return
+  }
+
   if (store.selectedNodeId) {
     store.updateNodeData(store.selectedNodeId, { [key]: value })
   }
@@ -128,6 +144,10 @@ function insertArrayVariable(propKey: string, index: number, fieldKey: string, v
 const nodeOutputs = computed<OutputField[]>({
   get: () => store.selectedNode?.data?.outputs ?? [],
   set: (val) => {
+    if (store.selectedEmbeddedNode) {
+      setFieldValue('outputs', val)
+      return
+    }
     if (store.selectedNodeId) {
       store.updateNodeData(store.selectedNodeId, { outputs: val })
     }
@@ -228,7 +248,7 @@ function confirmImport() {
       </div>
 
       <!-- 调试按钮 -->
-      <div class="px-3 py-2 border-b border-border">
+      <div v-if="!store.selectedEmbeddedNode" class="px-3 py-2 border-b border-border">
         <Button
           size="sm"
           :variant="isDebugging ? 'destructive' : 'outline'"
@@ -395,8 +415,8 @@ function confirmImport() {
                 @update:model-value="setFieldValue(prop.key, $event)"
               />
               <VariablePicker
-                v-if="store.selectedNodeId"
-                :exclude-node-id="store.selectedNodeId"
+                v-if="selectedNodeId"
+                :exclude-node-id="selectedNodeId"
                 @select="insertVariable(prop.key, $event)"
               />
             </div>
@@ -487,8 +507,8 @@ function confirmImport() {
                         @update:model-value="updateArrayItemField(prop.key, idx, field.key, $event)"
                       />
                       <VariablePicker
-                        v-if="store.selectedNodeId"
-                        :exclude-node-id="store.selectedNodeId"
+                        v-if="selectedNodeId"
+                        :exclude-node-id="selectedNodeId"
                         @select="insertArrayVariable(prop.key, idx, field.key, $event)"
                       />
                     </div>

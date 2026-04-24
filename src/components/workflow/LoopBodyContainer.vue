@@ -43,6 +43,7 @@ function handleUpdateBodyWorkflow(value: ReturnType<typeof normalizeEmbeddedWork
     <div class="loop-body-canvas" @click.stop @dragover.stop @drop.stop>
       <EmbeddedWorkflowEditor
         :flow-id="`loop-body-${props.nodeId || 'unknown'}`"
+        :host-node-id="props.nodeId"
         :model-value="embeddedWorkflow"
         @update:model-value="handleUpdateBodyWorkflow"
       />
