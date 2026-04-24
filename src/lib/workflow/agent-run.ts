@@ -103,11 +103,7 @@ export async function executeAgentRunTask(
     },
   }
 
-  if (wsBridge.isConnected() || !navigator.userAgent.includes('Electron')) {
-    await wsBridge.invoke('chat:completions', payload as any)
-  } else {
-    await window.api.chat.completions(payload)
-  }
+  await wsBridge.invoke('chat:completions', payload as any)
 
   await completionFinished
 

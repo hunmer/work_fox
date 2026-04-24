@@ -3,6 +3,7 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { useAgentSettingsStore } from '@/stores/agent-settings'
 import { useTabStore } from '@/stores/tab'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { fsApi } from '@/lib/backend-api/fs'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import {
@@ -57,7 +58,7 @@ async function loadRoot() {
     return
   }
   try {
-    rootEntries.value = await window.api.fs.listDir(workspacePath.value)
+    rootEntries.value = await fsApi.listDir(workspacePath.value)
   } catch {
     rootEntries.value = []
   }
@@ -66,7 +67,7 @@ async function loadRoot() {
 async function handleCreateFile() {
   if (!workspacePath.value) return
   const newPath = joinPath(workspacePath.value, 'untitled')
-  await window.api.fs.createFile(newPath)
+  await fsApi.createFile(newPath)
   await loadRoot()
   newEntryPath.value = newPath
 }
@@ -74,7 +75,7 @@ async function handleCreateFile() {
 async function handleCreateDir() {
   if (!workspacePath.value) return
   const newPath = joinPath(workspacePath.value, 'new_folder')
-  await window.api.fs.createDir(newPath)
+  await fsApi.createDir(newPath)
   await loadRoot()
   newEntryPath.value = newPath
 }

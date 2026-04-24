@@ -38,7 +38,7 @@
 
 | 文件 | 注册频道前缀 | 功能 |
 |---|---|---|
-| `chat.ts` | `chat:completions`, `chat:abort`, `agent:execTool`, `workflow-tool:respond`, `chatHistory:*` | AI 对话、工具执行、聊天历史 |
+| `chat.ts` | `agent:execTool`, `chatHistory:*` | 工具执行、聊天历史 |
 | `workflow.ts` | `workflow:list/get/create/update/delete`, `workflowFolder:*`, `workflow:importOpenFile/exportSaveFile` | 工作流 CRUD（兼容层，部分已迁移到 backend） |
 | `plugin.ts` | `plugin:list/enable/disable/get-view/get-icon/import-zip/open-folder/install/uninstall/get-workflow-nodes/list-workflow-plugins/get-agent-tools` | 插件管理 |
 | `shortcut.ts` | `shortcut:list/update/toggle/clear/reset` | 快捷键管理 |
@@ -150,8 +150,6 @@ electron/
     claude-tool-adapter.ts             Claude 工具适配器（SDK -> IPC 桥接）
     backend-process.ts                 Backend 子进程生命周期管理
     workflow-store.ts                  工作流文件存储
-    workflow-tool-dispatcher.ts        工作流工具调度（请求/响应配对）
-    workflow-tool-executor.ts          工作流工具执行
     workflow-node-registry.ts          工作流节点注册表（内置 + 插件）
     workflow-browser-node-runtime.ts   浏览器节点运行时
     builtin-nodes.ts                   内置节点定义

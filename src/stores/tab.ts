@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch, type Ref } from 'vue'
 import { createWorkflowStore, type WorkflowStore } from './workflow'
+import { wsBridge } from '@/lib/ws-bridge'
 
 export interface Tab {
   id: string
@@ -38,7 +39,7 @@ export const useTabStore = defineStore('tabs', () => {
   async function restoreTabs() {
     // 热加载时防止重复
     if (tabs.value.length > 0) return
-    const data = await (window as any).api.tabs.load() as { tabs: Tab[]; activeTabId: string | null }
+    const data = await wsBridge.invoke('tabs:load', undefined) as { tabs: Tab[]; activeTabId: string | null }
     if (!data.tabs || data.tabs.length === 0) return
     for (const tab of data.tabs) {
       const store = createWorkflowStore(tab.id)
@@ -153,7 +154,7 @@ export const useTabStore = defineStore('tabs', () => {
     if (nextSnapshot === lastPersistedSnapshot) return
 
     lastPersistedSnapshot = nextSnapshot
-    ;(window as any).api.tabs.save(JSON.parse(nextSnapshot))
+    wsBridge.invoke('tabs:save', JSON.parse(nextSnapshot)).catch(() => {})
   }
 
   function updateTabWorkflow(tabId: string, workflowId: string | null, name: string) {

@@ -26,7 +26,6 @@
 |---|---|---|
 | `api.chat` | `completions`, `abort` | `chat:completions`, `chat:abort` |
 | `api.chatHistory` | `listSessions`, `createSession`, `updateSession`, `deleteSession`, `listMessages`, `addMessage`, `updateMessage`, `deleteMessage`, `deleteMessages`, `clearMessages` | `chatHistory:*` |
-| `api.workflowTool` | `respond` | `workflow-tool:respond` |
 | `api.agent` | `execTool` | `agent:execTool` |
 | `api.aiProvider` | `list`, `create`, `update`, `delete`, `test` | `aiProvider:*` |
 | `api.workflow` | `importOpenFile`, `exportSaveFile` | `workflow:importOpenFile`, `workflow:exportSaveFile` |
@@ -68,18 +67,6 @@ interface ChatCompletionParams {
     ruleFileNames?: string[];
     enabledPlugins?: string[];
   };
-}
-```
-
-### WorkflowToolExecuteRequest
-
-```typescript
-interface WorkflowToolExecuteRequest {
-  requestId: string;
-  toolUseId: string;
-  name: string;
-  args: Record<string, unknown>;
-  workflowId: string;
 }
 ```
 

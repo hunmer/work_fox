@@ -56,7 +56,7 @@
 - **应用**: `app:getVersion`
 - **文件系统**: `fs:listDir/delete/createFile/createDir/rename`
 - **Chat**: `chat:completions`, `chat:abort`
-- **工具**: `agent:execTool`, `workflowTool:respond`
+- **工具**: `agent:execTool`
 
 ### 插件相关共享约定
 

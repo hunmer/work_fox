@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { AgentGlobalSettings, AgentResourceItem, WorkflowAgentConfig } from '@/types'
 import { useTabStore } from './tab'
+import { wsBridge } from '@/lib/ws-bridge'
 
 function cloneResources(items?: AgentResourceItem[]): AgentResourceItem[] {
   return Array.isArray(items) ? JSON.parse(JSON.stringify(items)) : []
@@ -39,7 +40,7 @@ export const useAgentSettingsStore = defineStore('agent-settings', () => {
 
   async function init() {
     if (initialized.value) return
-    const loaded = await window.api.agentSettings.get()
+    const loaded = await wsBridge.invoke('agentSettings:get', undefined) as AgentGlobalSettings
     const defaults = createEmptyGlobalSettings()
     globalSettings.value = {
       ...defaults,
@@ -53,7 +54,9 @@ export const useAgentSettingsStore = defineStore('agent-settings', () => {
   async function saveGlobalSettings() {
     saving.value = true
     try {
-      globalSettings.value = await window.api.agentSettings.set(JSON.parse(JSON.stringify(globalSettings.value)))
+      globalSettings.value = await wsBridge.invoke('agentSettings:set', {
+        settings: JSON.parse(JSON.stringify(globalSettings.value)),
+      }) as AgentGlobalSettings
     } finally {
       saving.value = false
     }

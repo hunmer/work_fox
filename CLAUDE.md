@@ -49,7 +49,6 @@ Main (Electron)
           |-- plugin-catalog.ts         Electron 本地插件目录扫描与元数据
           |-- store.ts                  electron-store 全局配置（AI providers / shortcuts / tabs）
           |-- chat-history-store.ts     Chat 历史（IndexedDB 跨进程代理或文件存储）
-          |-- workflow-tool-dispatcher.ts 工作流工具调度（主进程 <-> 渲染进程协作）
           |-- workflow-node-registry.ts 工作流节点注册表（内置 + 插件）
           |-- builtin-nodes.ts          内置节点定义（start/end/run_code/toast/switch）
           |-- ...
@@ -188,9 +187,6 @@ pnpm build
 # 单独编译 backend
 pnpm build:backend
 
-# backend smoke 回归
-pnpm smoke:backend
-
 # 打包安装程序（electron-builder）
 pnpm pack
 ```
@@ -262,7 +258,6 @@ WorkFox 支持两种运行模式：
 ```bash
 pnpm exec tsc -p tsconfig.web.json --noEmit
 pnpm build:backend
-pnpm smoke:backend
 pnpm build
 ```
 

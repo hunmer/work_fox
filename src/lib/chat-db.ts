@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie'
 import type { ChatSession, ChatMessage } from '@/types'
+import { wsBridge } from '@/lib/ws-bridge'
 
 class ChatDB extends Dexie {
   sessions!: Table<ChatSession, string>
@@ -67,7 +68,7 @@ export async function createSession(
   await chatDb.sessions.add(session)
 
   if (scope === 'workflow' && workflowId) {
-    await window.api.chatHistory.createSession(workflowId, session)
+    await wsBridge.invoke('chatHistory:createSession', { workflowId, session })
   }
 
   return session
@@ -84,7 +85,7 @@ export async function listSessionsByScope(scope: string): Promise<ChatSession[]>
 export async function deleteSession(id: string): Promise<void> {
   const session = await chatDb.sessions.get(id)
   if (session?.scope === 'workflow' && session.workflowId) {
-    await window.api.chatHistory.deleteSession(session.workflowId, id)
+    await wsBridge.invoke('chatHistory:deleteSession', { workflowId: session.workflowId, sessionId: id })
   }
   await chatDb.messages.where('sessionId').equals(id).delete()
   await chatDb.sessions.delete(id)
@@ -93,7 +94,7 @@ export async function deleteSession(id: string): Promise<void> {
 export async function updateSessionTitle(id: string, title: string): Promise<void> {
   const session = await chatDb.sessions.get(id)
   if (session?.scope === 'workflow' && session.workflowId) {
-    await window.api.chatHistory.updateSession(session.workflowId, id, { title, updatedAt: Date.now() })
+    await wsBridge.invoke('chatHistory:updateSession', { workflowId: session.workflowId, sessionId: id, updates: { title, updatedAt: Date.now() } })
   }
   await chatDb.sessions.update(id, { title, updatedAt: Date.now() })
 }
@@ -101,7 +102,7 @@ export async function updateSessionTitle(id: string, title: string): Promise<voi
 export async function updateSessionBrowserView(id: string, browserViewId: string | null): Promise<void> {
   const session = await chatDb.sessions.get(id)
   if (session?.scope === 'workflow' && session.workflowId) {
-    await window.api.chatHistory.updateSession(session.workflowId, id, { browserViewId, updatedAt: Date.now() })
+    await wsBridge.invoke('chatHistory:updateSession', { workflowId: session.workflowId, sessionId: id, updates: { browserViewId, updatedAt: Date.now() } })
   }
   await chatDb.sessions.update(id, { browserViewId, updatedAt: Date.now() })
 }
@@ -118,7 +119,7 @@ export async function addMessage(message: Omit<ChatMessage, 'id'>): Promise<Chat
   await chatDb.messages.add(msg)
 
   if (session?.scope === 'workflow' && session.workflowId) {
-    await window.api.chatHistory.addMessage(session.workflowId, message.sessionId, msg)
+    await wsBridge.invoke('chatHistory:addMessage', { workflowId: session.workflowId, sessionId: message.sessionId, message: msg })
   }
 
   // 更新会话的 updatedAt 和 messageCount
@@ -147,7 +148,7 @@ export async function listMessages(sessionId: string): Promise<ChatMessage[]> {
   // 优先从文件读取 workflow scope 的消息
   const wid = await getWorkflowId(sessionId)
   if (wid) {
-    return window.api.chatHistory.listMessages(wid, sessionId)
+    return wsBridge.invoke('chatHistory:listMessages', { workflowId: wid, sessionId })
   }
   return chatDb.messages
     .where('sessionId')
@@ -163,7 +164,7 @@ export async function updateMessage(id: string, updates: Partial<ChatMessage>): 
   if (msg?.sessionId) {
     const wid = await getWorkflowId(msg.sessionId)
     if (wid) {
-      await window.api.chatHistory.updateMessage(wid, msg.sessionId, id, updates)
+      await wsBridge.invoke('chatHistory:updateMessage', { workflowId: wid, sessionId: msg.sessionId, messageId: id, updates })
     }
   }
 }
@@ -176,7 +177,7 @@ export async function deleteMessage(id: string): Promise<void> {
   if (msg.sessionId) {
     const wid = await getWorkflowId(msg.sessionId)
     if (wid) {
-      await window.api.chatHistory.deleteMessage(wid, msg.sessionId, id)
+      await wsBridge.invoke('chatHistory:deleteMessage', { workflowId: wid, sessionId: msg.sessionId, messageId: id })
     }
     const session = await chatDb.sessions.get(msg.sessionId)
     if (session) {
@@ -196,7 +197,7 @@ export async function deleteMessages(ids: string[]): Promise<void> {
   if (first?.sessionId) {
     const wid = await getWorkflowId(first.sessionId)
     if (wid) {
-      await window.api.chatHistory.deleteMessages(wid, first.sessionId, ids)
+      await wsBridge.invoke('chatHistory:deleteMessages', { workflowId: wid, sessionId: first.sessionId, messageIds: ids })
     }
   }
 }
@@ -204,7 +205,7 @@ export async function deleteMessages(ids: string[]): Promise<void> {
 export async function clearMessages(sessionId: string): Promise<void> {
   const wid = await getWorkflowId(sessionId)
   if (wid) {
-    await window.api.chatHistory.clearMessages(wid, sessionId)
+    await wsBridge.invoke('chatHistory:clearMessages', { workflowId: wid, sessionId })
   }
   await chatDb.messages.where('sessionId').equals(sessionId).delete()
   await chatDb.sessions.update(sessionId, {

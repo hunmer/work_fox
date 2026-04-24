@@ -2,6 +2,7 @@ import { reactive } from 'vue'
 import type { SuggestionItem, SuggestionState } from './types'
 import { useAgentSettingsStore } from '@/stores/agent-settings'
 import { useTabStore } from '@/stores/tab'
+import { fsApi } from '@/lib/backend-api/fs'
 
 /**
  * 创建三种 Mention 的 suggestion 配置和共享响应式状态。
@@ -109,7 +110,7 @@ export function useMentionConfig() {
     if (!workspace) return []
 
     try {
-      const entries = await window.api.fs.listDir(workspace)
+      const entries = await fsApi.listDir(workspace)
       const q = query.toLowerCase()
       return entries
         .filter((e) => e.name.toLowerCase().includes(q))

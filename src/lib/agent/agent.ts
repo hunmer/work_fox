@@ -7,7 +7,7 @@ import { buildWorkflowSystemPrompt } from './workflow-prompt'
 import type { ChatCompletionParams } from '@/types'
 import { wsBridge } from '@/lib/ws-bridge'
 
-type ChatCompletionPayload = Parameters<typeof window.api.chat.completions>[0]
+type ChatCompletionPayload = ChatCompletionParams
 
 function toIpcPayload<T>(value: T): T {
   return JSON.parse(JSON.stringify(value))
@@ -131,11 +131,7 @@ export async function runAgentStream(
   })
 
   try {
-    if (wsBridge.isConnected() || !navigator.userAgent.includes('Electron')) {
-      await wsBridge.invoke('chat:completions', payload as any)
-    } else {
-      await window.api.chat.completions(payload)
-    }
+    await wsBridge.invoke('chat:completions', payload as any)
   } catch (error) {
     cleanup()
     callbacks.onError(error instanceof Error ? error : new Error(String(error)))

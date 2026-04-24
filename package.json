@@ -10,7 +10,7 @@
     "dev-win": "chcp 65001 && electron-vite dev",
     "dev:backend": "node scripts/backend-dev.mjs",
     "build:backend": "tsc -p tsconfig.backend.json",
-    "smoke:backend": "node scripts/backend-smoke-test.mjs",
+
     "dev:web": "vite --config vite.web.config.ts",
     "build:web": "vite build --config vite.web.config.ts",
     "preview:web": "vite preview --config vite.web.config.ts",

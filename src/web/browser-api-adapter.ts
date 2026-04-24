@@ -48,7 +48,7 @@ interface EndpointConfig {
 
 /**
  * Browser-mode drop-in replacement for Electron's `window.api`.
- * Every call is routed through WSBridge to the backend.
+ * Platform-only APIs that have no web equivalent are stubbed as no-ops or not-available.
  */
 export class BrowserAPIAdapter implements IpcAPI {
   private ws: WSBridge
@@ -60,97 +60,14 @@ export class BrowserAPIAdapter implements IpcAPI {
   }
 
   // ------------------------------------------------------------------
-  // Raw invoke — bypasses BackendChannel type constraint so that web
-  // mode can call IPC channels that are not (yet) in channel-contracts.
-  // Multiple positional args are packed into a single data payload.
-  // ------------------------------------------------------------------
-  private rpc<R = any>(channel: string, ...args: any[]): Promise<R> {
-    // If exactly one arg, send it directly; otherwise pack as array
-    const data = args.length <= 1 ? args[0] : args
-    return (this.ws as any).invoke(channel, data) as Promise<R>
-  }
-
-  // ------------------------------------------------------------------
-  // chat
-  // ------------------------------------------------------------------
-  chat = {
-    completions: (params: any): Promise<{ started: boolean }> =>
-      this.rpc('chat:completions', params),
-    abort: (requestId: string): Promise<{ aborted: boolean }> =>
-      this.rpc('chat:abort', { requestId }),
-  }
-
-  // ------------------------------------------------------------------
-  // chatHistory
-  // ------------------------------------------------------------------
-  chatHistory = {
-    listSessions: (workflowId: string): Promise<any[]> =>
-      this.rpc('chatHistory:listSessions', { workflowId }),
-    createSession: (workflowId: string, session: any): Promise<any> =>
-      this.rpc('chatHistory:createSession', { workflowId, session }),
-    updateSession: (workflowId: string, sessionId: string, updates: any): Promise<void> =>
-      this.rpc('chatHistory:updateSession', { workflowId, sessionId, updates }),
-    deleteSession: (workflowId: string, sessionId: string): Promise<void> =>
-      this.rpc('chatHistory:deleteSession', { workflowId, sessionId }),
-    listMessages: (workflowId: string, sessionId: string): Promise<any[]> =>
-      this.rpc('chatHistory:listMessages', { workflowId, sessionId }),
-    addMessage: (workflowId: string, sessionId: string, message: any): Promise<any> =>
-      this.rpc('chatHistory:addMessage', { workflowId, sessionId, message }),
-    updateMessage: (
-      workflowId: string,
-      sessionId: string,
-      messageId: string,
-      updates: any,
-    ): Promise<void> =>
-      this.rpc('chatHistory:updateMessage', { workflowId, sessionId, messageId, updates }),
-    deleteMessage: (
-      workflowId: string,
-      sessionId: string,
-      messageId: string,
-    ): Promise<void> =>
-      this.rpc('chatHistory:deleteMessage', { workflowId, sessionId, messageId }),
-    deleteMessages: (
-      workflowId: string,
-      sessionId: string,
-      messageIds: string[],
-    ): Promise<void> =>
-      this.rpc('chatHistory:deleteMessages', { workflowId, sessionId, messageIds }),
-    clearMessages: (workflowId: string, sessionId: string): Promise<void> =>
-      this.rpc('chatHistory:clearMessages', { workflowId, sessionId }),
-  }
-
-  // ------------------------------------------------------------------
-  // workflowTool
-  // ------------------------------------------------------------------
-  workflowTool = {
-    respond: (requestId: string, result: unknown): Promise<{ resolved: boolean }> =>
-      this.rpc('workflow-tool:respond', { requestId, result }),
-  }
-
-  // ------------------------------------------------------------------
-  // agent
+  // agent (interaction bridge → backend agent:execTool via WS)
   // ------------------------------------------------------------------
   agent = {
     execTool: (
       toolType: string,
       params: Record<string, any>,
       targetTabId?: string,
-    ): Promise<any> => this.rpc('agent:execTool', { toolType, params, targetTabId }),
-  }
-
-  // ------------------------------------------------------------------
-  // aiProvider
-  // ------------------------------------------------------------------
-  aiProvider = {
-    list: (): Promise<any[]> => this.rpc('aiProvider:list'),
-    create: (data: any): Promise<any> => this.rpc('aiProvider:create', { data }),
-    update: (data: { id: string; [key: string]: any }): Promise<any> => {
-      const { id, ...rest } = data
-      return this.rpc('aiProvider:update', { id, data: rest })
-    },
-    delete: (id: string): Promise<boolean> => this.rpc('aiProvider:delete', { id }),
-    test: (id: string): Promise<{ success: boolean; error?: string }> =>
-      this.rpc('aiProvider:test', { id }),
+    ): Promise<any> => (this.ws as any).invoke('agent:execTool', { toolType, params, targetTabId }),
   }
 
   // ------------------------------------------------------------------
@@ -165,58 +82,50 @@ export class BrowserAPIAdapter implements IpcAPI {
   }
 
   // ------------------------------------------------------------------
-  // shortcut
+  // shortcut (web mode: config stored via backend WS, no global shortcuts)
   // ------------------------------------------------------------------
   shortcut = {
     list: (): Promise<{ groups: any[]; shortcuts: any[] }> =>
-      this.rpc('shortcut:list'),
+      (this.ws as any).invoke('shortcut:list'),
     update: (
       id: string,
       accelerator: string,
       isGlobal: boolean,
       enabled?: boolean,
-    ): Promise<any> => this.rpc('shortcut:update', { id, accelerator, isGlobal, enabled }),
+    ): Promise<any> => (this.ws as any).invoke('shortcut:update', { id, accelerator, isGlobal, enabled }),
     toggle: (id: string, enabled: boolean): Promise<any> =>
-      this.rpc('shortcut:toggle', { id, enabled }),
-    clear: (id: string): Promise<any> => this.rpc('shortcut:clear', { id }),
-    reset: (): Promise<any> => this.rpc('shortcut:reset'),
+      (this.ws as any).invoke('shortcut:toggle', { id, enabled }),
+    clear: (id: string): Promise<any> => (this.ws as any).invoke('shortcut:clear', { id }),
+    reset: (): Promise<any> => (this.ws as any).invoke('shortcut:reset'),
   }
 
   // ------------------------------------------------------------------
-  // plugin
+  // plugin (server plugins via WS, local plugins not available in web)
   // ------------------------------------------------------------------
   plugin = {
-    list: () => this.rpc('plugin:list'),
+    list: () => (this.ws as any).invoke('plugin:list'),
     listLocal: async () => [],
-    enable: (id: string) => this.rpc('plugin:enable', { id }),
+    enable: (id: string) => (this.ws as any).invoke('plugin:enable', { id }),
     enableLocal: notAvailable('plugin:enable-local'),
-    disable: (id: string) => this.rpc('plugin:disable', { id }),
+    disable: (id: string) => (this.ws as any).invoke('plugin:disable', { id }),
     disableLocal: notAvailable('plugin:disable-local'),
-    getWorkflowNodes: (pluginId: string) => this.rpc('plugin:get-workflow-nodes', { pluginId }),
-    getAgentTools: (pluginIds: string[]) => this.rpc('plugin:get-agent-tools', { pluginIds }),
-    getView: (id: string) => this.rpc('plugin:get-view', id),
-    getIcon: (id: string) => this.rpc('plugin:get-icon', id),
+    getWorkflowNodes: (pluginId: string) => (this.ws as any).invoke('plugin:get-workflow-nodes', { pluginId }),
+    getAgentTools: (pluginIds: string[]) => (this.ws as any).invoke('plugin:get-agent-tools', { pluginIds }),
+    getView: (id: string) => (this.ws as any).invoke('plugin:get-view', id),
+    getIcon: (id: string) => (this.ws as any).invoke('plugin:get-icon', id),
     importZip: notAvailable('plugin:import-zip'),
     openFolder: notAvailable('plugin:open-folder'),
     install: async (url: string) => {
-      const plugin = await this.rpc<any>('plugin:install', { url })
+      const plugin = await (this.ws as any).invoke('plugin:install', { url })
       return {
         success: true,
         pluginName: plugin?.name,
       }
     },
     uninstall: async (id: string) => {
-      await this.rpc('plugin:uninstall', { id })
+      await (this.ws as any).invoke('plugin:uninstall', { id })
       return { success: true }
     },
-  }
-
-  // ------------------------------------------------------------------
-  // agentSettings
-  // ------------------------------------------------------------------
-  agentSettings = {
-    get: (): Promise<any> => this.rpc('agentSettings:get'),
-    set: (settings: any): Promise<any> => this.rpc('agentSettings:set', { settings }),
   }
 
   // ------------------------------------------------------------------
@@ -230,39 +139,10 @@ export class BrowserAPIAdapter implements IpcAPI {
   }
 
   // ------------------------------------------------------------------
-  // tabs
-  // ------------------------------------------------------------------
-  tabs = {
-    load: (): Promise<{ tabs: any[]; activeTabId: string | null }> =>
-      this.rpc('tabs:load'),
-    save: (data: { tabs: any[]; activeTabId: string | null }): Promise<void> =>
-      this.rpc('tabs:save', data),
-  }
-
-  // ------------------------------------------------------------------
-  // fs
+  // fs (only openInExplorer is platform-only; data fs ops use fsApi via wsBridge)
   // ------------------------------------------------------------------
   fs = {
-    listDir: (
-      dirPath: string,
-    ): Promise<Array<{
-      name: string
-      path: string
-      type: 'file' | 'directory'
-      modifiedAt: string
-    }>> => this.rpc('fs:listDir', dirPath),
-    delete: (targetPath: string): Promise<{ success: boolean; error?: string }> =>
-      this.rpc('fs:delete', targetPath),
-    createFile: (filePath: string): Promise<{ success: boolean; error?: string }> =>
-      this.rpc('fs:createFile', filePath),
-    createDir: (dirPath: string): Promise<{ success: boolean; error?: string }> =>
-      this.rpc('fs:createDir', dirPath),
     openInExplorer: notAvailable('fs:openInExplorer'),
-    rename: (
-      oldPath: string,
-      newName: string,
-    ): Promise<{ success: boolean; newPath?: string; error?: string }> =>
-      this.rpc('fs:rename', { oldPath, newName }),
   }
 
   // ------------------------------------------------------------------
@@ -294,7 +174,7 @@ export class BrowserAPIAdapter implements IpcAPI {
   // ------------------------------------------------------------------
   // getAppVersion
   // ------------------------------------------------------------------
-  getAppVersion = (): Promise<string> => this.rpc<string>('app:getVersion')
+  getAppVersion = (): Promise<string> => (this.ws as any).invoke('app:getVersion')
 
   // ------------------------------------------------------------------
   // on — subscribe to events via WSBridge

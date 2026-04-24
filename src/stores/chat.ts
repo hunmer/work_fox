@@ -106,7 +106,7 @@ function createSessionActions(scope: string, sessions: Ref<ChatSession[]>, curre
       const workflowStore = useTabStore().activeStore
       const workflowId = workflowStore?.currentWorkflow?.id
       if (workflowId) {
-        sessions.value = await window.api.chatHistory.listSessions(workflowId)
+        sessions.value = await wsBridge.invoke('chatHistory:listSessions', { workflowId })
       } else {
         sessions.value = []
       }
@@ -157,7 +157,7 @@ function createSessionActions(scope: string, sessions: Ref<ChatSession[]>, curre
   async function switchToWorkflowSession(workflowId: string | undefined) {
     if (!workflowId) return
     // 先加载该 workflow 的会话列表
-    const fileSessions = await window.api.chatHistory.listSessions(workflowId)
+    const fileSessions = await wsBridge.invoke('chatHistory:listSessions', { workflowId })
     sessions.value = fileSessions
 
     const existing = sessions.value.find((s) => s.workflowId === workflowId)
@@ -392,7 +392,7 @@ function createMessageActions(
     messages.value[msgIndex] = { ...msg, toolCalls: updatedCalls }
 
     try {
-      const rawResult = await window.api.agent.execTool(tc.name, rerunArgs, targetTabId)
+      const rawResult = await wsBridge.invoke('agent:execTool', { toolType: tc.name, params: rerunArgs, targetTabId })
       const result = JSON.parse(JSON.stringify(rawResult))
       const hasError = result && typeof result === 'object' && 'error' in result
       const finalCalls = [...updatedCalls]
@@ -462,11 +462,7 @@ export function createChatStore(scope: string) {
     async function pauseGenerationForUserQuestion() {
       if (!abortController.value) return
       if (currentRequestId) {
-        if (wsBridge.isConnected() || !navigator.userAgent.includes('Electron')) {
-          wsBridge.invoke('chat:abort', { requestId: currentRequestId }).catch(() => {})
-        } else {
-          window.api.chat.abort(currentRequestId).catch(() => {})
-        }
+        wsBridge.invoke('chat:abort', { requestId: currentRequestId }).catch(() => {})
         currentRequestId = null
       }
       abortController.value = null
@@ -554,11 +550,7 @@ export function createChatStore(scope: string) {
     async function stopGeneration() {
       if (!abortController.value) return
       if (currentRequestId) {
-        if (wsBridge.isConnected() || !navigator.userAgent.includes('Electron')) {
-          wsBridge.invoke('chat:abort', { requestId: currentRequestId }).catch(() => {})
-        } else {
-          window.api.chat.abort(currentRequestId).catch(() => {})
-        }
+        wsBridge.invoke('chat:abort', { requestId: currentRequestId }).catch(() => {})
         currentRequestId = null
       }
       abortController.value = null

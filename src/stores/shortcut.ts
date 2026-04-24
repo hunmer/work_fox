@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
+import { wsBridge } from '@/lib/ws-bridge'
 
 export interface ShortcutItem {
   id: string
@@ -17,8 +18,6 @@ export interface ShortcutGroup {
   label: string
 }
 
-const api = window.api
-
 export const useShortcutStore = defineStore('shortcut', () => {
   const shortcuts = ref<ShortcutItem[]>([])
   const groups = ref<ShortcutGroup[]>([])
@@ -27,7 +26,7 @@ export const useShortcutStore = defineStore('shortcut', () => {
   async function load() {
     loading.value = true
     try {
-      const result = await api.shortcut.list()
+      const result = await wsBridge.invoke('shortcut:list', undefined) as { groups: ShortcutGroup[]; shortcuts: ShortcutItem[] }
       groups.value = result.groups
       shortcuts.value = result.shortcuts
     } finally {
@@ -36,7 +35,7 @@ export const useShortcutStore = defineStore('shortcut', () => {
   }
 
   async function updateShortcut(id: string, accelerator: string, isGlobal: boolean, enabled?: boolean) {
-    const result = await api.shortcut.update(id, accelerator, isGlobal, enabled)
+    const result = await wsBridge.invoke('shortcut:update', { id, accelerator, isGlobal, enabled }) as any
     if (result.success) {
       const idx = shortcuts.value.findIndex(s => s.id === id)
       if (idx >= 0) {
@@ -49,7 +48,7 @@ export const useShortcutStore = defineStore('shortcut', () => {
   }
 
   async function toggleEnabled(id: string, enabled: boolean) {
-    const result = await api.shortcut.toggle(id, enabled)
+    const result = await wsBridge.invoke('shortcut:toggle', { id, enabled }) as any
     if (result.success) {
       const idx = shortcuts.value.findIndex(s => s.id === id)
       if (idx >= 0) {
@@ -60,7 +59,7 @@ export const useShortcutStore = defineStore('shortcut', () => {
   }
 
   async function clearShortcut(id: string) {
-    await api.shortcut.clear(id)
+    await wsBridge.invoke('shortcut:clear', { id })
     const idx = shortcuts.value.findIndex(s => s.id === id)
     if (idx >= 0) {
       shortcuts.value.splice(idx, 1, { ...shortcuts.value[idx], accelerator: '', global: false })

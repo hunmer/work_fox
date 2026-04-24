@@ -157,7 +157,7 @@ export class BackendWorkflowExecutionManager {
       currentNodeId: session.executionOrder[session.currentIndex]?.id,
     })
     this.emitLog(session)
-    void this.runFromIndex(session, session.currentIndex)
+    void this.runSafe(session, session.currentIndex)
     return { executionId, status: session.status }
   }
 
@@ -210,14 +210,27 @@ export class BackendWorkflowExecutionManager {
       this.emitLog(session)
       this.emitContext(session)
 
-      await this.runFromIndex(session, 0)
+      await this.runSafe(session, 0)
     } catch (error) {
-      session.status = 'error'
-      session.lastErrorMessage = error instanceof Error ? error.message : String(error)
-      session.finishedAt = Date.now()
-      this.emitWorkflowError(session)
-      this.persistAndCleanup(session)
+      this.handleExecutionError(session, error)
     }
+  }
+
+  private async runSafe(session: ExecutionSession, startIndex: number): Promise<void> {
+    try {
+      await this.runFromIndex(session, startIndex)
+    } catch (error) {
+      this.handleExecutionError(session, error)
+    }
+  }
+
+  private handleExecutionError(session: ExecutionSession, error: unknown): void {
+    if (session.status === 'completed' || session.status === 'error') return
+    session.status = 'error'
+    session.lastErrorMessage = error instanceof Error ? error.message : String(error)
+    session.finishedAt = Date.now()
+    this.emitWorkflowError(session)
+    this.persistAndCleanup(session)
   }
 
   private async runFromIndex(session: ExecutionSession, startIndex: number): Promise<void> {

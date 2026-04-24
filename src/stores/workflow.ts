@@ -7,7 +7,6 @@ import { executeRendererWorkflowTool } from '@/lib/agent/workflow-renderer-tools
 import { ensureWorkflowInteractionHandler } from '@/lib/backend-api/interaction'
 import { createWorkflowDomainApi } from '@/lib/backend-api/workflow-domain'
 import { wsBridge } from '@/lib/ws-bridge'
-import type { WorkflowToolExecuteRequest } from '../../preload'
 import { useAgentSettingsStore, createWorkflowAgentConfigFromGlobal } from './agent-settings'
 import type {
   ExecutionEventChannel,

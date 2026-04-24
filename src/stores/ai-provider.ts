@@ -1,12 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { AIProvider, AIModel } from '@/types'
+import { wsBridge } from '@/lib/ws-bridge'
 
 const SELECTED_PROVIDER_KEY = 'workfox-selected-provider'
 const SELECTED_MODEL_KEY = 'workfox-selected-model'
 
 export const useAIProviderStore = defineStore('ai-provider', () => {
-  const api = (window as any).api?.aiProvider
   const providers = ref<AIProvider[]>([])
   const selectedProviderId = ref<string | null>(localStorage.getItem(SELECTED_PROVIDER_KEY))
   const selectedModelId = ref<string | null>(localStorage.getItem(SELECTED_MODEL_KEY))
@@ -27,11 +27,7 @@ export const useAIProviderStore = defineStore('ai-provider', () => {
   )
 
   async function loadProviders() {
-    if (!api) {
-      providers.value = []
-      return
-    }
-    providers.value = await api.list()
+    providers.value = await wsBridge.invoke('aiProvider:list', undefined) as AIProvider[]
     if (!selectedProviderId.value || !providers.value.find((p) => p.id === selectedProviderId.value)) {
       const first = providers.value.find((p) => p.enabled)
       if (first) {
@@ -76,19 +72,13 @@ export const useAIProviderStore = defineStore('ai-provider', () => {
   }
 
   async function createProvider(data: Omit<AIProvider, 'id' | 'createdAt'>) {
-    if (!api) {
-      throw new Error('AI provider API is not available in current runtime')
-    }
-    const provider = await api.create(data)
+    const provider = await wsBridge.invoke('aiProvider:create', { data }) as AIProvider
     providers.value.push(provider)
     return provider
   }
 
   async function updateProvider(id: string, updates: Partial<AIProvider>) {
-    if (!api) {
-      throw new Error('AI provider API is not available in current runtime')
-    }
-    const updated = await api.update({ id, ...updates })
+    const updated = await wsBridge.invoke('aiProvider:update', { id, data: updates }) as AIProvider
     const index = providers.value.findIndex((p) => p.id === id)
     if (index !== -1) {
       providers.value[index] = updated
@@ -97,10 +87,7 @@ export const useAIProviderStore = defineStore('ai-provider', () => {
   }
 
   async function deleteProvider(id: string) {
-    if (!api) {
-      throw new Error('AI provider API is not available in current runtime')
-    }
-    const success = await api.delete(id)
+    const { success } = await wsBridge.invoke('aiProvider:delete', { id }) as { success: boolean }
     if (success) {
       providers.value = providers.value.filter((p) => p.id !== id)
       if (selectedProviderId.value === id) {
@@ -114,10 +101,7 @@ export const useAIProviderStore = defineStore('ai-provider', () => {
   }
 
   async function testConnection(id: string) {
-    if (!api) {
-      throw new Error('AI provider API is not available in current runtime')
-    }
-    return api.test(id)
+    return wsBridge.invoke('aiProvider:test', { id }) as Promise<{ success: boolean; error?: string }>
   }
 
   async function init() {

@@ -145,7 +145,6 @@ export const backendChannelMetadata: Record<BackendChannel, ChannelMetadata> = {
     streaming: false,
     description: 'Execute agent tool',
   },
-  'workflowTool:respond': mutation('workflowTool:respond', 'Respond to workflow tool call'),
 }
 
 function crud(channel: BackendChannel, description: string): ChannelMetadata {

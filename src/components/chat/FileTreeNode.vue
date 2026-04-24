@@ -8,6 +8,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
 import { ChevronRight, ChevronDown, File, Folder, FolderOpen, X } from 'lucide-vue-next'
+import { fsApi } from '@/lib/backend-api/fs'
 
 export interface FileEntry {
   name: string
@@ -84,11 +85,11 @@ async function confirmRename() {
   const newName = editValue.value.trim()
   if (!newName || newName === props.entry.name) return
 
-  const result = await window.api.fs.rename(props.entry.path, newName)
+  const result = await fsApi.rename(props.entry.path, newName)
   if (result.success && result.newPath) {
     // 如果是目录且已展开，刷新子项
     if (props.entry.type === 'directory' && expanded.value) {
-      children.value = await window.api.fs.listDir(result.newPath)
+      children.value = await fsApi.listDir(result.newPath)
     }
     emit('renamed', props.entry.path, result.newPath)
   }
@@ -103,7 +104,7 @@ async function toggle() {
   if (!expanded.value) {
     loading.value = true
     try {
-      children.value = await window.api.fs.listDir(props.entry.path)
+      children.value = await fsApi.listDir(props.entry.path)
     } catch {
       children.value = []
     } finally {
@@ -114,7 +115,7 @@ async function toggle() {
 }
 
 async function handleDelete() {
-  const { success } = await window.api.fs.delete(props.entry.path)
+  const { success } = await fsApi.delete(props.entry.path)
   if (success) {
     emit('deleted', props.entry.path)
   }
@@ -136,22 +137,22 @@ function joinPath(base: string, name: string): string {
 async function handleCreateFile() {
   if (props.entry.type !== 'directory') return
   const newName = 'untitled'
-  await window.api.fs.createFile(joinPath(props.entry.path, newName))
+  await fsApi.createFile(joinPath(props.entry.path, newName))
   if (!expanded.value) {
     expanded.value = true
   }
-  children.value = await window.api.fs.listDir(props.entry.path)
+  children.value = await fsApi.listDir(props.entry.path)
   emit('refresh', props.entry.path)
 }
 
 async function handleCreateDir() {
   if (props.entry.type !== 'directory') return
   const newName = 'new_folder'
-  await window.api.fs.createDir(joinPath(props.entry.path, newName))
+  await fsApi.createDir(joinPath(props.entry.path, newName))
   if (!expanded.value) {
     expanded.value = true
   }
-  children.value = await window.api.fs.listDir(props.entry.path)
+  children.value = await fsApi.listDir(props.entry.path)
   emit('refresh', props.entry.path)
 }
 
@@ -199,11 +200,11 @@ async function handleCreateFileAndEdit() {
   if (props.entry.type !== 'directory') return
   const newName = 'untitled'
   const newPath = joinPath(props.entry.path, newName)
-  await window.api.fs.createFile(newPath)
+  await fsApi.createFile(newPath)
   if (!expanded.value) {
     expanded.value = true
   }
-  children.value = await window.api.fs.listDir(props.entry.path)
+  children.value = await fsApi.listDir(props.entry.path)
   newChildEditingPath.value = newPath
   emit('refresh', props.entry.path)
 }
@@ -212,11 +213,11 @@ async function handleCreateDirAndEdit() {
   if (props.entry.type !== 'directory') return
   const newName = 'new_folder'
   const newPath = joinPath(props.entry.path, newName)
-  await window.api.fs.createDir(newPath)
+  await fsApi.createDir(newPath)
   if (!expanded.value) {
     expanded.value = true
   }
-  children.value = await window.api.fs.listDir(props.entry.path)
+  children.value = await fsApi.listDir(props.entry.path)
   newChildEditingPath.value = newPath
   emit('refresh', props.entry.path)
 }

@@ -300,7 +300,6 @@ export interface BackendChannelMap {
 
   // --- Agent / Workflow Tool ---
   'agent:execTool': ChannelContract<{ toolType: string; params: Record<string, unknown>; targetTabId?: string }, any>
-  'workflowTool:respond': ChannelContract<{ requestId: string; result: unknown }, { resolved: boolean }>
 }
 
 export type BackendChannel = keyof BackendChannelMap
