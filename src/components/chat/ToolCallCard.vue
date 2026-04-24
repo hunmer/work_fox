@@ -34,7 +34,17 @@ interface AskQuestionItem {
 }
 
 function copyResult() {
-  const text = props.toolCall.error ?? formattedResult.value
+  const lines: string[] = []
+  lines.push(`工具: ${props.toolCall.name}`)
+  if (props.toolCall.input != null) {
+    lines.push(`\n参数:\n${typeof props.toolCall.input === 'string' ? props.toolCall.input : JSON.stringify(props.toolCall.input, null, 2)}`)
+  }
+  if (props.toolCall.error) {
+    lines.push(`\n错误:\n${props.toolCall.error}`)
+  } else if (props.toolCall.result != null) {
+    lines.push(`\n结果:\n${formattedResult.value}`)
+  }
+  const text = lines.join('')
   if (!text) return
   navigator.clipboard.writeText(text).then(() => {
     copied.value = true
@@ -452,7 +462,7 @@ async function handleRerun() {
         </CollapsibleTrigger>
         <button
           class="p-0.5 rounded hover:bg-muted hover:text-foreground transition-colors"
-          title="复制输出"
+          title="复制全部信息"
           @click.stop="copyResult"
         >
           <svg

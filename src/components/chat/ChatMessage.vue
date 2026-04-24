@@ -461,7 +461,7 @@ const segments = computed<ContentSegment[]>(() => {
           />
           <div
             v-else-if="seg.type === 'text' && seg.content"
-            class="inline-block rounded-lg px-3 py-2 text-sm leading-relaxed break-words max-w-[85%] overflow-hidden text-left"
+            class="inline-block rounded-lg px-3 py-2 text-sm leading-relaxed break-words max-w-[85%] overflow-hidden text-left select-text"
             :class="isUser ? 'bg-primary text-primary-foreground' : 'bg-muted'"
           >
             <Markdown

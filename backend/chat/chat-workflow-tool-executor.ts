@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import dagre from '@dagrejs/dagre'
-import type { NodeTypeDefinition, Workflow, WorkflowEdge, WorkflowNode } from '../../shared/workflow-types'
+import type { EmbeddedWorkflow, NodeTypeDefinition, Workflow, WorkflowEdge, WorkflowNode } from '../../shared/workflow-types'
 import { builtinNodeDefinitions } from '../../electron/services/builtin-nodes'
 import type { BackendWorkflowStore } from '../storage/workflow-store'
 import type { BackendPluginRegistry } from '../plugins/plugin-registry'
 import type { ConnectionManager } from '../ws/connection-manager'
 import type { ClientNodeCache } from './client-node-cache'
+import { normalizeEmbeddedWorkflow } from '../../shared/embedded-workflow'
 
 export interface ToolResult {
   success: boolean
@@ -85,7 +86,8 @@ function buildNodeUsageNotes(def: any): string[] {
 
   if (def.type === 'run_code') {
     notes.push('run_code.code 是 JavaScript 代码，不要在 code 字段里写 {{ }} 插值。')
-    notes.push('run_code 应直接读取 context，并通过 return 返回给下游节点消费的结构化结果。')
+    notes.push('run_code 必须定义 main 函数，推荐写成 async function main({ params, context }) { ... }。执行器会调用 main，函数返回值会作为该节点输出。')
+    notes.push('run_code 可通过 params 读取节点输入字段，也可通过 context 读取上游节点结果；应在 main 函数里 return 给下游消费的结构化结果。')
   }
 
   return notes
@@ -96,7 +98,7 @@ function buildNodeUsageExamples(def: any): Array<Record<string, any>> {
     return [{
       scene: '在两个节点之间插入 JS 做结构映射',
       data: {
-        code: 'const upstream = context["上游节点ID"] || {}\nreturn { value: upstream.value }',
+        code: 'async function main({ params, context }) {\n  const upstream = context["上游节点ID"] || {}\n  return { value: upstream.value, input: params.input }\n}',
       },
     }]
   }
@@ -135,6 +137,30 @@ function autoLayout(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowNode[
       },
     }
   })
+}
+
+function createNodeData(definition?: NodeTypeDefinition, overrideData?: Record<string, unknown>): Record<string, unknown> {
+  const data: Record<string, unknown> = {}
+  for (const prop of definition?.properties || []) {
+    if (prop.default !== undefined) data[prop.key] = cloneJson(prop.default)
+  }
+  if (definition?.outputs?.length) {
+    data.outputs = cloneJson(definition.outputs)
+  }
+  if (overrideData && typeof overrideData === 'object') {
+    Object.assign(data, overrideData)
+  }
+  return data
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+interface WorkflowTarget {
+  nodes: WorkflowNode[]
+  edges: WorkflowEdge[]
+  hostNode?: WorkflowNode
 }
 
 export class ChatWorkflowToolExecutor {
@@ -235,6 +261,148 @@ export class ChatWorkflowToolExecutor {
     this.connections.emit('workflow:updated', payload)
   }
 
+  private resolveWorkflowTarget(ctx: ToolContext): WorkflowTarget | ToolResult {
+    const embeddedInNodeId = typeof ctx.args?.embeddedInNodeId === 'string' ? ctx.args.embeddedInNodeId : ''
+    if (!embeddedInNodeId) {
+      return {
+        nodes: ctx.nodes,
+        edges: ctx.edges,
+      }
+    }
+
+    const hostNode = ctx.nodes.find((node) => node.id === embeddedInNodeId)
+    if (!hostNode) {
+      return { success: false, message: `宿主节点 ${embeddedInNodeId} 不存在` }
+    }
+
+    const embeddedWorkflow = normalizeEmbeddedWorkflow(hostNode.data?.bodyWorkflow, () => randomUUID())
+    return {
+      nodes: cloneJson(embeddedWorkflow.nodes),
+      edges: cloneJson(embeddedWorkflow.edges),
+      hostNode,
+    }
+  }
+
+  private commitWorkflowTarget(ctx: ToolContext, target: WorkflowTarget): { nodes: WorkflowNode[], edges: WorkflowEdge[] } {
+    if (!target.hostNode) {
+      return { nodes: target.nodes, edges: target.edges }
+    }
+
+    const embeddedWorkflow: EmbeddedWorkflow = {
+      nodes: target.nodes,
+      edges: target.edges,
+    }
+    const updatedHostNode: WorkflowNode = {
+      ...target.hostNode,
+      data: {
+        ...target.hostNode.data,
+        bodyWorkflow: embeddedWorkflow,
+      },
+    }
+    const nextNodes = ctx.nodes.map((node) => (node.id === updatedHostNode.id ? updatedHostNode : node))
+    ctx.changes.upsertNodes.push(updatedHostNode)
+    return {
+      nodes: nextNodes,
+      edges: ctx.edges,
+    }
+  }
+
+  private createNodesByDefinition(
+    typeDef: NodeTypeDefinition,
+    label?: string,
+    data?: Record<string, unknown>,
+  ): { rootNode: WorkflowNode, nodes: WorkflowNode[], edges: WorkflowEdge[] } {
+    if (!typeDef.compound) {
+      const rootNode: WorkflowNode = {
+        id: randomUUID(),
+        type: typeDef.type,
+        label: label || typeDef.label,
+        position: { x: 0, y: 0 },
+        data: createNodeData(typeDef, data),
+      }
+      return { rootNode, nodes: [rootNode], edges: [] }
+    }
+
+    const roleMap = new Map<string, WorkflowNode>()
+    const rootRole = typeDef.compound.rootRole || typeDef.compound.children[0]?.role
+    if (!rootRole) {
+      throw new Error(`节点类型 ${typeDef.type} 的 compound 缺少 rootRole`)
+    }
+
+    for (const childDef of typeDef.compound.children) {
+      const isRoot = childDef.role === rootRole
+      const childTypeDef = this.getAllNodeTypeDefinitions().find((d) => d.type === childDef.type)
+      const baseLabel = childDef.label || childTypeDef?.label || childDef.type
+      const node: WorkflowNode = {
+        id: randomUUID(),
+        type: childDef.type,
+        label: isRoot ? (label || typeDef.label || baseLabel) : baseLabel,
+        position: childDef.offset ? cloneJson(childDef.offset) : { x: 0, y: 0 },
+        data: createNodeData(
+          childTypeDef,
+          isRoot
+            ? data
+            : (childDef.data as Record<string, unknown> | undefined),
+        ),
+        composite: {
+          role: childDef.role,
+          generated: !isRoot,
+          hidden: !!childDef.hidden,
+          scopeBoundary: !!childDef.scopeBoundary,
+        },
+      }
+      roleMap.set(childDef.role, node)
+    }
+
+    const rootNode = roleMap.get(rootRole)
+    if (!rootNode) {
+      throw new Error(`节点类型 ${typeDef.type} 创建失败: 未生成根节点`)
+    }
+
+    rootNode.composite = {
+      ...(rootNode.composite || {}),
+      rootId: rootNode.id,
+      parentId: null,
+      generated: false,
+      hidden: false,
+    }
+
+    for (const childDef of typeDef.compound.children) {
+      const node = roleMap.get(childDef.role)
+      if (!node || node.id === rootNode.id) continue
+      const parentRole = childDef.parentRole || rootRole
+      const parentNode = roleMap.get(parentRole)
+      node.composite = {
+        ...(node.composite || {}),
+        rootId: rootNode.id,
+        parentId: parentNode?.id || rootNode.id,
+      }
+    }
+
+    const edges: WorkflowEdge[] = []
+    for (const edgeDef of typeDef.compound.edges || []) {
+      const sourceNode = roleMap.get(edgeDef.sourceRole)
+      const targetNode = roleMap.get(edgeDef.targetRole)
+      if (!sourceNode || !targetNode) continue
+      edges.push({
+        id: `e-${sourceNode.id}-${edgeDef.sourceHandle ?? 'default'}-${targetNode.id}-${edgeDef.targetHandle ?? 'default'}`,
+        source: sourceNode.id,
+        target: targetNode.id,
+        sourceHandle: edgeDef.sourceHandle ?? null,
+        targetHandle: edgeDef.targetHandle ?? null,
+        composite: {
+          rootId: rootNode.id,
+          parentId: sourceNode.id,
+          generated: true,
+          hidden: !!edgeDef.hidden,
+          locked: !!edgeDef.locked,
+        },
+      })
+    }
+
+    return { rootNode, nodes: Array.from(roleMap.values()), edges }
+  }
+
   private getHandlers(): Map<string, ToolHandler> {
     return new Map<string, ToolHandler>([
       ['get_current_workflow', () => ({
@@ -266,95 +434,205 @@ export class ChatWorkflowToolExecutor {
             edges: ctx.edges,
           }
         }
-        const newNode: WorkflowNode = {
-          id: randomUUID(),
-          type,
-          label: label || typeDef.label,
-          position: { x: 0, y: 0 },
-          data: ctx.args?.data || {},
+        const target = this.resolveWorkflowTarget(ctx)
+        if ('success' in target) {
+          return { result: target, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
         }
-        ctx.nodes.push(newNode)
-        ctx.changes.upsertNodes.push(newNode)
+        const created = this.createNodesByDefinition(typeDef, label, ctx.args?.data)
+        target.nodes.push(...created.nodes)
+        target.edges.push(...created.edges)
+        let nextNodes = ctx.nodes
+        let nextEdges = ctx.edges
+        if (target.hostNode) {
+          const committed = this.commitWorkflowTarget(ctx, target)
+          nextNodes = committed.nodes
+          nextEdges = committed.edges
+        } else {
+          ctx.changes.upsertNodes.push(...created.nodes)
+          ctx.changes.upsertEdges.push(...created.edges)
+          nextNodes = target.nodes
+          nextEdges = target.edges
+        }
         return {
-          result: { success: true, message: `节点已创建: ${newNode.label} (${newNode.id})`, data: { nodeId: newNode.id } },
+          result: {
+            success: true,
+            message: `节点已创建: ${created.rootNode.label} (${created.rootNode.id})`,
+            data: {
+              nodeId: created.rootNode.id,
+              createdNodeIds: created.nodes.map((node) => node.id),
+              createdEdgeIds: created.edges.map((edge) => edge.id),
+              embeddedInNodeId: target.hostNode?.id,
+            },
+          },
           mutated: true,
-          nodes: ctx.nodes,
-          edges: ctx.edges,
+          nodes: nextNodes,
+          edges: nextEdges,
         }
       }],
       ['update_node', (ctx) => {
         const { nodeId, data } = ctx.args || {}
         if (!nodeId) return { result: { success: false, message: '缺少必填参数: nodeId' }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
-        const idx = ctx.nodes.findIndex((n) => n.id === nodeId)
+        const target = this.resolveWorkflowTarget(ctx)
+        if ('success' in target) {
+          return { result: target, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
+        }
+        const idx = target.nodes.findIndex((n) => n.id === nodeId)
         if (idx === -1) return { result: { success: false, message: `节点 ${nodeId} 不存在` }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
-        if (ctx.args?.label) ctx.nodes[idx].label = ctx.args.label
-        if (data) ctx.nodes[idx].data = { ...ctx.nodes[idx].data, ...data }
-        ctx.changes.upsertNodes.push(ctx.nodes[idx])
+        if (ctx.args?.label) target.nodes[idx].label = ctx.args.label
+        if (data) target.nodes[idx].data = { ...target.nodes[idx].data, ...data }
+        let nextNodes = ctx.nodes
+        let nextEdges = ctx.edges
+        if (target.hostNode) {
+          const committed = this.commitWorkflowTarget(ctx, target)
+          nextNodes = committed.nodes
+          nextEdges = committed.edges
+        } else {
+          ctx.changes.upsertNodes.push(target.nodes[idx])
+          nextNodes = target.nodes
+          nextEdges = target.edges
+        }
         return {
-          result: { success: true, message: `节点已更新: ${nodeId}`, data: { node: ctx.nodes[idx] } },
+          result: { success: true, message: `节点已更新: ${nodeId}`, data: { node: target.nodes[idx], embeddedInNodeId: target.hostNode?.id } },
           mutated: true,
-          nodes: ctx.nodes,
-          edges: ctx.edges,
+          nodes: nextNodes,
+          edges: nextEdges,
         }
       }],
       ['delete_node', (ctx) => {
         const nodeId = ctx.args?.nodeId
         if (!nodeId) return { result: { success: false, message: '缺少必填参数: nodeId' }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
-        const idx = ctx.nodes.findIndex((n) => n.id === nodeId)
+        const target = this.resolveWorkflowTarget(ctx)
+        if ('success' in target) {
+          return { result: target, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
+        }
+        const idx = target.nodes.findIndex((n) => n.id === nodeId)
         if (idx === -1) return { result: { success: false, message: `节点 ${nodeId} 不存在` }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
-        ctx.nodes.splice(idx, 1)
-        const relatedEdges = ctx.edges.filter((e) => e.source === nodeId || e.target === nodeId)
-        const nextEdges = ctx.edges.filter((e) => e.source !== nodeId && e.target !== nodeId)
-        ctx.changes.deleteNodeIds.push(nodeId)
-        ctx.changes.deleteEdgeIds.push(...relatedEdges.map((e) => e.id))
+        target.nodes.splice(idx, 1)
+        const relatedEdges = target.edges.filter((e) => e.source === nodeId || e.target === nodeId)
+        target.edges = target.edges.filter((e) => e.source !== nodeId && e.target !== nodeId)
+        let nextNodes = ctx.nodes
+        let nextEdges = ctx.edges
+        if (target.hostNode) {
+          const committed = this.commitWorkflowTarget(ctx, target)
+          nextNodes = committed.nodes
+          nextEdges = committed.edges
+        } else {
+          ctx.changes.deleteNodeIds.push(nodeId)
+          ctx.changes.deleteEdgeIds.push(...relatedEdges.map((e) => e.id))
+          nextNodes = target.nodes
+          nextEdges = target.edges
+        }
         return {
-          result: { success: true, message: `节点 ${nodeId} 已删除，同时删除 ${relatedEdges.length} 条关联边` },
+          result: { success: true, message: `节点 ${nodeId} 已删除，同时删除 ${relatedEdges.length} 条关联边`, data: { embeddedInNodeId: target.hostNode?.id } },
           mutated: true,
-          nodes: ctx.nodes,
+          nodes: nextNodes,
           edges: nextEdges,
         }
       }],
       ['create_edge', (ctx) => {
         const { source, target, sourceHandle, targetHandle } = ctx.args || {}
         if (!source || !target) return { result: { success: false, message: '缺少必填参数: source, target' }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
-        if (!ctx.nodes.find((n) => n.id === source)) return { result: { success: false, message: `源节点 ${source} 不存在` }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
-        if (!ctx.nodes.find((n) => n.id === target)) return { result: { success: false, message: `目标节点 ${target} 不存在` }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
+        const targetWorkflow = this.resolveWorkflowTarget(ctx)
+        if ('success' in targetWorkflow) {
+          return { result: targetWorkflow, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
+        }
+        if (!targetWorkflow.nodes.find((n) => n.id === source)) return { result: { success: false, message: `源节点 ${source} 不存在` }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
+        if (!targetWorkflow.nodes.find((n) => n.id === target)) return { result: { success: false, message: `目标节点 ${target} 不存在` }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
         const edgeId = `e-${source}-${sourceHandle || 'default'}-${target}-${targetHandle || 'default'}`
         const edge: WorkflowEdge = { id: edgeId, source, target, sourceHandle: sourceHandle || 'default', targetHandle: targetHandle || 'default' }
-        ctx.edges.push(edge)
-        ctx.changes.upsertEdges.push(edge)
-        return { result: { success: true, message: `边已创建: ${edgeId}`, data: { edgeId } }, mutated: true, nodes: ctx.nodes, edges: ctx.edges }
+        targetWorkflow.edges.push(edge)
+        let nextNodes = ctx.nodes
+        let nextEdges = ctx.edges
+        if (targetWorkflow.hostNode) {
+          const committed = this.commitWorkflowTarget(ctx, targetWorkflow)
+          nextNodes = committed.nodes
+          nextEdges = committed.edges
+        } else {
+          ctx.changes.upsertEdges.push(edge)
+          nextNodes = targetWorkflow.nodes
+          nextEdges = targetWorkflow.edges
+        }
+        return {
+          result: { success: true, message: `边已创建: ${edgeId}`, data: { edgeId, embeddedInNodeId: targetWorkflow.hostNode?.id } },
+          mutated: true,
+          nodes: nextNodes,
+          edges: nextEdges,
+        }
       }],
       ['delete_edge', (ctx) => {
         const edgeId = ctx.args?.edgeId
         if (!edgeId) return { result: { success: false, message: '缺少必填参数: edgeId' }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
-        const nextEdges = ctx.edges.filter((e) => e.id !== edgeId)
-        if (nextEdges.length === ctx.edges.length) return { result: { success: false, message: `边 ${edgeId} 不存在` }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
-        ctx.changes.deleteEdgeIds.push(edgeId)
-        return { result: { success: true, message: `边 ${edgeId} 已删除` }, mutated: true, nodes: ctx.nodes, edges: nextEdges }
+        const target = this.resolveWorkflowTarget(ctx)
+        if ('success' in target) {
+          return { result: target, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
+        }
+        const nextTargetEdges = target.edges.filter((e) => e.id !== edgeId)
+        if (nextTargetEdges.length === target.edges.length) return { result: { success: false, message: `边 ${edgeId} 不存在` }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
+        target.edges = nextTargetEdges
+        let nextNodes = ctx.nodes
+        let nextEdges = ctx.edges
+        if (target.hostNode) {
+          const committed = this.commitWorkflowTarget(ctx, target)
+          nextNodes = committed.nodes
+          nextEdges = committed.edges
+        } else {
+          ctx.changes.deleteEdgeIds.push(edgeId)
+          nextNodes = target.nodes
+          nextEdges = target.edges
+        }
+        return {
+          result: { success: true, message: `边 ${edgeId} 已删除`, data: { embeddedInNodeId: target.hostNode?.id } },
+          mutated: true,
+          nodes: nextNodes,
+          edges: nextEdges,
+        }
       }],
       ['insert_node', (ctx) => {
         const { edgeId, type, label } = ctx.args || {}
         if (!edgeId || !type) return { result: { success: false, message: '缺少必填参数: edgeId, type' }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
-        const edge = ctx.edges.find((item) => item.id === edgeId)
+        const target = this.resolveWorkflowTarget(ctx)
+        if ('success' in target) {
+          return { result: target, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
+        }
+        const edge = target.edges.find((item) => item.id === edgeId)
         if (!edge) return { result: { success: false, message: `边 ${edgeId} 不存在` }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
         const typeDef = this.getAllNodeTypeDefinitions().find((d) => d.type === type)
         if (!typeDef) return { result: { success: false, message: `未知节点类型: ${type}` }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
-        const nodeId = randomUUID()
-        const newNode: WorkflowNode = { id: nodeId, type, label: label || typeDef.label, position: { x: 0, y: 0 }, data: ctx.args?.data || {} }
-        const remainingEdges = ctx.edges.filter((item) => item.id !== edgeId)
+        const created = this.createNodesByDefinition(typeDef, label, ctx.args?.data)
+        const nodeId = created.rootNode.id
+        const remainingEdges = target.edges.filter((item) => item.id !== edgeId)
         const edge1: WorkflowEdge = { id: `e-${edge.source}-${edge.sourceHandle || 'default'}-${nodeId}-default`, source: edge.source, target: nodeId, sourceHandle: edge.sourceHandle || 'default', targetHandle: 'default' }
         const edge2: WorkflowEdge = { id: `e-${nodeId}-default-${edge.target}-${edge.targetHandle || 'default'}`, source: nodeId, target: edge.target, sourceHandle: 'default', targetHandle: edge.targetHandle || 'default' }
-        ctx.nodes.push(newNode)
-        remainingEdges.push(edge1, edge2)
-        ctx.changes.upsertNodes.push(newNode)
-        ctx.changes.deleteEdgeIds.push(edgeId)
-        ctx.changes.upsertEdges.push(edge1, edge2)
+        target.nodes.push(...created.nodes)
+        target.edges = remainingEdges
+        target.edges.push(...created.edges, edge1, edge2)
+        let nextNodes = ctx.nodes
+        let nextEdges = ctx.edges
+        if (target.hostNode) {
+          const committed = this.commitWorkflowTarget(ctx, target)
+          nextNodes = committed.nodes
+          nextEdges = committed.edges
+        } else {
+          ctx.changes.upsertNodes.push(...created.nodes)
+          ctx.changes.deleteEdgeIds.push(edgeId)
+          ctx.changes.upsertEdges.push(...created.edges, edge1, edge2)
+          nextNodes = target.nodes
+          nextEdges = target.edges
+        }
         return {
-          result: { success: true, message: `已在边 ${edgeId} 上插入节点 ${newNode.label} (${nodeId})`, data: { nodeId } },
+          result: {
+            success: true,
+            message: `已在边 ${edgeId} 上插入节点 ${created.rootNode.label} (${nodeId})`,
+            data: {
+              nodeId,
+              createdNodeIds: created.nodes.map((node) => node.id),
+              createdEdgeIds: created.edges.map((item) => item.id).concat([edge1.id, edge2.id]),
+              embeddedInNodeId: target.hostNode?.id,
+            },
+          },
           mutated: true,
-          nodes: ctx.nodes,
-          edges: remainingEdges,
+          nodes: nextNodes,
+          edges: nextEdges,
         }
       }],
       ['batch_update', (ctx) => {
@@ -450,13 +728,31 @@ export class ChatWorkflowToolExecutor {
         }
       }],
       ['auto_layout', (ctx) => {
-        const nodes = autoLayout(ctx.nodes, ctx.edges)
-        ctx.changes.upsertNodes.push(...nodes)
+        const target = this.resolveWorkflowTarget(ctx)
+        if ('success' in target) {
+          return { result: target, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
+        }
+        target.nodes = autoLayout(target.nodes, target.edges)
+        let nextNodes = ctx.nodes
+        let nextEdges = ctx.edges
+        if (target.hostNode) {
+          const committed = this.commitWorkflowTarget(ctx, target)
+          nextNodes = committed.nodes
+          nextEdges = committed.edges
+        } else {
+          ctx.changes.upsertNodes.push(...target.nodes)
+          nextNodes = target.nodes
+          nextEdges = target.edges
+        }
         return {
-          result: { success: true, message: `自动布局完成，${nodes.length} 个节点已重新排列`, data: { nodes } },
+          result: {
+            success: true,
+            message: `自动布局完成，${target.nodes.length} 个节点已重新排列`,
+            data: { nodes: target.nodes, embeddedInNodeId: target.hostNode?.id },
+          },
           mutated: true,
-          nodes,
-          edges: ctx.edges,
+          nodes: nextNodes,
+          edges: nextEdges,
         }
       }],
       ['search_nodes', (ctx) => {

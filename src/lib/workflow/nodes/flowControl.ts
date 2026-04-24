@@ -65,7 +65,7 @@ export const flowControlNodes: NodeTypeDefinition[] = [
     label: '运行 JS 代码',
     category: '流程控制',
     icon: 'Terminal',
-    description: '执行自定义 JavaScript 代码，可通过 context 访问上游数据',
+    description: '执行自定义 JavaScript 代码。代码需定义 main 函数，可通过 params 读取输入、通过 context 访问上游数据',
     properties: [
       {
         key: 'code',
@@ -73,7 +73,7 @@ export const flowControlNodes: NodeTypeDefinition[] = [
         type: 'code',
         required: true,
         default: RUN_CODE_DEFAULT_CODE,
-        tooltip: 'JavaScript 代码，可使用 context 变量。返回值将写入 context[this.id]',
+        tooltip: 'JavaScript 代码。需定义 async function main({ params, context }) { ... }，其返回值将写入 context[this.id]',
       },
     ],
   },

@@ -30,6 +30,14 @@ const WORKFLOW_SEARCH_PROPERTIES = {
   },
 } as const
 
+const EMBEDDED_SCOPE_PROPERTIES = {
+  embeddedInNodeId: {
+    type: 'string',
+    description:
+      '可选。把本次编辑作用到某个宿主节点的内嵌子工作流（当前主要用于 loop_body.data.bodyWorkflow）。传入 loop_body 节点 ID 后，节点/连线的增删改查都在该子工作流内执行，而不是顶层画布。',
+  },
+} as const
+
 /** 工作流 AI 助手的工具定义 */
 export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
@@ -122,6 +130,7 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
             '节点的参数数据，键值对结构，对应节点类型的 properties 定义。例如 { "selector": "#btn", "url": "https://example.com" }。',
           properties: {},
         },
+        ...EMBEDDED_SCOPE_PROPERTIES,
       },
       required: ['type'],
     },
@@ -147,6 +156,7 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
             '要更新的参数键值对，会与现有数据合并（浅合并）。例如 { "selector": "#new-btn", "text": "提交" }。',
           properties: {},
         },
+        ...EMBEDDED_SCOPE_PROPERTIES,
       },
       required: ['nodeId'],
     },
@@ -162,6 +172,7 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
           type: 'string',
           description: '要删除的节点 ID。删除该节点时会自动移除与之相连的所有边。',
         },
+        ...EMBEDDED_SCOPE_PROPERTIES,
       },
       required: ['nodeId'],
     },
@@ -189,6 +200,7 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
           type: 'string',
           description: '目标节点的连接点标识，用于有多个输入的节点。',
         },
+        ...EMBEDDED_SCOPE_PROPERTIES,
       },
       required: ['source', 'target'],
     },
@@ -204,6 +216,7 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
           type: 'string',
           description: '要删除的连线 ID。',
         },
+        ...EMBEDDED_SCOPE_PROPERTIES,
       },
       required: ['edgeId'],
     },
@@ -232,6 +245,7 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
           description: '新节点的参数数据，键值对结构。',
           properties: {},
         },
+        ...EMBEDDED_SCOPE_PROPERTIES,
       },
       required: ['edgeId', 'type'],
     },
@@ -301,7 +315,9 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
       '使用 dagre 算法对工作流进行自动布局。会自动计算所有节点的位置，使图结构清晰、美观、无重叠。适合在添加/删除节点后整理画布，或在初始创建工作流后一键排列。',
     input_schema: {
       type: 'object',
-      properties: {},
+      properties: {
+        ...EMBEDDED_SCOPE_PROPERTIES,
+      },
     },
   },
   {
