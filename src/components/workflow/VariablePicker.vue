@@ -71,7 +71,13 @@ const loopParentNode = computed(() => {
   }
 
   if (store.selectedEmbeddedNode) {
-    return store.currentWorkflow.nodes.find((node) => node.id === store.selectedEmbeddedNode?.hostNodeId && node.type === 'loop') ?? null
+    const hostNode = store.currentWorkflow.nodes.find((node) => node.id === store.selectedEmbeddedNode?.hostNodeId)
+    if (!hostNode) return null
+    if (hostNode.type === 'loop') return hostNode
+
+    const hostParentId = getCompositeParentId(hostNode)
+    if (!hostParentId) return null
+    return store.currentWorkflow.nodes.find((node) => node.id === hostParentId && node.type === 'loop') ?? null
   }
 
   return null
@@ -83,6 +89,7 @@ const isInLoopBody = computed(() => !!loopParentNode.value && (isGeneratedWorkfl
 const otherNodes = computed(() => {
   if (!store.currentWorkflow) return []
   const hiddenNodeIds = new Set([props.excludeNodeId])
+  if (store.selectedEmbeddedNode?.hostNodeId) hiddenNodeIds.add(store.selectedEmbeddedNode.hostNodeId)
   if (isInLoopBody.value) {
     const parentId = loopParentNode.value?.id
     if (parentId) hiddenNodeIds.add(parentId)
