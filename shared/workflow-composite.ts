@@ -28,6 +28,10 @@ export function isHiddenWorkflowNode(node: WorkflowNode): boolean {
   return !!node.composite?.hidden
 }
 
+export function isScopeBoundaryWorkflowNode(node: WorkflowNode): boolean {
+  return !!node.composite?.scopeBoundary
+}
+
 export function isGeneratedWorkflowEdge(edge: WorkflowEdge): boolean {
   return !!edge.composite?.generated
 }
@@ -71,13 +75,19 @@ export function getNearestScopeAnchorId(
   nodes: WorkflowNode[],
   nodeOrId: WorkflowNode | string,
 ): string | null {
-  let current = typeof nodeOrId === 'string' ? findWorkflowNode(nodes, nodeOrId) : nodeOrId
+  const currentNode = typeof nodeOrId === 'string' ? findWorkflowNode(nodes, nodeOrId) : nodeOrId
+  if (!currentNode) return null
+  if (isScopeBoundaryWorkflowNode(currentNode)) {
+    return currentNode.id
+  }
+
+  let current = currentNode
   while (current) {
     const parentId = getCompositeParentId(current)
     if (!parentId) return null
     const parent = findWorkflowNode(nodes, parentId)
     if (!parent) return null
-    if (isGeneratedWorkflowNode(parent) && isHiddenWorkflowNode(parent)) {
+    if (isScopeBoundaryWorkflowNode(parent)) {
       return parent.id
     }
     current = parent

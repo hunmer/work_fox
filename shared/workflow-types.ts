@@ -25,6 +25,7 @@ export interface WorkflowNodeCompositeMeta {
   role?: string
   generated?: boolean
   hidden?: boolean
+  scopeBoundary?: boolean
 }
 
 export interface WorkflowNode {
@@ -52,6 +53,11 @@ export interface WorkflowEdge {
   sourceHandle?: string | null
   targetHandle?: string | null
   composite?: WorkflowEdgeCompositeMeta
+}
+
+export interface EmbeddedWorkflow {
+  nodes: WorkflowNode[]
+  edges: WorkflowEdge[]
 }
 
 export interface AgentResourceItem {
@@ -133,6 +139,7 @@ export interface CompoundChildNodeDefinition {
   label?: string
   offset?: { x: number; y: number }
   hidden?: boolean
+  scopeBoundary?: boolean
   parentRole?: string
   data?: Record<string, unknown>
 }

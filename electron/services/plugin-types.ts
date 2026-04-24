@@ -238,6 +238,7 @@ export interface PluginWorkflowNode {
       label?: string
       offset?: { x: number; y: number }
       hidden?: boolean
+      scopeBoundary?: boolean
       parentRole?: string
       data?: Record<string, any>
     }>

@@ -31,7 +31,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { LOOP_BODY_SOURCE_HANDLE } from '@shared/workflow-composite'
+import { LOOP_BODY_NODE_TYPE, LOOP_BODY_SOURCE_HANDLE } from '@shared/workflow-composite'
 
 const props = defineProps<NodeProps>()
 defineEmits<{ (e: 'updateNodeInternals'): void }>()
@@ -44,6 +44,8 @@ const inputRef = ref<HTMLInputElement | null>(null)
 
 const definition = computed(() => getNodeDefinition(props.data?.nodeType || props.type))
 const IconComponent = computed(() => resolveLucideIcon(definition.value?.icon || 'Circle'))
+const nodeMinWidth = computed(() => definition.value?.customViewMinSize?.width || 140)
+const nodeMinHeight = computed(() => definition.value?.customViewMinSize?.height || 60)
 
 /** 是否显示输入/输出连接点 */
 const showTargetHandle = computed(() => definition.value?.handles?.target !== false)
@@ -234,11 +236,19 @@ const customViewProps = computed(() => {
         : undefined,
     }
   }
+  if (definition.value?.type === LOOP_BODY_NODE_TYPE) {
+    return {
+      nodeId: props.id,
+      bodyWorkflow: props.data?.bodyWorkflow,
+      outputLabel: props.data?.outputLabel,
+    }
+  }
   return props.data || {}
 })
 
 /** 是否有自定义视图 */
 const hasCustomView = computed(() => !!CustomViewComponent.value)
+const isLoopBodyContainer = computed(() => definition.value?.type === LOOP_BODY_NODE_TYPE)
 
 /** 动态输出连接点（switch 节点） */
 const dynamicHandles = computed(() => {
@@ -302,15 +312,15 @@ async function copyNodeInfo() {
   <NodeResizer
     v-if="!store.isPreview"
     :is-visible="props.selected"
-    min-width="140"
-    min-height="60"
+    :min-width="nodeMinWidth"
+    :min-height="nodeMinHeight"
   />
 
   <ContextMenu>
     <ContextMenuTrigger as-child>
       <div
         class="group/node border-2 rounded-lg shadow-sm w-full h-full cursor-pointer transition-colors relative flex flex-col"
-        :class="[statusColor, stateBackground, props.selected ? 'ring-2 ring-primary' : '']"
+        :class="[statusColor, stateBackground, props.selected ? 'ring-2 ring-primary' : '', { 'loop-body-node': isLoopBodyContainer }]"
       >
         <!-- 输入连接点 -->
         <Handle
@@ -370,7 +380,7 @@ async function copyNodeInfo() {
           </Tooltip>
         </TooltipProvider>
 
-        <div class="flex items-center gap-2 px-3 py-2 border-b border-border/50">
+        <div v-if="!isLoopBodyContainer" class="flex items-center gap-2 px-3 py-2 border-b border-border/50">
           <component
             :is="IconComponent"
             v-if="IconComponent"
@@ -379,7 +389,7 @@ async function copyNodeInfo() {
           <span class="text-xs text-muted-foreground truncate">{{ definition?.label || type }}</span>
         </div>
 
-        <div class="px-3 py-1.5">
+        <div v-if="!isLoopBodyContainer" class="px-3 py-1.5">
           <input
             v-if="isEditing"
             ref="inputRef"
@@ -513,6 +523,12 @@ async function copyNodeInfo() {
 </template>
 
 <style scoped>
+.loop-body-node {
+  border-color: rgba(114, 181, 197, 0.5);
+  box-shadow: 0 10px 30px rgba(98, 156, 173, 0.14);
+  background: linear-gradient(180deg, rgba(233, 247, 250, 0.95), rgba(246, 250, 251, 0.98));
+}
+
 .custom-view-area {
   overflow: hidden;
 }

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch, inject, provide, type Ref, type App } from 'vue'
-import type { Workflow, WorkflowFolder, WorkflowNode, ExecutionLog } from '@/lib/workflow/types'
+import type { Workflow, WorkflowFolder, WorkflowNode, ExecutionLog, EmbeddedWorkflow } from '@/lib/workflow/types'
 import { WorkflowEngine, type EngineStatus } from '@/lib/workflow/engine'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { executeRendererWorkflowTool } from '@/lib/agent/workflow-renderer-tools'
@@ -22,6 +22,7 @@ import {
   isHiddenWorkflowEdge,
   isHiddenWorkflowNode,
   isLockedWorkflowEdge,
+  isScopeBoundaryWorkflowNode,
   LOOP_BODY_ROLE,
   LOOP_BODY_SOURCE_HANDLE,
 } from '@shared/workflow-composite'
@@ -419,13 +420,17 @@ function createEditActions(
     const node = getNode(nodeId)
     if (!node) return null
 
+    if (isScopeBoundaryWorkflowNode(node)) {
+      return node
+    }
+
     let current: WorkflowNode | undefined = node
     while (current) {
       const parentId = getCompositeParentId(current)
       if (!parentId) return current
       const parent = getNode(parentId)
       if (!parent) return current
-      if (isGeneratedWorkflowNode(parent) && isHiddenWorkflowNode(parent)) {
+      if (isScopeBoundaryWorkflowNode(parent)) {
         return parent
       }
       current = parent
@@ -490,11 +495,17 @@ function createEditActions(
     const def = getNodeDefinition(type)
     if (!def?.compound) {
       const scopeNode = getInsertScopeNode(options?.sourceNodeId, options?.sourceHandle, options?.scopeNodeId)
+      const nextPosition = scopeNode
+        ? {
+            x: position.x - scopeNode.position.x,
+            y: position.y - scopeNode.position.y,
+          }
+        : position
       const node: WorkflowNode = {
         id: crypto.randomUUID(),
         type,
         label: def?.label || type,
-        position,
+        position: nextPosition,
         data: createNodeData(type),
         composite: scopeNode
           ? {
@@ -535,6 +546,7 @@ function createEditActions(
           role: childDef.role,
           generated: !isRoot,
           hidden: !!childDef.hidden,
+          scopeBoundary: !!childDef.scopeBoundary,
         },
       }
       roleMap.set(childDef.role, appendNode(node))
@@ -653,13 +665,24 @@ function createEditActions(
     if (!source) return null
     const def = getNodeDefinition(source.type)
     if (def?.compound) {
-      const cloned = createCompoundNodes(source.type, {
+      const createdNodes = createCompoundNodes(source.type, {
         x: source.position.x + 30,
         y: source.position.y + 30,
-      })[0]
+      })
+      const cloned = createdNodes[0]
       if (!cloned) return null
       cloned.data = cloneData(source.data)
       cloned.label = source.label
+      const sourceChildren = currentWorkflow.value.nodes.filter((node) => node.composite?.rootId === source.id)
+      const createdChildren = createdNodes.filter((node) => node.id !== cloned.id)
+      for (const createdChild of createdChildren) {
+        const role = createdChild.composite?.role
+        if (!role) continue
+        const sourceChild = sourceChildren.find((node) => node.composite?.role === role)
+        if (!sourceChild) continue
+        createdChild.data = cloneData(sourceChild.data)
+        createdChild.label = sourceChild.label
+      }
       return cloned
     }
     const cloned: WorkflowNode = {
@@ -683,6 +706,22 @@ function createEditActions(
   function updateNodePosition(nodeId: string, position: { x: number; y: number }): void {
     const node = currentWorkflow.value?.nodes.find((n) => n.id === nodeId)
     if (node) node.position = position
+  }
+
+  function updateEmbeddedWorkflow(
+    nodeId: string,
+    embeddedWorkflow: EmbeddedWorkflow,
+    options?: { pushUndo?: boolean; description?: string },
+  ): void {
+    const node = currentWorkflow.value?.nodes.find((n) => n.id === nodeId)
+    if (!node) return
+    if (options?.pushUndo !== false) {
+      undoRedo.pushUndo(options?.description || '')
+    }
+    node.data = {
+      ...node.data,
+      bodyWorkflow: embeddedWorkflow,
+    }
   }
 
   function updateNodeLabel(nodeId: string, label: string): void {
@@ -726,6 +765,7 @@ function createEditActions(
     removeNode,
     cloneNode,
     updateNodeData,
+    updateEmbeddedWorkflow,
     updateNodePosition,
     updateNodeLabel,
     updateNodeState,

@@ -26,6 +26,7 @@ export interface WorkflowNodeCompositeMeta {
   role?: string
   generated?: boolean
   hidden?: boolean
+  scopeBoundary?: boolean
 }
 
 /** 工作流节点 */
@@ -55,6 +56,11 @@ export interface WorkflowEdge {
   sourceHandle?: string | null
   targetHandle?: string | null
   composite?: WorkflowEdgeCompositeMeta
+}
+
+export interface EmbeddedWorkflow {
+  nodes: WorkflowNode[]
+  edges: WorkflowEdge[]
 }
 
 /** 工作流 */
@@ -142,6 +148,7 @@ export interface CompoundChildNodeDefinition {
   label?: string
   offset?: { x: number; y: number }
   hidden?: boolean
+  scopeBoundary?: boolean
   parentRole?: string
   data?: Record<string, unknown>
 }

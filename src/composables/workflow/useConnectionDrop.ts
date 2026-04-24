@@ -1,5 +1,6 @@
 import type { Ref } from 'vue'
 import type { WorkflowStore } from '@/stores/workflow'
+import { LOOP_BODY_SOURCE_HANDLE } from '@shared/workflow-composite'
 
 export function useConnectionDrop(
   store: WorkflowStore,
@@ -37,10 +38,20 @@ export function useConnectionDrop(
     if (!connectSource || !store.currentWorkflow) return
     const sourceNode = store.currentWorkflow.nodes.find(n => n.id === connectSource!.nodeId)
     if (!sourceNode) return
-    const position = connectDropPosition || {
-      x: sourceNode.position.x + 250,
-      y: sourceNode.position.y,
-    }
+    const loopBodyNode = connectSource.handleId === LOOP_BODY_SOURCE_HANDLE
+      ? store.findLoopBodyNode(connectSource.nodeId)
+      : null
+    const position = connectDropPosition || (
+      loopBodyNode
+        ? {
+            x: loopBodyNode.position.x + 80,
+            y: loopBodyNode.position.y + 110,
+          }
+        : {
+            x: sourceNode.position.x + 250,
+            y: sourceNode.position.y,
+          }
+    )
     const newNode = store.addNode(type, position, {
       sourceNodeId: connectSource.nodeId,
       sourceHandle: connectSource.handleId,

@@ -1,4 +1,5 @@
 import type { PluginWorkflowNode } from './plugin-types'
+import { createDefaultEmbeddedWorkflow } from '../../shared/embedded-workflow'
 import {
   LOOP_BODY_NODE_TYPE,
   LOOP_BODY_ROLE,
@@ -137,9 +138,12 @@ export const builtinNodeDefinitions: PluginWorkflowNode[] = [
           type: LOOP_BODY_NODE_TYPE,
           label: '循环体节点',
           offset: { x: 260, y: 0 },
-          hidden: true,
+          scopeBoundary: true,
           parentRole: LOOP_ROOT_ROLE,
           data: {
+            width: 520,
+            height: 260,
+            bodyWorkflow: createDefaultEmbeddedWorkflow(),
             outputs: [
               { key: '$index', type: 'number' },
               { key: '$count', type: 'number' },
@@ -156,7 +160,6 @@ export const builtinNodeDefinitions: PluginWorkflowNode[] = [
           targetRole: LOOP_BODY_ROLE,
           sourceHandle: LOOP_BODY_SOURCE_HANDLE,
           targetHandle: 'target',
-          hidden: true,
           locked: true,
         },
       ],
@@ -166,13 +169,14 @@ export const builtinNodeDefinitions: PluginWorkflowNode[] = [
     type: LOOP_BODY_NODE_TYPE,
     label: '循环体节点',
     category: '流程控制',
-    icon: 'Ghost',
+    icon: 'Container',
     description: '循环节点自动生成的内部锚点，用户不可手动创建。',
     properties: [],
     handles: {
       target: true,
       source: true,
     } as any,
+    customViewMinSize: { width: 520, height: 260 } as any,
     manualCreate: false as any,
   },
   // AI

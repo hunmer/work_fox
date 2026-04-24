@@ -9,6 +9,8 @@ const props = defineProps<EdgeProps>()
 const store = useWorkflowStore()
 
 const isRunning = computed(() => store.executionStatus === 'running')
+const isLocked = computed(() => !!props.data?.composite?.locked)
+const isGenerated = computed(() => !!props.data?.composite?.generated)
 
 const pathData = computed(() =>
   getBezierPath({
@@ -30,13 +32,13 @@ const emit = defineEmits<{
 }>()
 
 function onPlusClick(event: MouseEvent) {
+  if (isLocked.value) return
   event.stopPropagation()
   emit('insert-node', props.id, props.source, props.target, props.sourceHandle ?? null)
 }
 </script>
 
 <template>
-  <!-- 加宽透明交互路径，让边更容易被 hover 到 -->
   <path
     :d="path"
     fill="none"
@@ -48,15 +50,14 @@ function onPlusClick(event: MouseEvent) {
   <BaseEdge
     :path="path"
     :style="{
-      stroke: 'var(--primary)',
-      strokeWidth: 2.5,
-      strokeDasharray: isRunning ? '6 3' : 'none',
+      stroke: isLocked ? 'rgba(74, 144, 164, 0.9)' : 'var(--primary)',
+      strokeWidth: isGenerated ? 2 : 2.5,
+      strokeDasharray: isRunning ? '6 3' : (isLocked ? '4 2' : 'none'),
       transition: 'stroke-dasharray 0.3s ease',
     }"
   />
 
-  <!-- 非运行时加号按钮 -->
-  <EdgeLabelRenderer v-if="!isRunning">
+  <EdgeLabelRenderer v-if="!isRunning && !isLocked">
     <div
       :style="{
         position: 'absolute',

@@ -19,6 +19,7 @@ import type {
   WorkflowExecuteResponse,
 } from '../../shared/execution-events'
 import { createErrorShape } from '../../shared/errors'
+import { normalizeEmbeddedWorkflow } from '../../shared/embedded-workflow'
 import type { AgentChatInteractionSchema, NodeExecutionInteractionSchema, TableConfirmInteractionSchema } from '../../shared/ws-protocol'
 import {
   findCompositeChildByRole,
@@ -26,6 +27,7 @@ import {
   getCompositeParentId,
   getNodesForExecutionScope,
   LOOP_BODY_ROLE,
+  LOOP_BODY_NODE_TYPE,
   LOOP_NEXT_SOURCE_HANDLE,
   LOOP_NODE_TYPE,
 } from '../../shared/workflow-composite'
@@ -443,6 +445,7 @@ export class BackendWorkflowExecutionManager {
     switch (node.type) {
       case 'start':
       case 'end':
+      case LOOP_BODY_NODE_TYPE:
         return null
       case 'gallery_preview':
         return { items: Array.isArray(resolvedData.items) ? resolvedData.items : [] }
@@ -684,6 +687,18 @@ export class BackendWorkflowExecutionManager {
   }
 
   private async executeLoopBody(session: ExecutionSession, bodyNode: WorkflowNode): Promise<unknown> {
+    const bodyWorkflowData = bodyNode.data?.bodyWorkflow
+    if (bodyWorkflowData && typeof bodyWorkflowData === 'object') {
+      return this.executeEmbeddedWorkflow(
+        session,
+        normalizeEmbeddedWorkflow(bodyWorkflowData, () => randomUUID()),
+      )
+    }
+
+    return this.executeScopedLoopBody(session, bodyNode)
+  }
+
+  private async executeScopedLoopBody(session: ExecutionSession, bodyNode: WorkflowNode): Promise<unknown> {
     const scopeNodes = getNodesForExecutionScope(session.nodes, bodyNode.id)
     const scopeNodeIds = new Set(scopeNodes.map((node) => node.id))
     const bodyEdges = session.edges.filter((edge) => {
@@ -721,6 +736,56 @@ export class BackendWorkflowExecutionManager {
     }
 
     return executeFrom(bodyNode.id)
+  }
+
+  private async executeEmbeddedWorkflow(
+    session: ExecutionSession,
+    workflow: { nodes: WorkflowNode[]; edges: WorkflowEdge[] },
+  ): Promise<unknown> {
+    const nodeMap = new Map(workflow.nodes.map((node) => [node.id, node]))
+    const adjacency = new Map<string, WorkflowEdge[]>()
+
+    for (const edge of workflow.edges) {
+      const edges = adjacency.get(edge.source) || []
+      edges.push(edge)
+      adjacency.set(edge.source, edges)
+    }
+
+    const startNode = workflow.nodes.find((node) => node.type === 'start')
+    if (!startNode) {
+      throw new Error('循环体子工作流缺少开始节点')
+    }
+
+    const visited = new Set<string>([startNode.id])
+
+    const executeFrom = async (nodeId: string): Promise<unknown> => {
+      const outgoing = adjacency.get(nodeId) || []
+      let lastResult: unknown
+
+      for (const edge of outgoing) {
+        const activeHandle = session.activeBranches.get(edge.source)
+        if (activeHandle !== undefined && edge.sourceHandle !== activeHandle) continue
+
+        const nextNode = nodeMap.get(edge.target)
+        if (!nextNode || visited.has(nextNode.id)) continue
+
+        visited.add(nextNode.id)
+        await this.executeNode(session, nextNode)
+
+        if (nextNode.type !== 'start' && nextNode.type !== 'end') {
+          lastResult = session.context.__data__?.[nextNode.id]
+        }
+
+        const downstream = await executeFrom(nextNode.id)
+        if (downstream !== undefined) {
+          lastResult = downstream
+        }
+      }
+
+      return lastResult
+    }
+
+    return executeFrom(startNode.id)
   }
 
   private evaluateCondition(variable: any, value: any, operator: string): boolean {

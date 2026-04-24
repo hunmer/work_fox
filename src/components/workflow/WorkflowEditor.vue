@@ -339,6 +339,8 @@ function isDropInsideCanvas(event: DragEvent) {
 }
 
 function onLayoutDragOver(event: DragEvent) {
+  const target = event.target as HTMLElement | null
+  if (target?.closest?.('[data-embedded-workflow="true"]')) return
   if (store.isPreview || !hasWorkflowNodeDrag(event) || !isDropInsideCanvas(event)) return
   event.preventDefault()
   if (event.dataTransfer) {
@@ -347,6 +349,8 @@ function onLayoutDragOver(event: DragEvent) {
 }
 
 function onLayoutDrop(event: DragEvent) {
+  const target = event.target as HTMLElement | null
+  if (target?.closest?.('[data-embedded-workflow="true"]')) return
   if (store.isPreview || !hasWorkflowNodeDrag(event) || !isDropInsideCanvas(event)) return
   event.preventDefault()
   event.stopPropagation()
