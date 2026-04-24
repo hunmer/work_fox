@@ -1,5 +1,6 @@
 import type { NodeTypeDefinition } from '../types'
 import LoopBodyContainer from '@/components/workflow/LoopBodyContainer.vue'
+import SubWorkflowSelector from '@/components/workflow/SubWorkflowSelector.vue'
 import { createDefaultEmbeddedWorkflow } from '@shared/embedded-workflow'
 import {
   LOOP_BODY_NODE_TYPE,
@@ -28,6 +29,17 @@ export const flowControlNodes: NodeTypeDefinition[] = [
     description: '工作流出口节点，仅支持输入连接',
     properties: [],
     handles: { source: false, target: true },
+  },
+  {
+    type: 'sub_workflow',
+    label: '子工作流',
+    category: '流程控制',
+    icon: 'Workflow',
+    description: '选择并调用一个已有工作流，输入字段同步自目标工作流的开始节点。',
+    properties: [],
+    handles: { target: true, source: true },
+    customView: SubWorkflowSelector,
+    customViewMinSize: { width: 220, height: 120 },
   },
   {
     type: 'run_code',

@@ -28,6 +28,19 @@ const builtinNodes: PluginWorkflowNode[] = [
     properties: [],
   },
   {
+    type: 'sub_workflow',
+    label: '子工作流',
+    category: '流程控制',
+    icon: 'Workflow',
+    description: '选择并调用一个已有工作流，输入字段同步自目标工作流的开始节点。',
+    properties: [],
+    handles: {
+      target: true,
+      source: true,
+    } as any,
+    customViewMinSize: { width: 220, height: 120 },
+  },
+  {
     type: 'run_code',
     label: '运行 JS 代码',
     category: '流程控制',

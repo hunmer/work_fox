@@ -172,6 +172,7 @@ const nodeInputFields = computed<OutputField[]>({
 })
 
 const allowInputFields = computed(() => !!definition.value?.allowInputFields)
+const inputFieldsTitle = computed(() => store.selectedNode?.type === 'sub_workflow' ? '??????' : '????')
 
 async function handleDebug() {
   const nodeId = store.effectiveSelectedNodeId

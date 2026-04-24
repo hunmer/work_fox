@@ -255,6 +255,13 @@ const customViewProps = computed(() => {
       outputLabel: props.data?.outputLabel,
     }
   }
+  if (definition.value?.type === 'sub_workflow') {
+    return {
+      nodeId: props.id,
+      workflowId: props.data?.workflowId,
+      workflowName: props.data?.workflowName,
+    }
+  }
   return props.data || {}
 })
 
