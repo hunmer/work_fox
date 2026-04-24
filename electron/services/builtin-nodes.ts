@@ -197,13 +197,6 @@ const builtinNodes: PluginWorkflowNode[] = [
             width: 520,
             height: 260,
             bodyWorkflow: createDefaultEmbeddedWorkflow(),
-            outputs: [
-              { key: '$index', type: 'number' },
-              { key: '$count', type: 'number' },
-              { key: '$item', type: 'any' },
-              { key: '$isFirst', type: 'boolean' },
-              { key: '$isLast', type: 'boolean' },
-            ],
           },
         },
       ],

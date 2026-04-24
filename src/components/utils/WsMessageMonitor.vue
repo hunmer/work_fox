@@ -314,11 +314,13 @@ onMounted(() => {
   })
 
   window.addEventListener('keydown', toggleShortcut)
+  window.addEventListener('toggle-ws-monitor', toggleShortcut)
 })
 
 onBeforeUnmount(() => {
   unsubscribe?.()
   window.removeEventListener('keydown', toggleShortcut)
+  window.removeEventListener('toggle-ws-monitor', toggleShortcut)
 })
 
 function toggleShortcut(e: KeyboardEvent): void {

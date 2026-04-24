@@ -1,34 +1,33 @@
 <template>
-  <div
-    v-if="visible"
-    class="panel"
-    :style="panelStyle"
-    @mousedown="activate"
-  >
-    <!-- 标题栏：拖拽区域 -->
-    <div class="header" @mousedown.stop="startDrag">
-      <div class="title">{{ title }}</div>
-
-      <div class="actions">
-        <button @click.stop="toggleCollapse">
-          {{ collapsed ? "展开" : "折叠" }}
-        </button>
-        <button @click.stop="close">×</button>
-      </div>
-    </div>
-
-    <!-- 内容区 -->
-    <div v-show="!collapsed" class="body">
-      <slot />
-    </div>
-
-    <!-- 右下角缩放手柄 -->
+  <Teleport to="body">
     <div
-      v-show="!collapsed"
-      class="resize"
-      @mousedown.stop="startResize"
-    />
-  </div>
+      v-if="visible"
+      class="panel"
+      :style="panelStyle"
+      @mousedown="activate"
+    >
+      <div class="header" @mousedown.stop="startDrag">
+        <div class="title">{{ title }}</div>
+
+        <div class="actions">
+          <button @click.stop="toggleCollapse">
+            {{ collapsed ? "展开" : "折叠" }}
+          </button>
+          <button @click.stop="close">×</button>
+        </div>
+      </div>
+
+      <div v-show="!collapsed" class="body">
+        <slot />
+      </div>
+
+      <div
+        v-show="!collapsed"
+        class="resize"
+        @mousedown.stop="startResize"
+      />
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
@@ -41,7 +40,7 @@ const props = defineProps({
   y: { type: Number, default: 100 },
   width: { type: Number, default: 320 },
   height: { type: Number, default: 220 },
-  zIndex: { type: Number, default: 1 }
+  zIndex: { type: Number, default: 9999 }
 })
 
 const emit = defineEmits([
@@ -146,14 +145,13 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .panel {
-  position: absolute;
+  position: fixed;
   background: #fff;
   border: 1px solid #d9d9d9;
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   overflow: hidden;
   user-select: none;
-  z-index: 999999;
 }
 
 .header {

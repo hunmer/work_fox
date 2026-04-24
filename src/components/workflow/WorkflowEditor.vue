@@ -52,6 +52,11 @@ import PluginsDialog from '@/components/plugins/PluginsDialog.vue'
 import SettingsDialog from '@/components/settings/SettingsDialog.vue'
 import PluginPickerDialog from './PluginPickerDialog.vue'
 import { WORKFLOW_NODE_DRAG_MIME } from './dragDrop'
+import { Activity } from 'lucide-vue-next'
+
+function toggleWsMonitor() {
+  window.dispatchEvent(new CustomEvent('toggle-ws-monitor'))
+}
 
 import { useConnectionDrop } from '@/composables/workflow/useConnectionDrop'
 import { useEdgeInsert } from '@/composables/workflow/useEdgeInsert'
@@ -553,7 +558,15 @@ function onConnect(params: any) {
         />
       </div>
 
-      <div class="w-[50px] border-l border-border bg-muted/30" />
+      <div class="w-[50px] border-l border-border bg-muted/30 flex flex-col items-center pt-2">
+        <button
+          class="inline-flex items-center justify-center w-8 h-8 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+          title="WS Monitor (Ctrl+Shift+M)"
+          @click="toggleWsMonitor"
+        >
+          <Activity class="w-4 h-4" />
+        </button>
+      </div>
     </div>
 
     <Empty v-else class="flex-1">

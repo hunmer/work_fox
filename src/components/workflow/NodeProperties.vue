@@ -54,6 +54,7 @@ const IconComponent = computed(() => {
 })
 
 const isDebugging = computed(() => store.debugNodeStatus === 'running')
+const isLoopBodyNode = computed(() => store.selectedNode?.type === LOOP_BODY_NODE_TYPE)
 const canDebugSelectedNode = computed(() => store.selectedNode?.type !== LOOP_BODY_NODE_TYPE)
 const outputExpanded = ref(true)
 const inputsExpanded = ref(true)
@@ -254,6 +255,14 @@ function confirmImport() {
         点击节点查看属性
       </p>
     </div>
+
+    <template v-else-if="isLoopBodyNode">
+      <div class="flex-1 flex items-center justify-center p-4">
+        <p class="text-xs text-muted-foreground text-center">
+          循环体节点无需单独配置属性
+        </p>
+      </div>
+    </template>
 
     <template v-else>
       <div class="flex items-center gap-2 p-3 border-b border-border">

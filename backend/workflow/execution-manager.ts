@@ -157,7 +157,7 @@ export class BackendWorkflowExecutionManager {
       session.context.__config__ = await this.loadPluginConfigs(workflow)
       session.status = 'running'
       await this.executeNode(session, targetNode)
-      const step = session.steps[session.steps.length - 1]
+      const step = [...session.steps].reverse().find((item) => item.nodeId === targetNode.id)
 
       if (step?.status === 'error') {
         return {
@@ -767,7 +767,7 @@ if (typeof main === 'function') return main({ params, context })`)
         this.syncLoopContext(session)
         appendNodeLog('info', `循环第 ${index + 1}/${iterations.count} 次`)
         const result = await this.executeLoopBody(session, bodyNode)
-        items.push(result)
+        items.push(this.normalizeLoopIterationResult(result))
       } finally {
         session.loopStack.pop()
         this.syncLoopContext(session)
@@ -856,6 +856,13 @@ if (typeof main === 'function') return main({ params, context })`)
     }
 
     return this.executeScopedLoopBody(session, bodyNode)
+  }
+
+  private normalizeLoopIterationResult(result: unknown): Record<string, any> {
+    if (result && typeof result === 'object' && !Array.isArray(result)) {
+      return result as Record<string, any>
+    }
+    return { result }
   }
 
   private async executeScopedLoopBody(session: ExecutionSession, bodyNode: WorkflowNode): Promise<unknown> {
