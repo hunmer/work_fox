@@ -19,6 +19,11 @@ import {
 import VariableFieldMenu from './VariableFieldMenu.vue'
 import { getCompositeParentId, isGeneratedWorkflowNode } from '@shared/workflow-composite'
 
+type LoopVariableField = OutputField & {
+  expressionPath: string
+  children?: LoopVariableField[]
+}
+
 const props = defineProps<{
   excludeNodeId: string
 }>()
@@ -52,35 +57,74 @@ function handleSelectConfigField(pluginId: string, key: string) {
   emit('select', buildConfigPath(pluginId, key))
 }
 
-/** 获取画布上除当前节点外的所有节点 */
+const currentNode = computed(() => {
+  if (store.selectedEmbeddedNode) return store.selectedEmbeddedNode.node
+  return store.currentWorkflow?.nodes.find((node) => node.id === props.excludeNodeId) ?? null
+})
+
+const loopParentNode = computed(() => {
+  if (!store.currentWorkflow || !currentNode.value) return null
+
+  const parentId = getCompositeParentId(currentNode.value)
+  if (parentId) {
+    return store.currentWorkflow.nodes.find((node) => node.id === parentId && node.type === 'loop') ?? null
+  }
+
+  if (store.selectedEmbeddedNode) {
+    return store.currentWorkflow.nodes.find((node) => node.id === store.selectedEmbeddedNode?.hostNodeId && node.type === 'loop') ?? null
+  }
+
+  return null
+})
+
+const isInLoopBody = computed(() => !!loopParentNode.value && (isGeneratedWorkflowNode(currentNode.value!) || !!store.selectedEmbeddedNode))
+
+/** 获取画布上除当前节点外的可用节点 */
 const otherNodes = computed(() => {
   if (!store.currentWorkflow) return []
-  const scopedParentId = scopedParentVariableNode.value?.id
-  return store.currentWorkflow.nodes.filter((n) => n.id !== props.excludeNodeId && n.id !== scopedParentId)
-})
-
-const scopedParentVariableNode = computed(() => {
-  if (!store.currentWorkflow) return null
-  const currentNode = store.currentWorkflow.nodes.find((node) => node.id === props.excludeNodeId)
-  if (!currentNode) return null
-
-  const parentId = getCompositeParentId(currentNode)
-  if (!parentId) return null
-
-  const parentNode = store.currentWorkflow.nodes.find((node) => node.id === parentId)
-  if (!parentNode || !isGeneratedWorkflowNode(currentNode)) return null
-
-  const fields = Array.isArray(parentNode.data?.sharedVariables)
-    ? parentNode.data.sharedVariables as OutputField[]
-    : []
-  if (!fields.length) return null
-
-  return {
-    id: parentNode.id,
-    label: `${getNodeLabel(parentNode)} / 中间变量`,
-    fields,
+  const hiddenNodeIds = new Set([props.excludeNodeId])
+  if (isInLoopBody.value) {
+    const parentId = loopParentNode.value?.id
+    if (parentId) hiddenNodeIds.add(parentId)
+    for (const node of store.currentWorkflow.nodes) {
+      if (node.type === 'loop_body' && getCompositeParentId(node) === parentId) {
+        hiddenNodeIds.add(node.id)
+      }
+    }
   }
+
+  return store.currentWorkflow.nodes.filter((node) => !hiddenNodeIds.has(node.id))
 })
+
+const loopVariableFields = computed<LoopVariableField[]>(() => {
+  if (!isInLoopBody.value || !loopParentNode.value) return []
+
+  const fields: LoopVariableField[] = [
+    { key: 'index', type: 'number', expressionPath: 'index' },
+  ]
+
+  if (loopParentNode.value.data?.loopType === 'array') {
+    fields.push({ key: 'item', type: 'any', expressionPath: 'item' })
+  }
+
+  const sharedVariables = Array.isArray(loopParentNode.value.data?.sharedVariables)
+    ? loopParentNode.value.data.sharedVariables as OutputField[]
+    : []
+
+  fields.push(...mapLoopSharedVariables(sharedVariables))
+  return fields
+})
+
+function mapLoopSharedVariables(fields: OutputField[], parentPath = 'vars'): LoopVariableField[] {
+  return fields.map((field) => {
+    const expressionPath = `${parentPath}.${field.key}`
+    return {
+      ...field,
+      expressionPath,
+      children: field.children ? mapLoopSharedVariables(field.children, expressionPath) : undefined,
+    }
+  })
+}
 
 /** 获取节点图标组件 */
 function getNodeIcon(type: string) {
@@ -105,9 +149,21 @@ function buildVariablePath(nodeId: string, fieldPath: string): string {
   return `{{ __data__["${nodeId}"].${fieldPath} }}`
 }
 
+function buildLoopVariablePath(fieldPath: string): string {
+  return `{{ __loop__.${fieldPath} }}`
+}
+
 /** 点击字段 */
 function handleSelectField(nodeId: string, fieldPath: string) {
   emit('select', buildVariablePath(nodeId, fieldPath))
+}
+
+function handleSelectLoopVariable(fieldPath: string) {
+  emit('select', buildLoopVariablePath(fieldPath))
+}
+
+function handleSelectLoopField(_nodeId: string, fieldPath: string) {
+  handleSelectLoopVariable(fieldPath)
 }
 </script>
 
@@ -134,18 +190,6 @@ function handleSelectField(nodeId: string, fieldPath: string) {
           <span>节点属性</span>
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent class="w-56">
-          <DropdownMenuSub v-if="scopedParentVariableNode">
-            <DropdownMenuSubTrigger class="text-xs">
-              <span class="truncate">{{ scopedParentVariableNode.label }}</span>
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent class="min-w-[180px]">
-              <VariableFieldMenu
-                :fields="scopedParentVariableNode.fields"
-                :node-id="scopedParentVariableNode.id"
-                @select="handleSelectField"
-              />
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
           <template v-if="otherNodes.length === 0">
             <div class="px-2 py-1.5 text-xs text-muted-foreground">
               画布上没有其他节点
@@ -175,6 +219,20 @@ function handleSelectField(nodeId: string, fieldPath: string) {
               </DropdownMenuSubContent>
             </DropdownMenuSub>
           </template>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+
+      <!-- 循环中间变量 sub-menu -->
+      <DropdownMenuSub v-if="loopVariableFields.length > 0">
+        <DropdownMenuSubTrigger class="text-xs font-medium">
+          <span>中间变量</span>
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent class="w-56">
+          <VariableFieldMenu
+            :fields="loopVariableFields"
+            node-id="__loop__"
+            @select="handleSelectLoopField"
+          />
         </DropdownMenuSubContent>
       </DropdownMenuSub>
 

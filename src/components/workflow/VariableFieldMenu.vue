@@ -8,8 +8,13 @@ import {
 } from '@/components/ui/dropdown-menu'
 import VariableFieldMenu from './VariableFieldMenu.vue'
 
+type VariableField = OutputField & {
+  expressionPath?: string
+  children?: VariableField[]
+}
+
 const props = defineProps<{
-  fields: OutputField[]
+  fields: VariableField[]
   parentPath?: string
   nodeId: string
 }>()
@@ -18,8 +23,9 @@ const emit = defineEmits<{
   select: [nodeId: string, fieldPath: string]
 }>()
 
-function buildPath(key: string): string {
-  return props.parentPath ? `${props.parentPath}.${key}` : key
+function buildPath(field: VariableField): string {
+  if (field.expressionPath) return field.expressionPath
+  return props.parentPath ? `${props.parentPath}.${field.key}` : field.key
 }
 </script>
 
@@ -37,7 +43,7 @@ function buildPath(key: string): string {
       <DropdownMenuSubContent class="min-w-[180px]">
         <VariableFieldMenu
           :fields="field.children!"
-          :parent-path="buildPath(field.key)"
+          :parent-path="buildPath(field)"
           :node-id="nodeId"
           @select="(id: string, path: string) => emit('select', id, path)"
         />
@@ -47,7 +53,7 @@ function buildPath(key: string): string {
     <DropdownMenuItem
       v-else
       class="text-xs"
-      @click="emit('select', nodeId, buildPath(field.key))"
+      @click="emit('select', nodeId, buildPath(field))"
     >
       <span class="font-mono text-muted-foreground mr-1.5 text-[10px]">
         {{ field.type }}
