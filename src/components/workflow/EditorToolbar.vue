@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { Minus, Square, X, Maximize2, ChevronDown, Plus, Home, Save, LayoutDashboard, SaveAll, RotateCcw, Trash2 } from 'lucide-vue-next'
+import { Minus, Square, X, Maximize2, ChevronDown, Plus, Save, LayoutDashboard, SaveAll, RotateCcw, Trash2 } from 'lucide-vue-next'
 import {
   Menubar,
   MenubarMenu,
@@ -54,7 +54,6 @@ const emit = defineEmits<{
   cancelEditName: []
   openPlugins: []
   openSettings: []
-  goHome: []
   openRecent: [id: string]
   'reset-layout': []
   'save-preset': []
@@ -95,15 +94,6 @@ refreshMaximized()
     <div class="absolute inset-x-0 top-0 h-3 app-drag" />
     <div class="relative flex items-center px-2 py-1">
     <Menubar class="border-0 bg-transparent h-7 no-drag">
-      <MenubarMenu>
-        <MenubarTrigger
-          class="text-xs h-6 px-2 flex items-center gap-1"
-          @click="emit('goHome')"
-        >
-          <Home class="w-3 h-3" />
-          主页
-        </MenubarTrigger>
-      </MenubarMenu>
       <MenubarMenu>
         <MenubarTrigger class="text-xs h-6 px-2">
           文件

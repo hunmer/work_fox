@@ -47,6 +47,7 @@ import ExecutionBar from './ExecutionBar.vue'
 import WorkflowListDialog from './WorkflowListDialog.vue'
 import NodeSelectDialog from './NodeSelectDialog.vue'
 import EditorToolbar from './EditorToolbar.vue'
+import ActivityBar from './ActivityBar.vue'
 import PluginsDialog from '@/components/plugins/PluginsDialog.vue'
 import SettingsDialog from '@/components/settings/SettingsDialog.vue'
 import PluginPickerDialog from './PluginPickerDialog.vue'
@@ -524,7 +525,6 @@ function onConnect(params: any) {
       @cancel-edit-name="cancelEditName"
       @open-plugins="pluginsDialogOpen = true"
       @open-settings="settingsDialogOpen = true"
-      @go-home="goHome"
       @open-recent="openRecentWorkflow"
       @reset-layout="handleResetLayout"
       @save-preset="handleSavePreset"
@@ -534,20 +534,30 @@ function onConnect(params: any) {
 
     <div
       v-if="store.currentWorkflow"
-      class="relative flex-1 min-h-0"
-      @dragover.capture="onLayoutDragOver"
-      @drop.capture="onLayoutDrop"
+      class="flex flex-1 min-h-0"
     >
-      <!-- Golden Layout：画布作为真实面板挂载，避免透明覆盖层拦截事件 -->
-      <GoldenLayout
-        ref="goldenLayoutRef"
-        :key="layoutKey"
-        :config="editorLayout"
-        :registry="componentRegistry"
-        :provides="parentProvides"
-        class="absolute inset-0 z-10"
-        @layout-change="onLayoutChange"
+      <ActivityBar
+        @go-home="goHome"
+        @open-settings="settingsDialogOpen = true"
       />
+
+      <div
+        class="relative flex-1 min-h-0"
+        @dragover.capture="onLayoutDragOver"
+        @drop.capture="onLayoutDrop"
+      >
+        <GoldenLayout
+          ref="goldenLayoutRef"
+          :key="layoutKey"
+          :config="editorLayout"
+          :registry="componentRegistry"
+          :provides="parentProvides"
+          class="absolute inset-0 z-10"
+          @layout-change="onLayoutChange"
+        />
+      </div>
+
+      <div class="w-[50px] border-l border-border bg-muted/30" />
     </div>
 
     <Empty v-else class="flex-1">
