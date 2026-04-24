@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { BaseEdge, EdgeLabelRenderer, getBezierPath } from '@vue-flow/core'
 import type { EdgeProps } from '@vue-flow/core'
 import { useWorkflowStore } from '@/stores/workflow'
+import { LOOP_BODY_SOURCE_HANDLE } from '@shared/workflow-composite'
 
 const props = defineProps<EdgeProps>()
 
@@ -11,6 +12,8 @@ const store = useWorkflowStore()
 const isRunning = computed(() => store.executionStatus === 'running')
 const isLocked = computed(() => !!props.data?.composite?.locked)
 const isGenerated = computed(() => !!props.data?.composite?.generated)
+const edgeSourceHandle = computed(() => props.sourceHandle ?? props.data?.sourceHandle ?? null)
+const isLoopBodyEdge = computed(() => edgeSourceHandle.value === LOOP_BODY_SOURCE_HANDLE)
 
 const pathData = computed(() =>
   getBezierPath({
@@ -34,7 +37,7 @@ const emit = defineEmits<{
 function onPlusClick(event: MouseEvent) {
   if (isLocked.value) return
   event.stopPropagation()
-  emit('insert-node', props.id, props.source, props.target, props.sourceHandle ?? null)
+  emit('insert-node', props.id, props.source, props.target, edgeSourceHandle.value)
 }
 </script>
 
@@ -52,7 +55,7 @@ function onPlusClick(event: MouseEvent) {
     :style="{
       stroke: isLocked ? 'rgba(74, 144, 164, 0.9)' : 'var(--primary)',
       strokeWidth: isGenerated ? 2 : 2.5,
-      strokeDasharray: isRunning ? '6 3' : (isLocked ? '4 2' : 'none'),
+      strokeDasharray: isRunning ? '6 3' : (isLocked && !isLoopBodyEdge ? '4 2' : 'none'),
       transition: 'stroke-dasharray 0.3s ease',
     }"
   />

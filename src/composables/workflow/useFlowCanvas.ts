@@ -202,7 +202,11 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
       targetHandle: e.targetHandle,
       animated: true,
       markerEnd: MarkerType.ArrowClosed,
-      data: { composite: e.composite || null },
+      data: {
+        composite: e.composite || null,
+        sourceHandle: e.sourceHandle ?? null,
+        targetHandle: e.targetHandle ?? null,
+      },
       })),
   )
 
