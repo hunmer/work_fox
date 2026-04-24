@@ -438,7 +438,7 @@ export class WorkflowEngine {
           loop: !!resolvedData.loop,
         }
       case 'run_code':
-        return this.executeCode(resolvedData.code || '')
+        return this.executeCode(resolvedData.code || '', this.buildOutputObject(resolvedData.inputFields) ?? {})
       case 'toast':
         return this.executeToast(resolvedData.message || '', resolvedData.type || 'info')
       case 'switch':
@@ -456,9 +456,17 @@ export class WorkflowEngine {
     }
   }
 
-  private executeCode(code: string): any {
-    const fn = new Function('context', code)
-    return fn(this.context)
+  private executeCode(code: string, params: Record<string, any>): any {
+    const normalizedCode = this.normalizeRunCode(code)
+    const fn = new Function('context', 'params', `${normalizedCode}
+if (typeof main === 'function') return main({ params, context })`)
+    return fn(this.context, params)
+  }
+
+  private normalizeRunCode(code: string): string {
+    return code
+      .replace(/\basync\s+function\s+main\s*\(\s*\{\s*params\s*\}\s*:\s*Args\s*\)\s*:\s*Promise\s*<\s*Output\s*>/g, 'async function main({ params })')
+      .replace(/\bfunction\s+main\s*\(\s*\{\s*params\s*\}\s*:\s*Args\s*\)\s*:\s*Output/g, 'function main({ params })')
   }
 
   private executeToast(message: string, type: string): any {
