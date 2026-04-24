@@ -14,6 +14,7 @@ import {
   findWorkflowNode,
   getCompositeParentId,
   getNodesForExecutionScope,
+  isGeneratedWorkflowNode,
   LOOP_BODY_ROLE,
   LOOP_BODY_NODE_TYPE,
   LOOP_NEXT_SOURCE_HANDLE,
@@ -273,6 +274,10 @@ export class WorkflowEngine {
       this.currentIndex = i
       const node = this.executionOrder[i]
       const nodeState = node.nodeState || 'normal'
+
+      if (node.type === LOOP_BODY_NODE_TYPE && isGeneratedWorkflowNode(node)) {
+        continue
+      }
 
       // 检查节点是否在活跃分支路径上
       if (this.activeBranches.size > 0 && !this.isNodeReachable(node.id)) {
@@ -624,7 +629,7 @@ export class WorkflowEngine {
         visited.add(nextNode.id)
         await this.executeNode(nextNode)
 
-        if (nextNode.type !== 'start' && nextNode.type !== 'end') {
+        if (nextNode.type !== 'start') {
           lastResult = this.context.__data__?.[nextNode.id]
         }
 

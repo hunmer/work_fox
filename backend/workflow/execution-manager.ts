@@ -27,6 +27,7 @@ import {
   findWorkflowNode,
   getCompositeParentId,
   getNodesForExecutionScope,
+  isGeneratedWorkflowNode,
   LOOP_BODY_ROLE,
   LOOP_BODY_NODE_TYPE,
   LOOP_NEXT_SOURCE_HANDLE,
@@ -290,6 +291,10 @@ export class BackendWorkflowExecutionManager {
       session.currentIndex = i
       const node = session.executionOrder[i]
       const nodeState = node.nodeState || 'normal'
+
+      if (node.type === LOOP_BODY_NODE_TYPE && isGeneratedWorkflowNode(node)) {
+        continue
+      }
 
       if (session.activeBranches.size > 0 && !this.isNodeReachable(session, node.id)) {
         this.recordSkippedStep(session, node, '非活跃分支')
@@ -774,7 +779,7 @@ export class BackendWorkflowExecutionManager {
         visited.add(nextNode.id)
         await this.executeNode(session, nextNode)
 
-        if (nextNode.type !== 'start' && nextNode.type !== 'end') {
+        if (nextNode.type !== 'start') {
           lastResult = session.context.__data__?.[nextNode.id]
         }
 
