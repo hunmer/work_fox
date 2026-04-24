@@ -467,7 +467,11 @@ export class BackendWorkflowExecutionManager {
       case 'table_display':
         return this.executeTableDisplay(session, node, resolvedData)
       case 'run_code':
-        return this.executeCode(session.context, String(resolvedData.code || ''))
+        return this.executeCode(
+          session.context,
+          String(resolvedData.code || ''),
+          this.buildOutputObject(resolvedData.inputFields) ?? {},
+        )
       case 'toast':
         return {
           message: String(resolvedData.message || ''),
@@ -626,9 +630,17 @@ export class BackendWorkflowExecutionManager {
     return result
   }
 
-  private executeCode(context: Record<string, any>, code: string): any {
-    const fn = new Function('context', code)
-    return fn(context)
+  private executeCode(context: Record<string, any>, code: string, params: Record<string, any>): any {
+    const normalizedCode = this.normalizeRunCode(code)
+    const fn = new Function('context', 'params', `${normalizedCode}
+if (typeof main === 'function') return main({ params, context })`)
+    return fn(context, params)
+  }
+
+  private normalizeRunCode(code: string): string {
+    return code
+      .replace(/\basync\s+function\s+main\s*\(\s*\{\s*params\s*\}\s*:\s*Args\s*\)\s*:\s*Promise\s*<\s*Output\s*>/g, 'async function main({ params })')
+      .replace(/\bfunction\s+main\s*\(\s*\{\s*params\s*\}\s*:\s*Args\s*\)\s*:\s*Output/g, 'function main({ params })')
   }
 
   private executeSwitch(session: ExecutionSession, conditions: ConditionItem[]): any {
