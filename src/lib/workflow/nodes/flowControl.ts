@@ -142,7 +142,7 @@ export const flowControlNodes: NodeTypeDefinition[] = [
     ],
     handles: {
       target: true,
-      source: false,
+      source: true,
       sourceHandles: [
         { id: LOOP_BODY_SOURCE_HANDLE, label: '循环体' },
         { id: LOOP_NEXT_SOURCE_HANDLE, label: '完成后' },
@@ -202,7 +202,7 @@ export const flowControlNodes: NodeTypeDefinition[] = [
     properties: [],
     handles: {
       target: true,
-      source: true,
+      source: false,
     },
     customView: LoopBodyContainer,
     customViewMinSize: { width: 520, height: 260 },

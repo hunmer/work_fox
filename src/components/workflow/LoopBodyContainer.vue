@@ -25,7 +25,7 @@ function handleUpdateBodyWorkflow(value: ReturnType<typeof normalizeEmbeddedWork
 </script>
 
 <template>
-  <div class="loop-body-shell" @dragover.stop @drop.stop>
+  <div class="loop-body-shell">
     <div class="loop-body-header">
       <div class="flex flex-col gap-0.5">
         <span class="loop-body-title">循环体</span>
@@ -34,7 +34,15 @@ function handleUpdateBodyWorkflow(value: ReturnType<typeof normalizeEmbeddedWork
       <span v-if="props.outputLabel" class="loop-body-output">输出: {{ props.outputLabel }}</span>
     </div>
 
-    <div class="loop-body-canvas">
+    <div
+      class="loop-body-canvas nodrag"
+      @click.stop
+      @mousedown.stop
+      @pointerdown.stop
+      @wheel.stop
+      @dragover.stop
+      @drop.stop
+    >
       <EmbeddedWorkflowEditor
         :flow-id="`loop-body-${props.nodeId || 'unknown'}`"
         :model-value="embeddedWorkflow"

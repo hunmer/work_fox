@@ -122,7 +122,7 @@ export const builtinNodeDefinitions: PluginWorkflowNode[] = [
     ] as any,
     handles: {
       target: true,
-      source: false,
+      source: true,
       sourceHandles: [
         { id: LOOP_BODY_SOURCE_HANDLE, label: '循环体' },
         { id: LOOP_NEXT_SOURCE_HANDLE, label: '完成后' },
@@ -174,7 +174,7 @@ export const builtinNodeDefinitions: PluginWorkflowNode[] = [
     properties: [],
     handles: {
       target: true,
-      source: true,
+      source: false,
     } as any,
     customViewMinSize: { width: 520, height: 260 } as any,
     manualCreate: false as any,

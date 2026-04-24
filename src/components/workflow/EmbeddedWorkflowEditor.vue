@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, markRaw } from 'vue'
-import { VueFlow, useVueFlow, MarkerType } from '@vue-flow/core'
+import { computed, markRaw, ref } from 'vue'
+import { VueFlow, useVueFlow, MarkerType, ConnectionMode } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import type { EmbeddedWorkflow, WorkflowNode } from '@/lib/workflow/types'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { WORKFLOW_NODE_DRAG_MIME } from './dragDrop'
 import EmbeddedWorkflowNode from './EmbeddedWorkflowNode.vue'
 import EmbeddedWorkflowEdge from './EmbeddedWorkflowEdge.vue'
+import NodeSelectDialog from './NodeSelectDialog.vue'
 
 const props = defineProps<{
   modelValue: EmbeddedWorkflow
@@ -21,6 +22,8 @@ const nodeTypes = { embedded: markRaw(EmbeddedWorkflowNode) }
 const edgeTypes = { embedded: markRaw(EmbeddedWorkflowEdge) }
 
 const { project } = useVueFlow(props.flowId)
+const nodeSelectOpen = ref(false)
+const pendingInsert = ref<{ sourceId: string; targetId?: string; position?: { x: number; y: number } } | null>(null)
 
 function cloneWorkflow(): EmbeddedWorkflow {
   return JSON.parse(JSON.stringify(props.modelValue)) as EmbeddedWorkflow
@@ -61,7 +64,8 @@ const nodes = computed(() =>
       label: node.label,
       nodeType: node.type,
     },
-    draggable: node.type !== 'start' && node.type !== 'end',
+    draggable: true,
+    dragHandle: '.embedded-node-body',
     selectable: true,
   })),
 )
@@ -117,7 +121,7 @@ function onNodesChange(changes: Array<any>) {
   for (const change of changes) {
     if (change.type === 'position' && change.position) {
       const node = props.modelValue.nodes.find((item) => item.id === change.id)
-      if (!node || node.type === 'start' || node.type === 'end') continue
+      if (!node) continue
       if (!nextWorkflow) nextWorkflow = cloneWorkflow()
       const index = nextWorkflow.nodes.findIndex((item) => item.id === change.id)
       if (index >= 0) {
@@ -163,8 +167,6 @@ function onDrop(event: DragEvent) {
   event.stopPropagation()
 
   const type = event.dataTransfer?.getData(WORKFLOW_NODE_DRAG_MIME)
-  if (!type) return
-
   const target = event.currentTarget as HTMLElement | null
   const bounds = target?.getBoundingClientRect()
   if (!bounds) return
@@ -173,29 +175,63 @@ function onDrop(event: DragEvent) {
     x: event.clientX - bounds.left,
     y: event.clientY - bounds.top,
   })
-  addNodeAt(type, position)
+  if (type) {
+    addNodeAt(type, position)
+    return
+  }
+
+  pendingInsert.value = { sourceId: '', position }
+  nodeSelectOpen.value = true
 }
 
 function onEdgeInsertNode(_edgeId: string, sourceId: string, targetId: string) {
-  const sourceNode = props.modelValue.nodes.find((item) => item.id === sourceId)
-  const targetNode = props.modelValue.nodes.find((item) => item.id === targetId)
-  if (!sourceNode || !targetNode) return
+  pendingInsert.value = { sourceId, targetId }
+  nodeSelectOpen.value = true
+}
 
-  const nextPosition = {
-    x: (sourceNode.position.x + targetNode.position.x) / 2,
-    y: (sourceNode.position.y + targetNode.position.y) / 2,
+function handleSelectNodeType(type: string) {
+  const insert = pendingInsert.value
+  nodeSelectOpen.value = false
+  pendingInsert.value = null
+  if (!insert) return
+
+  let position = insert.position
+  if (!position && insert.sourceId && insert.targetId) {
+    const sourceNode = props.modelValue.nodes.find((item) => item.id === insert.sourceId)
+    const targetNode = props.modelValue.nodes.find((item) => item.id === insert.targetId)
+    if (!sourceNode || !targetNode) return
+    position = {
+      x: (sourceNode.position.x + targetNode.position.x) / 2,
+      y: (sourceNode.position.y + targetNode.position.y) / 2,
+    }
   }
-  const inserted = createEmbeddedNode('run_code', nextPosition)
+
+  if (!position) {
+    position = { x: 200, y: 140 }
+  }
+
+  const inserted = createEmbeddedNode(type, position)
   if (!inserted) return
 
   const nextWorkflow = cloneWorkflow()
   nextWorkflow.nodes.push(inserted)
-  nextWorkflow.edges = nextWorkflow.edges.filter((edge) => !(edge.source === sourceId && edge.target === targetId))
-  nextWorkflow.edges.push(
-    { id: `e-${sourceId}-${inserted.id}`, source: sourceId, target: inserted.id },
-    { id: `e-${inserted.id}-${targetId}`, source: inserted.id, target: targetId },
-  )
+
+  if (insert.sourceId && insert.targetId) {
+    nextWorkflow.edges = nextWorkflow.edges.filter((edge) => !(edge.source === insert.sourceId && edge.target === insert.targetId))
+    nextWorkflow.edges.push(
+      { id: `e-${insert.sourceId}-${inserted.id}`, source: insert.sourceId, target: inserted.id },
+      { id: `e-${inserted.id}-${insert.targetId}`, source: inserted.id, target: insert.targetId },
+    )
+  }
+
   emitWorkflow(nextWorkflow)
+}
+
+function handleSelectDialogOpenChange(open: boolean) {
+  nodeSelectOpen.value = open
+  if (!open) {
+    pendingInsert.value = null
+  }
 }
 </script>
 
@@ -210,7 +246,12 @@ function onEdgeInsertNode(_edgeId: string, sourceId: string, targetId: string) {
       :min-zoom="0.4"
       :max-zoom="1.8"
       :fit-view-on-init="true"
+      :connection-mode="ConnectionMode.Loose"
       class="h-full w-full"
+      :nodes-draggable="true"
+      :nodes-connectable="true"
+      :pan-on-drag="[0, 1]"
+      :elements-selectable="true"
       @connect="onConnect"
       @nodes-change="onNodesChange"
       @edges-change="onEdgesChange"
@@ -224,5 +265,11 @@ function onEdgeInsertNode(_edgeId: string, sourceId: string, targetId: string) {
         />
       </template>
     </VueFlow>
+
+    <NodeSelectDialog
+      :open="nodeSelectOpen"
+      @update:open="handleSelectDialogOpenChange"
+      @select="handleSelectNodeType"
+    />
   </div>
 </template>

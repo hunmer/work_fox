@@ -156,6 +156,14 @@ function refreshNodeInternals(reason: string) {
   })
 }
 
+function handleCustomViewMouseDown(event: MouseEvent) {
+  event.stopPropagation()
+}
+
+function handleCustomViewPointerDown(event: PointerEvent) {
+  event.stopPropagation()
+}
+
 const displayLabel = computed(() => props.data?.label || definition.value?.label || props.type)
 
 /** 自定义视图组件 */
@@ -410,7 +418,14 @@ async function copyNodeInfo() {
         </div>
 
         <!-- 自定义视图内容区 -->
-        <div v-if="hasCustomView" class="px-2 pb-2 custom-view-area flex-1 min-h-0 overflow-hidden" @click.stop>
+        <div
+          v-if="hasCustomView"
+          class="px-2 pb-2 custom-view-area flex-1 min-h-0 overflow-hidden"
+          :class="isLoopBodyContainer ? 'nodrag' : 'nodrag nopan'"
+          @click.stop
+          @mousedown="handleCustomViewMouseDown"
+          @pointerdown="handleCustomViewPointerDown"
+        >
           <component
             :is="CustomViewComponent"
             v-bind="customViewProps"

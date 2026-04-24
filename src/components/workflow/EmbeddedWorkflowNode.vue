@@ -10,8 +10,8 @@ const props = defineProps<NodeProps>()
 const definition = computed(() => getNodeDefinition(props.data?.nodeType || props.type))
 const icon = computed(() => resolveLucideIcon(definition.value?.icon || 'Circle'))
 const title = computed(() => props.data?.label || definition.value?.label || props.type)
-const isStart = computed(() => props.type === 'start')
-const isEnd = computed(() => props.type === 'end')
+const isStart = computed(() => props.data?.nodeType === 'start')
+const isEnd = computed(() => props.data?.nodeType === 'end')
 </script>
 
 <template>
@@ -28,10 +28,11 @@ const isEnd = computed(() => props.type === 'end')
       id="target"
       type="target"
       :position="Position.Left"
+      :connectable="true"
       class="!w-3 !h-3 !bg-sky-500 !border-2 !border-sky-200"
     />
 
-    <div class="flex items-center gap-2 px-3 py-2">
+    <div class="embedded-node-body flex items-center gap-2 px-3 py-2">
       <component :is="icon" v-if="icon" class="w-4 h-4 text-slate-600 shrink-0" />
       <div class="min-w-0">
         <div class="text-xs font-medium truncate text-slate-800">{{ title }}</div>
@@ -44,6 +45,7 @@ const isEnd = computed(() => props.type === 'end')
       id="source"
       type="source"
       :position="Position.Right"
+      :connectable="true"
       class="!w-3 !h-3 !bg-emerald-500 !border-2 !border-emerald-200"
     />
   </div>
@@ -52,6 +54,14 @@ const isEnd = computed(() => props.type === 'end')
 <style scoped>
 .embedded-node {
   border-color: rgba(148, 163, 184, 0.38);
+}
+
+.embedded-node-body {
+  cursor: grab;
+}
+
+.embedded-node-body:active {
+  cursor: grabbing;
 }
 
 .embedded-node-start {
