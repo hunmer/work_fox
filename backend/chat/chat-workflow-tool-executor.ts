@@ -88,6 +88,7 @@ function buildNodeUsageNotes(def: any): string[] {
     notes.push('run_code.code 是 JavaScript 代码，不要在 code 字段里写 {{ }} 插值。')
     notes.push('run_code 必须定义 main 函数，推荐写成 async function main({ params, context }) { ... }。执行器会调用 main，函数返回值会作为该节点输出。')
     notes.push('run_code 可通过 params 读取节点输入字段，也可通过 context 读取上游节点结果；应在 main 函数里 return 给下游消费的结构化结果。')
+    notes.push('更新 run_code.code 后，要同步用 update_node 设置 data.outputs，声明返回对象的字段结构；否则变量选择器和下游字段映射无法准确感知输出。')
   }
 
   return notes
@@ -99,6 +100,10 @@ function buildNodeUsageExamples(def: any): Array<Record<string, any>> {
       scene: '在两个节点之间插入 JS 做结构映射',
       data: {
         code: 'async function main({ params, context }) {\n  const upstream = context["上游节点ID"] || {}\n  return { value: upstream.value, input: params.input }\n}',
+        outputs: [
+          { key: 'value', type: 'any' },
+          { key: 'input', type: 'any' },
+        ],
       },
     }]
   }
