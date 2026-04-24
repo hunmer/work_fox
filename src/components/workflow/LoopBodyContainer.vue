@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, watch } from 'vue'
 import { normalizeEmbeddedWorkflow } from '@shared/embedded-workflow'
 import { useWorkflowStore } from '@/stores/workflow'
 import EmbeddedWorkflowEditor from './EmbeddedWorkflowEditor.vue'
@@ -11,13 +11,19 @@ const props = defineProps<{
 }>()
 
 const store = useWorkflowStore()
+const embeddedWorkflow = ref(normalizeEmbeddedWorkflow(props.bodyWorkflow, () => crypto.randomUUID()))
 
-const embeddedWorkflow = computed(() =>
-  normalizeEmbeddedWorkflow(props.bodyWorkflow, () => crypto.randomUUID()),
+watch(
+  () => props.bodyWorkflow,
+  (value) => {
+    embeddedWorkflow.value = normalizeEmbeddedWorkflow(value, () => crypto.randomUUID())
+  },
+  { deep: true },
 )
 
 function handleUpdateBodyWorkflow(value: ReturnType<typeof normalizeEmbeddedWorkflow>) {
   if (!props.nodeId) return
+  embeddedWorkflow.value = value
   store.updateEmbeddedWorkflow(props.nodeId, value, {
     pushUndo: false,
   })
@@ -34,15 +40,7 @@ function handleUpdateBodyWorkflow(value: ReturnType<typeof normalizeEmbeddedWork
       <span v-if="props.outputLabel" class="loop-body-output">输出: {{ props.outputLabel }}</span>
     </div>
 
-    <div
-      class="loop-body-canvas nodrag"
-      @click.stop
-      @mousedown.stop
-      @pointerdown.stop
-      @wheel.stop
-      @dragover.stop
-      @drop.stop
-    >
+    <div class="loop-body-canvas" @click.stop @dragover.stop @drop.stop>
       <EmbeddedWorkflowEditor
         :flow-id="`loop-body-${props.nodeId || 'unknown'}`"
         :model-value="embeddedWorkflow"

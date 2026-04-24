@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, markRaw, ref } from 'vue'
+import { markRaw, ref, watch } from 'vue'
 import { VueFlow, useVueFlow, MarkerType, ConnectionMode } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
-import type { EmbeddedWorkflow, WorkflowNode } from '@/lib/workflow/types'
+import type { EmbeddedWorkflow, WorkflowEdge, WorkflowNode } from '@/lib/workflow/types'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { WORKFLOW_NODE_DRAG_MIME } from './dragDrop'
 import EmbeddedWorkflowNode from './EmbeddedWorkflowNode.vue'
@@ -21,12 +21,43 @@ const emit = defineEmits<{
 const nodeTypes = { embedded: markRaw(EmbeddedWorkflowNode) }
 const edgeTypes = { embedded: markRaw(EmbeddedWorkflowEdge) }
 
-const { project } = useVueFlow(props.flowId)
+const { project } = useVueFlow({ id: props.flowId })
 const nodeSelectOpen = ref(false)
 const pendingInsert = ref<{ sourceId: string; targetId?: string; position?: { x: number; y: number } } | null>(null)
+const flowNodes = ref<Array<Record<string, any>>>([])
+const flowEdges = ref<Array<Record<string, any>>>([])
 
 function cloneWorkflow(): EmbeddedWorkflow {
   return JSON.parse(JSON.stringify(props.modelValue)) as EmbeddedWorkflow
+}
+
+function mapWorkflowNode(node: WorkflowNode) {
+  return {
+    id: node.id,
+    type: 'embedded',
+    position: node.position,
+    data: {
+      ...node.data,
+      label: node.label,
+      nodeType: node.type,
+    },
+    draggable: true,
+    dragHandle: '.embedded-node-body',
+    selectable: true,
+    connectable: true,
+  }
+}
+
+function mapWorkflowEdge(edge: WorkflowEdge) {
+  return {
+    id: edge.id,
+    type: 'embedded',
+    source: edge.source,
+    target: edge.target,
+    sourceHandle: edge.sourceHandle,
+    targetHandle: edge.targetHandle,
+    markerEnd: MarkerType.ArrowClosed,
+  }
 }
 
 function createNodeData(type: string): Record<string, any> {
@@ -54,36 +85,22 @@ function createEmbeddedNode(type: string, position: { x: number; y: number }): W
   }
 }
 
-const nodes = computed(() =>
-  props.modelValue.nodes.map((node) => ({
-    id: node.id,
-    type: 'embedded',
-    position: node.position,
-    data: {
-      ...node.data,
-      label: node.label,
-      nodeType: node.type,
-    },
-    draggable: true,
-    dragHandle: '.embedded-node-body',
-    selectable: true,
-  })),
-)
-
-const edges = computed(() =>
-  props.modelValue.edges.map((edge) => ({
-    id: edge.id,
-    type: 'embedded',
-    source: edge.source,
-    target: edge.target,
-    sourceHandle: edge.sourceHandle,
-    targetHandle: edge.targetHandle,
-    markerEnd: MarkerType.ArrowClosed,
-  })),
+watch(
+  () => props.modelValue,
+  (workflow) => {
+    flowNodes.value = workflow.nodes.map(mapWorkflowNode)
+    flowEdges.value = workflow.edges.map(mapWorkflowEdge)
+  },
+  { immediate: true, deep: true },
 )
 
 function emitWorkflow(nextWorkflow: EmbeddedWorkflow) {
   emit('update:modelValue', nextWorkflow)
+}
+
+function syncLocalState(nextWorkflow: EmbeddedWorkflow) {
+  flowNodes.value = nextWorkflow.nodes.map(mapWorkflowNode)
+  flowEdges.value = nextWorkflow.edges.map(mapWorkflowEdge)
 }
 
 function addNodeAt(type: string, position: { x: number; y: number }): WorkflowNode | null {
@@ -91,6 +108,7 @@ function addNodeAt(type: string, position: { x: number; y: number }): WorkflowNo
   if (!node) return null
   const nextWorkflow = cloneWorkflow()
   nextWorkflow.nodes.push(node)
+  syncLocalState(nextWorkflow)
   emitWorkflow(nextWorkflow)
   return node
 }
@@ -112,6 +130,7 @@ function onConnect(params: { source?: string | null; target?: string | null; sou
     sourceHandle: params.sourceHandle ?? null,
     targetHandle: params.targetHandle ?? null,
   })
+  syncLocalState(nextWorkflow)
   emitWorkflow(nextWorkflow)
 }
 
@@ -141,7 +160,10 @@ function onNodesChange(changes: Array<any>) {
     }
   }
 
-  if (nextWorkflow) emitWorkflow(nextWorkflow)
+  if (nextWorkflow) {
+    syncLocalState(nextWorkflow)
+    emitWorkflow(nextWorkflow)
+  }
 }
 
 function onEdgesChange(changes: Array<any>) {
@@ -151,7 +173,10 @@ function onEdgesChange(changes: Array<any>) {
     if (!nextWorkflow) nextWorkflow = cloneWorkflow()
     nextWorkflow.edges = nextWorkflow.edges.filter((edge) => edge.id !== change.id)
   }
-  if (nextWorkflow) emitWorkflow(nextWorkflow)
+  if (nextWorkflow) {
+    syncLocalState(nextWorkflow)
+    emitWorkflow(nextWorkflow)
+  }
 }
 
 function onDragOver(event: DragEvent) {
@@ -224,6 +249,7 @@ function handleSelectNodeType(type: string) {
     )
   }
 
+  syncLocalState(nextWorkflow)
   emitWorkflow(nextWorkflow)
 }
 
@@ -239,8 +265,8 @@ function handleSelectDialogOpenChange(open: boolean) {
   <div class="h-full w-full" data-embedded-workflow="true" @dragover="onDragOver" @drop="onDrop">
     <VueFlow
       :id="flowId"
-      :nodes="nodes"
-      :edges="edges"
+      :nodes="flowNodes"
+      :edges="flowEdges"
       :node-types="nodeTypes"
       :edge-types="edgeTypes"
       :min-zoom="0.4"
@@ -250,7 +276,8 @@ function handleSelectDialogOpenChange(open: boolean) {
       class="h-full w-full"
       :nodes-draggable="true"
       :nodes-connectable="true"
-      :pan-on-drag="[0, 1]"
+      :pan-on-drag="true"
+      :select-nodes-on-drag="false"
       :elements-selectable="true"
       @connect="onConnect"
       @nodes-change="onNodesChange"

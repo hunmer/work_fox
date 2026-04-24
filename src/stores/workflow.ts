@@ -427,16 +427,16 @@ function createEditActions(
     let current: WorkflowNode | undefined = node
     while (current) {
       const parentId = getCompositeParentId(current)
-      if (!parentId) return current
+      if (!parentId) return null
       const parent = getNode(parentId)
-      if (!parent) return current
+      if (!parent) return null
       if (isScopeBoundaryWorkflowNode(parent)) {
         return parent
       }
       current = parent
     }
 
-    return node
+    return null
   }
 
   function getScopeOwnerId(nodeId: string): string | null {

@@ -5,6 +5,7 @@ import {
   isHiddenWorkflowNode,
   isScopeBoundaryWorkflowNode,
   getCompositeParentId,
+  LOOP_BODY_NODE_TYPE,
 } from '@shared/workflow-composite'
 
 const CONTAINER_PADDING = {
@@ -178,6 +179,7 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
         extent: isChild ? 'parent' : undefined,
         expandParent: false,
         draggable: true,
+        dragHandle: n.type === LOOP_BODY_NODE_TYPE ? '.loop-body-header' : undefined,
         width,
         height,
         style: width || height ? {

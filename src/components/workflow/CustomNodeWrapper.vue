@@ -157,11 +157,15 @@ function refreshNodeInternals(reason: string) {
 }
 
 function handleCustomViewMouseDown(event: MouseEvent) {
-  event.stopPropagation()
+  if (!isLoopBodyContainer.value) {
+    event.stopPropagation()
+  }
 }
 
 function handleCustomViewPointerDown(event: PointerEvent) {
-  event.stopPropagation()
+  if (!isLoopBodyContainer.value) {
+    event.stopPropagation()
+  }
 }
 
 const displayLabel = computed(() => props.data?.label || definition.value?.label || props.type)
@@ -421,7 +425,7 @@ async function copyNodeInfo() {
         <div
           v-if="hasCustomView"
           class="px-2 pb-2 custom-view-area flex-1 min-h-0 overflow-hidden"
-          :class="isLoopBodyContainer ? 'nodrag' : 'nodrag nopan'"
+          :class="isLoopBodyContainer ? '' : 'nodrag nopan'"
           @click.stop
           @mousedown="handleCustomViewMouseDown"
           @pointerdown="handleCustomViewPointerDown"
