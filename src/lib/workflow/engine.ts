@@ -347,6 +347,8 @@ export class WorkflowEngine {
     }
 
     const resolvedData = this.resolveContextVariables(node.data)
+    if (!this.context.__inputs__) this.context.__inputs__ = {}
+    this.context.__inputs__[node.id] = this.buildOutputObject(resolvedData.inputFields) ?? {}
     const step: ExecutionStep = {
       nodeId: node.id,
       nodeLabel: node.label,
@@ -515,7 +517,8 @@ export class WorkflowEngine {
       }
     }
 
-    return { items }
+    const output = this.buildOutputObject(resolvedData.outputs) ?? {}
+    return { ...output, items }
   }
 
   private resolveLoopIterations(loopType: string, resolvedData: Record<string, any>): { count: number; items: unknown[] } {
@@ -761,6 +764,16 @@ export class WorkflowEngine {
       return ''
     }
 
+    const inputMatch = value.match(/^\s*\{\{\s*__inputs__\["([^"]+)"\]\.([^}]+?)\s*\}\}\s*$/)
+    if (inputMatch) {
+      const inputData = this.context.__inputs__?.[inputMatch[1]]
+      if (inputData != null) {
+        const result = this.getNestedValue(inputData, inputMatch[2])
+        if (result !== undefined) return result
+      }
+      return ''
+    }
+
     // Pure __config__ variable → preserve original type
     const configMatch = value.match(/^\s*\{\{\s*__config__\["([^"]+)"\]\["([^"]+)"\](?:\.(\w+(?:\.\w+)*))?\s*\}\}\s*$/)
     if (configMatch) {
@@ -798,6 +811,14 @@ export class WorkflowEngine {
         const data = this.getNodeExecutionData(nodeId)
         if (data == null) return ''
         return String(this.getNestedValue(data, fieldPath) ?? '')
+      },
+    )
+    str = str.replace(
+      /\{\{\s*__inputs__\["([^"]+)"\]\.([^}]+?)\s*\}\}/g,
+      (_, nodeId, fieldPath) => {
+        const inputData = this.context.__inputs__?.[nodeId]
+        if (inputData == null) return ''
+        return String(this.getNestedValue(inputData, fieldPath) ?? '')
       },
     )
     str = str.replace(

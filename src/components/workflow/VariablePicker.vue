@@ -162,9 +162,18 @@ function getNodeOutputs(node: { data: Record<string, any> }): OutputField[] {
   return node.data?.outputs ?? []
 }
 
+/** 获取节点的输入字段 */
+function getNodeInputFields(node: { data: Record<string, any> }): OutputField[] {
+  return node.data?.inputFields ?? []
+}
+
 /** 生成变量引用字符串 */
 function buildVariablePath(nodeId: string, fieldPath: string): string {
   return `{{ __data__["${nodeId}"].${fieldPath} }}`
+}
+
+function buildInputFieldPath(nodeId: string, fieldPath: string): string {
+  return `{{ __inputs__["${nodeId}"].${fieldPath} }}`
 }
 
 function buildLoopVariablePath(fieldPath: string): string {
@@ -174,6 +183,10 @@ function buildLoopVariablePath(fieldPath: string): string {
 /** 点击字段 */
 function handleSelectField(nodeId: string, fieldPath: string) {
   emit('select', buildVariablePath(nodeId, fieldPath))
+}
+
+function handleSelectInputField(nodeId: string, fieldPath: string) {
+  emit('select', buildInputFieldPath(nodeId, fieldPath))
 }
 
 function handleSelectLoopVariable(fieldPath: string) {
@@ -233,6 +246,44 @@ function handleSelectLoopField(_nodeId: string, fieldPath: string) {
                 </template>
                 <div v-else class="px-2 py-1.5 text-xs text-muted-foreground">
                   无输出字段
+                </div>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </template>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+
+      <!-- 输入字段 sub-menu -->
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger class="text-xs font-medium">
+          <span>输入字段</span>
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent class="w-56">
+          <template v-if="otherNodes.length === 0">
+            <div class="px-2 py-1.5 text-xs text-muted-foreground">
+              画布上没有其他节点
+            </div>
+          </template>
+          <template v-for="node in otherNodes" :key="node.id">
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger class="text-xs">
+                <component
+                  :is="getNodeIcon(node.type)"
+                  v-if="getNodeIcon(node.type)"
+                  class="w-3.5 h-3.5 mr-1.5 shrink-0 text-muted-foreground"
+                />
+                <span class="truncate">{{ getNodeLabel(node) }}</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent class="min-w-[180px]">
+                <template v-if="getNodeInputFields(node).length > 0">
+                  <VariableFieldMenu
+                    :fields="getNodeInputFields(node)"
+                    :node-id="node.id"
+                    @select="handleSelectInputField"
+                  />
+                </template>
+                <div v-else class="px-2 py-1.5 text-xs text-muted-foreground">
+                  无输入字段
                 </div>
               </DropdownMenuSubContent>
             </DropdownMenuSub>

@@ -110,6 +110,7 @@ function buildToolNodeDefinitions(): NodeTypeDefinition[] {
   return LOCAL_BRIDGE_WORKFLOW_NODES.map((tool) => {
     const schema = toolSchemas[tool.type] || { properties: {} }
     return {
+      allowInputFields: true,
       ...tool,
       icon: getToolIcon(tool.type),
       properties: tool.properties?.length
@@ -142,7 +143,7 @@ export const NO_VALUE_OPERATORS = new Set(['is_empty', 'is_not_empty'])
 /** 所有节点定义（合并） */
 export const allNodeDefinitions: NodeTypeDefinition[] = [
   ...buildToolNodeDefinitions(),
-  ...customNodeDefinitions,
+  ...customNodeDefinitions.map((def) => ({ allowInputFields: true, ...def })),
 ]
 
 /** 插件注册的额外节点定义 */

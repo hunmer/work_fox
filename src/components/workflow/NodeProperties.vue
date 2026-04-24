@@ -56,6 +56,7 @@ const IconComponent = computed(() => {
 const isDebugging = computed(() => store.debugNodeStatus === 'running')
 const canDebugSelectedNode = computed(() => store.selectedNode?.type !== LOOP_BODY_NODE_TYPE)
 const outputExpanded = ref(true)
+const inputsExpanded = ref(true)
 const outputsExpanded = ref(true)
 
 /** 追踪哪些字段处于"文本/变量模式" */
@@ -155,6 +156,22 @@ const nodeOutputs = computed<OutputField[]>({
     }
   },
 })
+
+/** 获取/设置节点输入字段（与 properties 配置互不冲突） */
+const nodeInputFields = computed<OutputField[]>({
+  get: () => store.selectedNode?.data?.inputFields ?? [],
+  set: (val) => {
+    if (store.selectedEmbeddedNode) {
+      setFieldValue('inputFields', val)
+      return
+    }
+    if (store.selectedNodeId) {
+      store.updateNodeData(store.selectedNodeId, { inputFields: val })
+    }
+  },
+})
+
+const allowInputFields = computed(() => !!definition.value?.allowInputFields)
 
 async function handleDebug() {
   const nodeId = store.effectiveSelectedNodeId
@@ -582,6 +599,34 @@ function confirmImport() {
           <ConditionEditor v-if="definition.type === 'switch'" />
         </div>
       </ScrollArea>
+
+      <!-- 输入字段编辑区（可选，按节点定义开启） -->
+      <div
+        v-if="allowInputFields"
+        class="border-t border-border shrink-0"
+      >
+        <div class="flex items-center gap-1.5 px-3 py-2">
+          <button
+            class="flex items-center gap-1.5 text-left flex-1"
+            @click="inputsExpanded = !inputsExpanded"
+          >
+            <component
+              :is="inputsExpanded ? ChevronDown : ChevronRight"
+              class="w-3 h-3 text-muted-foreground shrink-0"
+            />
+            <span class="text-xs font-medium">输入字段</span>
+          </button>
+        </div>
+        <div
+          v-if="inputsExpanded"
+          class="px-3 pb-3 max-h-[40vh] overflow-y-auto"
+        >
+          <OutputFieldEditor
+            v-model="nodeInputFields"
+            :exclude-node-id="selectedNodeId"
+          />
+        </div>
+      </div>
 
       <!-- 输出字段编辑区（固定底部） -->
       <div class="border-t border-border shrink-0">

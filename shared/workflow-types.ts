@@ -177,6 +177,7 @@ export interface NodeTypeDefinition {
   description: string
   properties: NodeProperty[]
   handles?: NodeHandleConfig
+  allowInputFields?: boolean
   outputs?: OutputField[]
   customView?: unknown
   customViewMinSize?: { width?: number; height?: number }

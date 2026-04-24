@@ -189,6 +189,7 @@ export interface NodeTypeDefinition {
   description: string
   properties: NodeProperty[]
   handles?: NodeHandleConfig
+  allowInputFields?: boolean
   outputs?: OutputField[]
   /** 自定义节点内容视图组件 */
   customView?: any

@@ -355,6 +355,8 @@ export class BackendWorkflowExecutionManager {
     }
 
     const resolvedData = this.resolveContextVariables(session, node.data)
+    if (!session.context.__inputs__) session.context.__inputs__ = {}
+    session.context.__inputs__[node.id] = this.buildOutputObject(resolvedData.inputFields) ?? {}
     const step: ExecutionStep = {
       nodeId: node.id,
       nodeLabel: node.label,
@@ -654,7 +656,8 @@ export class BackendWorkflowExecutionManager {
     }
 
     appendNodeLog('info', '循环执行完成')
-    return { items }
+    const output = this.buildOutputObject(resolvedData.outputs) ?? {}
+    return { ...output, items }
   }
 
   private resolveLoopIterations(loopType: string, resolvedData: Record<string, any>): { count: number; items: unknown[] } {
@@ -966,6 +969,16 @@ export class BackendWorkflowExecutionManager {
       return ''
     }
 
+    const inputMatch = value.match(/^\s*\{\{\s*__inputs__\["([^"]+)"\]\.([^}]+?)\s*\}\}\s*$/)
+    if (inputMatch) {
+      const inputData = session.context.__inputs__?.[inputMatch[1]]
+      if (inputData != null) {
+        const result = this.getNestedValue(inputData, inputMatch[2])
+        if (result !== undefined) return result
+      }
+      return ''
+    }
+
     const configMatch = value.match(/^\s*\{\{\s*__config__\["([^"]+)"\]\["([^"]+)"\](?:\.(\w+(?:\.\w+)*))?\s*\}\}\s*$/)
     if (configMatch) {
       const pluginConfig = session.context.__config__?.[configMatch[1]]
@@ -1002,6 +1015,15 @@ export class BackendWorkflowExecutionManager {
         const data = this.getNodeExecutionData(session, nodeId)
         if (data == null) return ''
         return String(this.getNestedValue(data, fieldPath) ?? '')
+      },
+    )
+
+    text = text.replace(
+      /\{\{\s*__inputs__\["([^"]+)"\]\.([^}]+?)\s*\}\}/g,
+      (_match, nodeId, fieldPath) => {
+        const inputData = session.context.__inputs__?.[nodeId]
+        if (inputData == null) return ''
+        return String(this.getNestedValue(inputData, fieldPath) ?? '')
       },
     )
 

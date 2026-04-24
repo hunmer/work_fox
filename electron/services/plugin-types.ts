@@ -223,6 +223,7 @@ export interface PluginWorkflowNode {
     sourceHandles?: Array<{ id: string; label?: string }>
     dynamicSource?: { dataKey: string; extraCount?: number }
   }
+  allowInputFields?: boolean
   outputs?: Array<{
     key: string
     type: 'string' | 'number' | 'boolean' | 'object' | 'any'

@@ -9,7 +9,7 @@ import {
   LOOP_ROOT_ROLE,
 } from '../../shared/workflow-composite'
 
-export const builtinNodeDefinitions: PluginWorkflowNode[] = [
+const builtinNodes: PluginWorkflowNode[] = [
   // 流程控制
   {
     type: 'start',
@@ -335,3 +335,8 @@ export const builtinNodeDefinitions: PluginWorkflowNode[] = [
     ],
   },
 ]
+
+export const builtinNodeDefinitions: PluginWorkflowNode[] = builtinNodes.map((node) => ({
+  allowInputFields: true,
+  ...node,
+}))
