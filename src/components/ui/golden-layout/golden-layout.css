@@ -71,21 +71,21 @@
   background: transparent;
   position: absolute !important;
 }
-/* 上下分割线：handle 撑满全宽，上下各扩展 8px 便于抓取 */
+/* 上下分割线：handle 撑满全宽，上下各扩展 4px 便于抓取 */
 .lm_splitter.lm_vertical .lm_drag_handle {
   left: 0 !important;
   right: 0 !important;
-  top: -8px !important;
-  bottom: -8px !important;
+  top: -4px !important;
+  bottom: -4px !important;
   width: auto !important;
   height: auto !important;
 }
-/* 左右分割线：handle 撑满全高，左右各扩展 8px 便于抓取 */
+/* 左右分割线：handle 撑满全高，左右各扩展 4px 便于抓取 */
 .lm_splitter.lm_horizontal .lm_drag_handle {
   top: 0 !important;
   bottom: 0 !important;
-  left: -8px !important;
-  right: -8px !important;
+  left: -4px !important;
+  right: -4px !important;
   width: auto !important;
   height: auto !important;
 }

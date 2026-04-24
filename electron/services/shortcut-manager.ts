@@ -9,7 +9,6 @@ import {
 export type { ShortcutGroup, ShortcutAction, ShortcutBinding } from '../../shared/shortcut-types'
 export { SHORTCUT_GROUPS, SHORTCUT_ACTIONS, getMergedBindings } from '../../shared/shortcut-types'
 
-export { getMergedBindings }
 
 export function getFullBindings(): ShortcutBinding[] {
   return getMergedBindings(getShortcutBindings())

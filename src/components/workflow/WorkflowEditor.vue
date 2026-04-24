@@ -475,7 +475,7 @@ onMounted(() => {
   cleanupFileUpdates = store.listenForFileUpdates()
   cleanupWorkflowToolRequests = store.listenForWorkflowToolRequests()
   cleanupTableConfirm = store.listenForUIInteractions()
-  if (!store.currentWorkflow) {
+  if (!store.currentWorkflow && !props.tab.workflowId) {
     openWorkflowList(route.query.create === '1')
   }
   autoSaveTimer = setInterval(() => {

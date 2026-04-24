@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, type Ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Minus, Square, X, Maximize2, ChevronDown, Plus, Save, LayoutDashboard, SaveAll, RotateCcw, Trash2 } from 'lucide-vue-next'
+import { Minus, Square, X, Maximize2, Plus, Save, LayoutDashboard, SaveAll, RotateCcw, Trash2, Pencil } from 'lucide-vue-next'
 import {
   Menubar,
   MenubarMenu,
@@ -13,12 +13,8 @@ import {
   MenubarSubContent,
   MenubarSeparator,
 } from '@/components/ui/menubar'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { useTabStore } from '@/stores/tab'
 import type { LayoutPreset } from '@/composables/workflow/useEditorLayout'
 
@@ -61,13 +57,36 @@ const emit = defineEmits<{
   'delete-preset': [id: string]
 }>()
 
-const nameInput = ref<HTMLInputElement | null>(null)
 const isMaximized = ref(false)
 const isElectron = navigator.userAgent.includes('Electron')
 
-watch(() => props.isEditingName, (val) => {
-  if (val) nextTick(() => nameInput.value?.focus())
+// 重命名对话框
+const renameDialogOpen = ref(false)
+const renameTabId = ref<string | null>(null)
+const renameInput = ref('')
+const renameInputEl = ref<HTMLInputElement | null>(null)
+
+watch(renameDialogOpen, (val) => {
+  if (val) nextTick(() => renameInputEl.value?.focus())
 })
+
+function openRenameDialog(tabId: string) {
+  const tab = tabStore.tabs.find(t => t.id === tabId)
+  if (!tab) return
+  renameTabId.value = tabId
+  renameInput.value = tab.name || ''
+  renameDialogOpen.value = true
+}
+
+function confirmRename() {
+  if (!renameTabId.value) return
+  const trimmed = renameInput.value.trim()
+  if (trimmed && renameTabId.value === tabStore.activeTabId) {
+    emit('update:editingName', trimmed)
+    emit('finishEditName')
+  }
+  renameDialogOpen.value = false
+}
 
 async function refreshMaximized() {
   isMaximized.value = await window.api.window.isMaximized()
@@ -207,59 +226,41 @@ refreshMaximized()
       </MenubarMenu>
     </Menubar>
 
-    <!-- Tab switcher -->
-    <div v-if="!hideTabSwitcher" class="flex items-center gap-1 ml-2 no-drag">
-      <DropdownMenu>
-        <DropdownMenuTrigger class="flex items-center gap-1 text-xs px-2 py-1 rounded hover:bg-muted transition-colors max-w-40">
-          <span class="truncate">{{ workflowName || '未选择工作流' }}</span>
-          <ChevronDown class="w-3 h-3 shrink-0" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" class="min-w-48">
-          <DropdownMenuItem
-            v-for="tab in tabStore.tabs"
-            :key="tab.id"
-            class="text-xs flex items-center justify-between gap-2"
-            :class="{ 'bg-muted': tab.id === tabStore.activeTabId }"
+    <!-- Tab bar -->
+    <div v-if="!hideTabSwitcher" class="flex items-center gap-0.5 ml-2 no-drag overflow-x-auto scrollbar-none">
+      <ContextMenu v-for="tab in tabStore.tabs" :key="tab.id">
+        <ContextMenuTrigger as-child>
+          <button
+            class="group relative flex items-center gap-1 text-xs px-2 py-1 rounded-t-md transition-colors max-w-32 shrink-0"
+            :class="tab.id === tabStore.activeTabId
+              ? 'bg-muted text-foreground border-b-2 border-primary'
+              : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'"
             @click="tabStore.switchTab(tab.id)"
           >
             <span class="truncate">{{ tab.name || '未选择工作流' }}</span>
-            <button
-              class="shrink-0 p-0.5 rounded hover:bg-destructive/20 hover:text-destructive"
+            <span
+              class="inline-flex items-center justify-center w-4 h-4 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity shrink-0 hover:bg-destructive/20 hover:text-destructive"
               @click.stop="closeTab(tab.id)"
             >
               <X class="w-3 h-3" />
-            </button>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            </span>
+          </button>
+        </ContextMenuTrigger>
+        <ContextMenuContent class="min-w-32">
+          <ContextMenuItem class="text-xs" @click="openRenameDialog(tab.id)">
+            <Pencil class="w-3 h-3 mr-2" />
+            重命名
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
       <button
-        class="inline-flex items-center justify-center w-5 h-5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-        title="新标签页"
-        @click="emit('new')"
+        class="inline-flex items-center justify-center w-5 h-5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"
+        title="打开工作流"
+        @click="emit('open')"
       >
         <Plus class="w-3 h-3" />
       </button>
     </div>
-
-    <template v-if="!hideTabSwitcher">
-    <input
-      v-if="isEditingName"
-      ref="nameInput"
-      :value="editingName"
-      class="ml-3 text-xs bg-transparent border border-border rounded px-1 py-0.5 outline-none focus:border-primary w-40"
-      @input="emit('update:editingName', ($event.target as HTMLInputElement).value)"
-      @blur="emit('finishEditName')"
-      @keydown.enter="emit('finishEditName')"
-      @keydown.escape="emit('cancelEditName')"
-    >
-    <span
-      v-else
-      class="ml-3 text-xs text-muted-foreground truncate cursor-pointer hover:text-foreground"
-      @click="emit('startEditName')"
-    >
-      {{ workflowName || '未选择工作流' }}
-    </span>
-    </template>
 
     <div class="flex-1" />
 
@@ -305,4 +306,35 @@ refreshMaximized()
     </div>
     </div>
   </div>
+
+  <!-- 重命名对话框 -->
+  <Dialog :open="renameDialogOpen" @update:open="renameDialogOpen = $event">
+    <DialogContent class="sm:max-w-sm">
+      <DialogHeader>
+        <DialogTitle>重命名工作流</DialogTitle>
+      </DialogHeader>
+      <input
+        ref="renameInputEl"
+        v-model="renameInput"
+        class="w-full text-sm bg-transparent border border-border rounded-md px-3 py-2 outline-none focus:border-primary"
+        placeholder="输入工作流名称"
+        @keydown.enter="confirmRename"
+        @keydown.escape="renameDialogOpen = false"
+      />
+      <DialogFooter class="gap-2">
+        <button
+          class="text-xs px-3 py-1.5 rounded-md border border-border hover:bg-muted transition-colors"
+          @click="renameDialogOpen = false"
+        >
+          取消
+        </button>
+        <button
+          class="text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          @click="confirmRename"
+        >
+          确定
+        </button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>

@@ -89,16 +89,29 @@ export function useWorkflowFileActions(
 
     // 如果其他 tab 已打开同一工作流，直接切换过去
     const existing = tabStore.tabs.find(t => t.workflowId === workflow.id)
-    if (existing && existing.id !== tabStore.activeTabId) {
-      tabStore.switchTab(existing.id)
+    if (existing) {
+      if (existing.id !== tabStore.activeTabId) {
+        tabStore.switchTab(existing.id)
+      }
+      listDialogOpen.value = false
       return
     }
 
-    await store.loadData()
-    const loaded = store.workflows.find((w) => w.id === workflow.id) || workflow
-    store.currentWorkflow = JSON.parse(JSON.stringify(loaded))
-    store.selectedNodeIds = []
-    tabStore.updateTabWorkflow(tabStore.activeTabId!, loaded.id, loaded.name)
+    // 当前 tab 是空白临时 tab，直接复用
+    const activeTab = tabStore.activeTab
+    if (activeTab && !activeTab.workflowId && !activeTab.name) {
+      await store.loadData()
+      const loaded = store.workflows.find((w) => w.id === workflow.id) || workflow
+      store.currentWorkflow = JSON.parse(JSON.stringify(loaded))
+      store.selectedNodeIds = []
+      tabStore.updateTabWorkflow(activeTab.id, loaded.id, loaded.name)
+      listDialogOpen.value = false
+      return
+    }
+
+    // 否则开新 tab
+    tabStore.addTab(workflow.id, workflow.name)
+    listDialogOpen.value = false
   }
 
   return {
