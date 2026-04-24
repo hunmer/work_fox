@@ -85,6 +85,17 @@ const loopParentNode = computed(() => {
 
 const isInLoopBody = computed(() => !!loopParentNode.value && (isGeneratedWorkflowNode(currentNode.value!) || !!store.selectedEmbeddedNode))
 
+const loopBodyNodes = computed(() => {
+  if (!isInLoopBody.value || !store.selectedEmbeddedNode || !store.currentWorkflow) return []
+
+  const hostNode = store.currentWorkflow.nodes.find((node) => node.id === store.selectedEmbeddedNode?.hostNodeId)
+  const bodyNodes = Array.isArray(hostNode?.data?.bodyWorkflow?.nodes)
+    ? hostNode.data.bodyWorkflow.nodes
+    : []
+
+  return bodyNodes.filter((node: any) => node.id !== props.excludeNodeId && node.type !== 'start')
+})
+
 /** 获取画布上除当前节点外的可用节点 */
 const otherNodes = computed(() => {
   if (!store.currentWorkflow) return []
@@ -203,6 +214,39 @@ function handleSelectLoopField(_nodeId: string, fieldPath: string) {
             </div>
           </template>
           <template v-for="node in otherNodes" :key="node.id">
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger class="text-xs">
+                <component
+                  :is="getNodeIcon(node.type)"
+                  v-if="getNodeIcon(node.type)"
+                  class="w-3.5 h-3.5 mr-1.5 shrink-0 text-muted-foreground"
+                />
+                <span class="truncate">{{ getNodeLabel(node) }}</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent class="min-w-[180px]">
+                <template v-if="getNodeOutputs(node).length > 0">
+                  <VariableFieldMenu
+                    :fields="getNodeOutputs(node)"
+                    :node-id="node.id"
+                    @select="handleSelectField"
+                  />
+                </template>
+                <div v-else class="px-2 py-1.5 text-xs text-muted-foreground">
+                  无输出字段
+                </div>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </template>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+
+      <!-- 循环体变量 sub-menu -->
+      <DropdownMenuSub v-if="loopBodyNodes.length > 0">
+        <DropdownMenuSubTrigger class="text-xs font-medium">
+          <span>循环体变量</span>
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent class="w-56">
+          <template v-for="node in loopBodyNodes" :key="node.id">
             <DropdownMenuSub>
               <DropdownMenuSubTrigger class="text-xs">
                 <component
