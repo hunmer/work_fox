@@ -1,6 +1,6 @@
 // src/lib/workflow/engine.ts
 import { toRaw } from 'vue'
-import type { WorkflowNode, WorkflowEdge, ExecutionLog, ExecutionStep, ExecutionLogEntry, ConditionItem } from './types'
+import type { WorkflowNode, WorkflowEdge, ExecutionLog, ExecutionStep, ExecutionLogEntry, ConditionItem, OutputField } from './types'
 import { getNodeDefinition } from './nodeRegistry'
 import { executeAgentRunTask } from './agent-run'
 import { pluginBackendApi } from '../backend-api/plugin'
@@ -417,7 +417,7 @@ export class WorkflowEngine {
       case 'start':
         return null
       case 'end':
-        return null
+        return this.buildOutputObject(resolvedData.outputs)
       case LOOP_BODY_NODE_TYPE:
         return null
       case 'gallery_preview':
@@ -695,6 +695,19 @@ export class WorkflowEngine {
 
   private resolveContextVariables(data: Record<string, any>): Record<string, any> {
     return this.resolveValue(data)
+  }
+
+  private buildOutputObject(outputs: OutputField[] | undefined): Record<string, any> | null {
+    if (!Array.isArray(outputs) || outputs.length === 0) return null
+
+    const result: Record<string, any> = {}
+    for (const field of outputs) {
+      if (!field.key) continue
+      result[field.key] = field.type === 'object'
+        ? this.buildOutputObject(field.children) ?? {}
+        : field.value ?? ''
+    }
+    return result
   }
 
   private resolveValue(value: any): any {

@@ -8,6 +8,7 @@ import type {
   ExecutionLogEntry,
   EngineStatus,
   ConditionItem,
+  OutputField,
 } from '../../shared/workflow-types'
 import type {
   ExecutionBacklogEvent,
@@ -444,9 +445,10 @@ export class BackendWorkflowExecutionManager {
   ): Promise<any> {
     switch (node.type) {
       case 'start':
-      case 'end':
       case LOOP_BODY_NODE_TYPE:
         return null
+      case 'end':
+        return this.buildOutputObject(resolvedData.outputs)
       case 'gallery_preview':
         return { items: Array.isArray(resolvedData.items) ? resolvedData.items : [] }
       case 'music_player':
@@ -908,6 +910,19 @@ export class BackendWorkflowExecutionManager {
 
   private resolveContextVariables(session: ExecutionSession, data: Record<string, any>): Record<string, any> {
     return this.resolveValue(session, data)
+  }
+
+  private buildOutputObject(outputs: OutputField[] | undefined): Record<string, any> | null {
+    if (!Array.isArray(outputs) || outputs.length === 0) return null
+
+    const result: Record<string, any> = {}
+    for (const field of outputs) {
+      if (!field.key) continue
+      result[field.key] = field.type === 'object'
+        ? this.buildOutputObject(field.children) ?? {}
+        : field.value ?? ''
+    }
+    return result
   }
 
   private resolveValue(session: ExecutionSession, value: any): any {

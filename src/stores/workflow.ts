@@ -994,9 +994,9 @@ function createDebugActions(
   const debugNodeId = ref<string | null>(null)
   let debugEngine: WorkflowEngine | null = null
 
-  async function debugSingleNode(nodeId: string): Promise<void> {
+  async function debugSingleNode(nodeId: string, embeddedNode?: WorkflowNode): Promise<void> {
     if (!currentWorkflow.value) return
-    const node = currentWorkflow.value.nodes.find((n) => n.id === nodeId)
+    const node = embeddedNode ?? currentWorkflow.value.nodes.find((n) => n.id === nodeId)
     if (!node) return
 
     debugNodeStatus.value = 'running'

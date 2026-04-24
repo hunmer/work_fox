@@ -1,19 +1,31 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTabStore } from '@/stores/tab'
+import { workflowBackendApi } from '@/lib/backend-api/workflow'
 import WelcomePage from '@/components/workflow/WelcomePage.vue'
 
 const router = useRouter()
 const tabStore = useTabStore()
 
-const recentWorkflows = computed(() => {
-  const store = tabStore.activeStore
-  if (!store) return []
-  return [...store.workflows]
-    .sort((a, b) => b.updatedAt - a.updatedAt)
-    .slice(0, 10)
-    .map(wf => ({ id: wf.id, name: wf.name, updatedAt: wf.updatedAt }))
+interface RecentWorkflow {
+  id: string
+  name: string
+  updatedAt: number
+}
+
+const recentWorkflows = ref<RecentWorkflow[]>([])
+
+onMounted(async () => {
+  try {
+    const workflows = await workflowBackendApi.list()
+    recentWorkflows.value = [...workflows]
+      .sort((a: any, b: any) => b.updatedAt - a.updatedAt)
+      .slice(0, 10)
+      .map((wf: any) => ({ id: wf.id, name: wf.name, updatedAt: wf.updatedAt }))
+  } catch {
+    recentWorkflows.value = []
+  }
 })
 
 function handleNew() {

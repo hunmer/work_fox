@@ -155,13 +155,21 @@ const nodeOutputs = computed<OutputField[]>({
 })
 
 async function handleDebug() {
-  if (!store.selectedNodeId) return
+  const nodeId = store.effectiveSelectedNodeId
+  if (!nodeId) return
   if (isDebugging.value) {
     store.cancelDebug()
     return
   }
   outputExpanded.value = true
-  await store.debugSingleNode(store.selectedNodeId)
+
+  // embedded node：直接传入节点对象
+  if (store.selectedEmbeddedNode) {
+    await store.debugSingleNode(nodeId, store.selectedEmbeddedNode.node)
+    return
+  }
+
+  await store.debugSingleNode(nodeId)
 }
 
 /** 将任意值推断为 OutputField 类型 */
@@ -248,7 +256,7 @@ function confirmImport() {
       </div>
 
       <!-- 调试按钮 -->
-      <div v-if="!store.selectedEmbeddedNode" class="px-3 py-2 border-b border-border">
+      <div class="px-3 py-2 border-b border-border">
         <Button
           size="sm"
           :variant="isDebugging ? 'destructive' : 'outline'"
@@ -269,7 +277,7 @@ function confirmImport() {
 
       <!-- 调试输出 -->
       <div
-        v-if="store.debugNodeResult && store.selectedNodeId === store.debugNodeId"
+        v-if="store.debugNodeResult && selectedNodeId === store.debugNodeId"
         class="px-3 py-2 border-b border-border"
       >
         <!-- 状态 + 折叠 -->
