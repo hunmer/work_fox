@@ -17,6 +17,7 @@ import { JsonEditor } from '@/components/ui/json-editor'
 import OutputFieldEditor from './OutputFieldEditor.vue'
 import ConditionEditor from './ConditionEditor.vue'
 import VariablePicker from './VariablePicker.vue'
+import { LOOP_BODY_NODE_TYPE } from '@shared/workflow-composite'
 import {
   Dialog,
   DialogContent,
@@ -53,6 +54,7 @@ const IconComponent = computed(() => {
 })
 
 const isDebugging = computed(() => store.debugNodeStatus === 'running')
+const canDebugSelectedNode = computed(() => store.selectedNode?.type !== LOOP_BODY_NODE_TYPE)
 const outputExpanded = ref(true)
 const outputsExpanded = ref(true)
 
@@ -256,7 +258,7 @@ function confirmImport() {
       </div>
 
       <!-- 调试按钮 -->
-      <div class="px-3 py-2 border-b border-border">
+      <div v-if="canDebugSelectedNode" class="px-3 py-2 border-b border-border">
         <Button
           size="sm"
           :variant="isDebugging ? 'destructive' : 'outline'"

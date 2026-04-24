@@ -6,12 +6,19 @@ import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
 
 const props = defineProps<NodeProps>()
+const emit = defineEmits<{
+  selectNode: [payload: { id: string; event: MouseEvent }]
+}>()
 
 const definition = computed(() => getNodeDefinition(props.data?.nodeType || props.type))
 const icon = computed(() => resolveLucideIcon(definition.value?.icon || 'Circle'))
 const title = computed(() => props.data?.label || definition.value?.label || props.type)
 const isStart = computed(() => props.data?.nodeType === 'start')
 const isEnd = computed(() => props.data?.nodeType === 'end')
+
+function handleClick(event: MouseEvent) {
+  emit('selectNode', { id: String(props.id), event })
+}
 </script>
 
 <template>
@@ -22,6 +29,7 @@ const isEnd = computed(() => props.data?.nodeType === 'end')
       'embedded-node-end': isEnd,
       'ring-2 ring-primary': selected,
     }"
+    @click.stop="handleClick"
   >
     <Handle
       v-if="!isStart"

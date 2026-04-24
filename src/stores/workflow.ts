@@ -24,6 +24,7 @@ import {
   isLockedWorkflowEdge,
   isScopeBoundaryWorkflowNode,
   LOOP_BODY_ROLE,
+  LOOP_NODE_TYPE,
   LOOP_BODY_SOURCE_HANDLE,
 } from '@shared/workflow-composite'
 
@@ -1003,7 +1004,10 @@ function createDebugActions(
     debugNodeResult.value = null
     debugNodeId.value = nodeId
 
-    debugEngine = new WorkflowEngine([node], [], undefined, {
+    const debugNodes = node.type === LOOP_NODE_TYPE ? currentWorkflow.value.nodes : [node]
+    const debugEdges = node.type === LOOP_NODE_TYPE ? currentWorkflow.value.edges : []
+
+    debugEngine = new WorkflowEngine(debugNodes, debugEdges, undefined, {
       workflowId: currentWorkflow.value.id,
       workflowName: currentWorkflow.value.name,
       workflowDescription: currentWorkflow.value.description,

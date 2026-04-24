@@ -420,6 +420,10 @@ function onNodeClick({ node, event }: any) {
   selectEmbeddedNode(String(nodeId), !!event?.shiftKey || !!event?.metaKey)
 }
 
+function onEmbeddedNodeSelect(payload: { id: string; event: MouseEvent }) {
+  selectEmbeddedNode(payload.id, payload.event.shiftKey || payload.event.metaKey)
+}
+
 function onPaneClick() {
   clearEmbeddedSelection()
 }
@@ -590,6 +594,13 @@ function handleSelectDialogOpenChange(open: boolean) {
       @edges-change="onEdgesChange"
     >
       <Background :gap="20" :size="1" pattern-color="rgba(148, 163, 184, 0.18)" />
+
+      <template #node-embedded="nodeProps">
+        <EmbeddedWorkflowNode
+          v-bind="nodeProps"
+          @select-node="onEmbeddedNodeSelect"
+        />
+      </template>
 
       <template #edge-embedded="edgeProps">
         <EmbeddedWorkflowEdge

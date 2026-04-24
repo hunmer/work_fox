@@ -28,10 +28,17 @@ function handleUpdateBodyWorkflow(value: ReturnType<typeof normalizeEmbeddedWork
     pushUndo: false,
   })
 }
+
+function selectLoopBodyNode() {
+  if (!props.nodeId) return
+  store.selectedNodeIds = [props.nodeId]
+  store.selectedEmbeddedNode = null
+  store.rightPanelTab = 'properties'
+}
 </script>
 
 <template>
-  <div class="loop-body-shell">
+  <div class="loop-body-shell" @click="selectLoopBodyNode">
     <div class="loop-body-header">
       <div class="flex flex-col gap-0.5">
         <span class="loop-body-title">循环体</span>
