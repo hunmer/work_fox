@@ -561,7 +561,7 @@ function onConnect(params: any) {
       <div class="w-[50px] border-l border-border bg-muted/30 flex flex-col items-center pt-2">
         <button
           class="inline-flex items-center justify-center w-8 h-8 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-          title="WS Monitor (Ctrl+Shift+M)"
+          title="WS Monitor"
           @click="toggleWsMonitor"
         >
           <Activity class="w-4 h-4" />

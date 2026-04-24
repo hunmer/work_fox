@@ -205,6 +205,7 @@ import { wsBridge, type WsMessageEntry } from '@/lib/ws-bridge'
 // --- Persistence ---
 
 const STORAGE_KEY = 'workfox.wsMonitor'
+const DEFAULT_MONITOR_Z_INDEX = 10001
 
 interface PanelState {
   visible: boolean
@@ -226,11 +227,11 @@ function loadState(): PanelState {
         y: parsed.y ?? 50,
         width: parsed.width ?? 820,
         height: parsed.height ?? 460,
-        zIndex: parsed.zIndex ?? 1,
+        zIndex: Math.max(parsed.zIndex ?? DEFAULT_MONITOR_Z_INDEX, DEFAULT_MONITOR_Z_INDEX),
       }
     }
   } catch { /* ignore */ }
-  return { visible: false, x: 50, y: 50, width: 820, height: 460, zIndex: 1 }
+  return { visible: false, x: 50, y: 50, width: 820, height: 460, zIndex: DEFAULT_MONITOR_Z_INDEX }
 }
 
 const state = reactive<PanelState>(loadState())
@@ -313,21 +314,13 @@ onMounted(() => {
     }
   })
 
-  window.addEventListener('keydown', toggleShortcut)
-  window.addEventListener('toggle-ws-monitor', toggleShortcut)
+  window.addEventListener('toggle-ws-monitor', () => updateState('visible', !state.visible))
 })
 
 onBeforeUnmount(() => {
   unsubscribe?.()
-  window.removeEventListener('keydown', toggleShortcut)
-  window.removeEventListener('toggle-ws-monitor', toggleShortcut)
+  window.removeEventListener('toggle-ws-monitor', () => updateState('visible', !state.visible))
 })
-
-function toggleShortcut(e: KeyboardEvent): void {
-  if (e.ctrlKey && e.shiftKey && e.key === 'M') {
-    updateState('visible', !state.visible)
-  }
-}
 
 function clearMessages(): void {
   messages.value = []
