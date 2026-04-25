@@ -1220,6 +1220,18 @@ function createGroupActions(
     group.name = name
   }
 
+  function updateGroupSize(groupId: string, size: { width?: number; height?: number }): void {
+    const group = getGroupById(groupId)
+    if (!group) return
+
+    if (typeof size.width === 'number' && Number.isFinite(size.width)) {
+      group.width = size.width
+    }
+    if (typeof size.height === 'number' && Number.isFinite(size.height)) {
+      group.height = size.height
+    }
+  }
+
   // ── 状态切换 ──
 
   function toggleGroupLock(groupId: string): void {
@@ -1380,6 +1392,7 @@ function createGroupActions(
     addNodesToGroup,
     removeNodesFromGroup,
     renameGroup,
+    updateGroupSize,
     toggleGroupLock,
     toggleGroupDisabled,
     arrangeGroupNodes,

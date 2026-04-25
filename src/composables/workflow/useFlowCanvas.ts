@@ -142,11 +142,14 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     const maxX = Math.max(...allBoxes.map(b => b.x + b.width))
     const maxY = Math.max(...allBoxes.map(b => b.y + b.height))
 
+    const autoWidth = Math.max(100, maxX - minX + GROUP_PADDING * 2)
+    const autoHeight = Math.max(60, maxY - minY + GROUP_HEADER_HEIGHT + GROUP_PADDING * 2)
+
     return {
       x: minX - GROUP_PADDING,
       y: minY - GROUP_HEADER_HEIGHT - GROUP_PADDING,
-      width: Math.max(100, maxX - minX + GROUP_PADDING * 2),
-      height: Math.max(60, maxY - minY + GROUP_HEADER_HEIGHT + GROUP_PADDING * 2),
+      width: Math.max(autoWidth, group.width ?? 0),
+      height: Math.max(autoHeight, group.height ?? 0),
     }
   }
 
@@ -223,7 +226,12 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
         if (groupId) syncGroupBoundingBox(groupId)
       } else if (change.type === 'dimensions') {
         if (change.dimensions) {
-          updateNodeSize(change.id, change.dimensions, change.resizing)
+          const group = store.currentWorkflow?.groups?.find(g => g.id === change.id)
+          if (group) {
+            store.updateGroupSize(change.id, change.dimensions)
+          } else {
+            updateNodeSize(change.id, change.dimensions, change.resizing)
+          }
           const resizedNode = store.currentWorkflow?.nodes.find((node) => node.id === change.id)
           const parentId = resizedNode ? getCompositeParentId(resizedNode) : null
           if (parentId) syncScopeBoundaryLayout(parentId)
@@ -335,7 +343,6 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
         style: {
           width: `${bb.width}px`,
           height: `${bb.height}px`,
-          zIndex: -1,
         },
         data: {
           name: group.name,
@@ -343,6 +350,8 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
           childGroupIds: group.childGroupIds,
           locked: group.locked,
           disabled: group.disabled,
+          width: bb.width,
+          height: bb.height,
         }
       }
     })

@@ -21,6 +21,8 @@ const props = defineProps<{
     childGroupIds: string[]
     locked: boolean
     disabled: boolean
+    width?: number
+    height?: number
   }
 }>()
 
@@ -62,6 +64,10 @@ const headerLabel = computed(() => {
           'group-node--locked': data.locked,
           'group-node--disabled': data.disabled,
         }"
+        :style="{
+          width: data.width ? `${data.width}px` : '100%',
+          height: data.height ? `${data.height}px` : '100%',
+        }"
       >
         <!-- 标题栏 -->
         <div class="group-node__header" @dblclick.stop="startEdit">
@@ -88,6 +94,7 @@ const headerLabel = computed(() => {
 
         <!-- NodeResizer -->
         <NodeResizer
+          :is-visible="!data.locked"
           :is-resizable="!data.locked"
           :min-width="100"
           :min-height="60"
@@ -133,11 +140,13 @@ const headerLabel = computed(() => {
 <style scoped>
 .group-node {
   position: relative;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
   border: 2px dashed var(--vf-node-border, #e2e8f0);
   border-radius: 8px;
   background: transparent;
   pointer-events: auto;
-  z-index: -1;
   min-width: 100px;
   min-height: 60px;
 }
