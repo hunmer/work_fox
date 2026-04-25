@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, unref, watch } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import type { NodeProps } from '@vue-flow/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
@@ -27,6 +27,8 @@ defineEmits<{ (e: 'updateNodeInternals'): void }>()
 const store = useWorkflowStore()
 const { updateNodeInternals } = useVueFlow()
 
+const nodeRootRef = ref<HTMLElement | null>(null)
+const controlBarRect = ref({ left: 0, top: 0, width: 180 })
 const isEditing = ref(false)
 const editLabel = ref('')
 const inputRef = ref<HTMLInputElement | null>(null)
@@ -76,15 +78,25 @@ const nodeLogsSummary = computed(() => {
   return lines.join('\n')
 })
 
+const pausedNodeId = computed(() => unref(store.pausedNodeId))
+const pausedReason = computed(() => unref(store.pausedReason))
+const partialExecutionStartNodeId = computed(() => unref(store.partialExecutionStartNodeId))
+
 const isPausedAtThisNode = computed(() => {
   return store.executionStatus === 'paused'
-    && store.pausedNodeId === String(props.id)
+    && pausedNodeId.value === String(props.id)
     && (
-      store.pausedReason === 'breakpoint-start'
-      || store.pausedReason === 'breakpoint-end'
+      pausedReason.value === 'breakpoint-start'
+      || pausedReason.value === 'breakpoint-end'
       || !!currentBreakpoint.value
     )
 })
+
+const controlBarStyle = computed(() => ({
+  left: `${controlBarRect.value.left}px`,
+  top: `${controlBarRect.value.top}px`,
+  width: `${controlBarRect.value.width}px`,
+}))
 
 /** 节点状态对应的样式 */
 const statusColor = computed(() => {
@@ -174,6 +186,17 @@ function refreshNodeInternals(reason: string) {
   nextTick(() => {
     updateNodeInternals([props.id])
   })
+}
+
+function updateControlBarRect() {
+  if (!isPausedAtThisNode.value) return
+  const rect = nodeRootRef.value?.getBoundingClientRect()
+  if (!rect) return
+  controlBarRect.value = {
+    left: rect.left + 8,
+    top: rect.bottom + 4,
+    width: Math.max(180, rect.width - 16),
+  }
 }
 
 function handleCustomViewMouseDown(event: MouseEvent) {
@@ -319,6 +342,19 @@ function getHandleTop(index: number, total: number): string {
 
 onMounted(() => {
   refreshNodeInternals('mounted')
+  updateControlBarRect()
+  window.addEventListener('scroll', updateControlBarRect, true)
+  window.addEventListener('resize', updateControlBarRect)
+})
+
+watch(isPausedAtThisNode, (paused) => {
+  if (!paused) return
+  nextTick(updateControlBarRect)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', updateControlBarRect, true)
+  window.removeEventListener('resize', updateControlBarRect)
 })
 
 const inputExpanded = ref(true)
@@ -354,8 +390,8 @@ const isCurrentNodeDebugging = computed(() => {
   return store.debugNodeId === props.id && store.debugNodeStatus === 'running'
 })
 const isPartialTesting = computed(() => {
-  return store.executionStatus === 'running'
-    && store.executionLog?.snapshot?.nodes[0]?.id === String(props.id)
+  return (store.executionStatus === 'running' || store.executionStatus === 'paused')
+    && partialExecutionStartNodeId.value === String(props.id)
 })
 
 /** 测试当前节点 */
@@ -390,6 +426,7 @@ async function handleStopAtBreakpoint() {
   />
 
   <div
+    ref="nodeRootRef"
     class="group/node border-2 rounded-lg shadow-sm w-full h-full cursor-pointer transition-colors relative flex flex-col"
     :class="[statusColor, stateBackground, props.selected ? 'ring-2 ring-primary' : '', { 'loop-body-node': isLoopBodyContainer }]"
   >
@@ -514,27 +551,6 @@ async function handleStopAtBreakpoint() {
           </div>
         </div>
 
-        <div
-          v-if="isPausedAtThisNode"
-          class="nodrag nopan mx-2 mb-2 flex items-center gap-1 rounded border border-blue-500/30 bg-blue-500/10 p-1"
-          @click.stop
-        >
-          <button
-            class="inline-flex h-6 flex-1 items-center justify-center gap-1 rounded bg-blue-500 px-2 text-[10px] font-medium text-white hover:bg-blue-600"
-            @click.stop="handleResumeFromBreakpoint"
-          >
-            <Play class="w-3 h-3" />
-            继续运行
-          </button>
-          <button
-            class="inline-flex h-6 flex-1 items-center justify-center gap-1 rounded bg-destructive px-2 text-[10px] font-medium text-destructive-foreground hover:bg-destructive/90"
-            @click.stop="handleStopAtBreakpoint"
-          >
-            <Square class="w-3 h-3" />
-            中断
-          </button>
-        </div>
-
         <!-- 自定义视图内容区 -->
         <div
           v-if="hasCustomView"
@@ -654,6 +670,30 @@ async function handleStopAtBreakpoint() {
           </div>
         </template>
   </div>
+
+  <Teleport to="body">
+    <div
+      v-if="isPausedAtThisNode"
+      class="nodrag nopan fixed flex items-center gap-1 rounded border border-blue-500/40 bg-background/95 p-1 shadow-lg z-[1000]"
+      :style="controlBarStyle"
+      @click.stop
+    >
+      <button
+        class="inline-flex h-6 flex-1 items-center justify-center gap-1 rounded bg-blue-500 px-2 text-[10px] font-medium text-white hover:bg-blue-600"
+        @click.stop="handleResumeFromBreakpoint"
+      >
+        <Play class="w-3 h-3" />
+        继续运行
+      </button>
+      <button
+        class="inline-flex h-6 flex-1 items-center justify-center gap-1 rounded bg-destructive px-2 text-[10px] font-medium text-destructive-foreground hover:bg-destructive/90"
+        @click.stop="handleStopAtBreakpoint"
+      >
+        <Square class="w-3 h-3" />
+        中断
+      </button>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>

@@ -85,13 +85,13 @@ function buildPartialWorkflowSnapshot(
   const partialEdges = workflow.edges.filter((edge) =>
     reachableIds.has(edge.source) && reachableIds.has(edge.target),
   )
+  const orderedNodes = [
+    firstNode,
+    ...partialNodes.filter((node) => node.id !== firstNodeId),
+  ]
 
   return {
-    nodes: partialNodes.map((node) =>
-      node.id === firstNodeId
-        ? { ...node, type: 'start', label: node.label || 'Partial test start' }
-        : node,
-    ),
+    nodes: orderedNodes,
     edges: partialEdges,
   }
 }
@@ -853,6 +853,7 @@ function createExecutionActions(
 ) {
   let currentExecutionId: string | null = null
   let startingExecution = false
+  const partialExecutionStartNodeId = ref<string | null>(null)
   const pausedNodeId = ref<string | null>(null)
   const pausedReason = ref<'manual' | 'breakpoint-start' | 'breakpoint-end' | null>(null)
   const backendConnectionState = ref<'idle' | 'connected' | 'reconnecting' | 'error'>('idle')
@@ -929,6 +930,7 @@ function createExecutionActions(
       case 'workflow:completed':
         currentExecutionId = payload.executionId
         executionStatus.value = 'completed'
+        partialExecutionStartNodeId.value = null
         pausedNodeId.value = null
         pausedReason.value = null
         executionLog.value = (payload as ExecutionEventMap['workflow:completed']).log
@@ -941,6 +943,7 @@ function createExecutionActions(
       case 'workflow:error':
         currentExecutionId = payload.executionId
         executionStatus.value = 'error'
+        partialExecutionStartNodeId.value = null
         pausedNodeId.value = null
         pausedReason.value = null
         if ((payload as ExecutionEventMap['workflow:error']).log) {
@@ -1014,6 +1017,7 @@ function createExecutionActions(
     try {
       backendLastError.value = null
       await saveWorkflow(currentWorkflow.value)
+      partialExecutionStartNodeId.value = null
       const result = await createWorkflowDomainApi().workflow.execute(currentWorkflow.value.id)
       currentExecutionId = result.executionId
       executionStatus.value = result.status as EngineStatus
@@ -1041,6 +1045,7 @@ function createExecutionActions(
     try {
       backendLastError.value = null
       await saveWorkflow(currentWorkflow.value)
+      partialExecutionStartNodeId.value = nodeId
       const result = await createWorkflowDomainApi().workflow.execute(
         currentWorkflow.value.id,
         {},
@@ -1050,6 +1055,7 @@ function createExecutionActions(
       executionStatus.value = result.status as EngineStatus
       return { executionId: currentExecutionId, status: executionStatus.value }
     } catch (error) {
+      partialExecutionStartNodeId.value = null
       backendLastError.value = error instanceof Error ? error.message : String(error)
       executionStatus.value = 'error'
       return { executionId: currentExecutionId, status: executionStatus.value }
@@ -1068,6 +1074,14 @@ function createExecutionActions(
     const result = await createWorkflowDomainApi().workflow.resume(currentExecutionId)
     currentExecutionId = result.executionId
     executionStatus.value = result.status as EngineStatus
+    setTimeout(() => {
+      void recoverExecutionState()
+    }, 100)
+    if (executionStatus.value === 'completed' || executionStatus.value === 'error') {
+      partialExecutionStartNodeId.value = null
+      pausedNodeId.value = null
+      pausedReason.value = null
+    }
   }
 
   async function stopExecution(): Promise<void> {
@@ -1075,6 +1089,11 @@ function createExecutionActions(
     const result = await createWorkflowDomainApi().workflow.stop(currentExecutionId)
     currentExecutionId = result.executionId
     executionStatus.value = result.status as EngineStatus
+    if (executionStatus.value !== 'running' && executionStatus.value !== 'paused') {
+      partialExecutionStartNodeId.value = null
+      pausedNodeId.value = null
+      pausedReason.value = null
+    }
   }
 
   return {
@@ -1083,6 +1102,7 @@ function createExecutionActions(
     pauseExecution,
     resumeExecution,
     stopExecution,
+    partialExecutionStartNodeId,
     pausedNodeId,
     pausedReason,
     backendConnectionState,
@@ -1746,6 +1766,7 @@ export function createWorkflowStore(tabId: string) {
       effectiveSelectedNodeId,
       rootFolders, selectedNode, selectedNodes, executionValidationError,
       executionStatus, executionLog, executionContext,
+      partialExecutionStartNodeId: execActions.partialExecutionStartNodeId,
       pausedNodeId: execActions.pausedNodeId,
       pausedReason: execActions.pausedReason,
       executionLogs: execLogMgr.executionLogs,

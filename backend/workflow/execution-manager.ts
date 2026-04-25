@@ -64,6 +64,7 @@ interface ExecutionSession {
   pauseRequested: boolean
   pauseReason?: 'manual' | 'breakpoint-start' | 'breakpoint-end'
   pauseNodeId?: string
+  pauseBreakpoint?: 'start' | 'end'
   stopRequested: boolean
   startedAt: number
   finishedAt?: number
@@ -209,6 +210,7 @@ export class BackendWorkflowExecutionManager {
       pauseRequested: false,
       pauseReason: undefined,
       pauseNodeId: undefined,
+      pauseBreakpoint: undefined,
       stopRequested: false,
       startedAt: Date.now(),
       steps: [],
@@ -262,6 +264,7 @@ export class BackendWorkflowExecutionManager {
     session.pauseRequested = false
     session.pauseReason = undefined
     session.pauseNodeId = undefined
+    session.pauseBreakpoint = undefined
     session.status = 'running'
     const currentNode = session.executionOrder[session.currentIndex]
     if (previousPauseReason === 'breakpoint-start' && currentNode?.breakpoint === 'start') {
@@ -1101,7 +1104,7 @@ if (typeof main === 'function') return main({ params, context })`)
     session.status = 'paused'
     session.pauseReason = breakpoint === 'start' ? 'breakpoint-start' : 'breakpoint-end'
     session.pauseNodeId = node.id
-    session.breakpointBypassKeys.add(this.getBreakpointKey(node.id, breakpoint))
+    session.pauseBreakpoint = breakpoint
     this.emitLog(session)
     this.emitEvent(session, 'workflow:paused', {
       executionId: session.id,
