@@ -236,7 +236,7 @@ function insertArrayVariable(propKey: string, index: number, fieldKey: string, v
           :model-value="getFieldValue(prop.key)"
           @update:model-value="setFieldValue(prop.key, $event)"
         >
-          <SelectTrigger class="h-7 text-xs w-full">
+          <SelectTrigger class="h-7 text-xs">
             <SelectValue :placeholder="prop.label" />
           </SelectTrigger>
           <SelectContent>
