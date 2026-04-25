@@ -471,14 +471,14 @@ async function handleStopAtBreakpoint() {
     class="group/node border-2 rounded-lg shadow-sm w-full h-full cursor-pointer transition-colors relative flex flex-col"
     :class="[statusColor, stateBackground, props.selected ? 'ring-2 ring-primary' : '', { 'loop-body-node': isLoopBodyContainer }]"
   >
-        <!-- 输入连接-->
+        <!-- 输入连接点 -->
         <Handle
           v-if="showTargetHandle"
           id="target"
           type="target"
           :position="Position.Left"
           :connectable="props.connectable"
-          class="!z-10 !w-3 !h-3 !bg-blue-500 !border-2 !border-blue-300"
+          class="!z-10 !w-3 !h-3 !bg-blue-500 !border-2 !border-blue-300 handle-dot"
         />
 
         <!-- 悬浮测试按钮（开结束节点隐藏，预览模式下隐藏-->
@@ -673,7 +673,7 @@ async function handleStopAtBreakpoint() {
             type="source"
             :position="Position.Right"
             :connectable="props.connectable"
-            class="!z-10 !w-3 !h-3 !bg-emerald-500 !border-2 !border-emerald-300"
+            class="!z-10 !w-3 !h-3 !bg-emerald-500 !border-2 !border-emerald-300 handle-dot"
           />
           <template v-else>
             <div
@@ -688,7 +688,7 @@ async function handleStopAtBreakpoint() {
                 type="source"
                 :position="Position.Right"
                 :connectable="props.connectable"
-                class="!relative !top-0 !translate-y-0 !z-10 !w-2.5 !h-2.5"
+                class="!relative !top-0 !translate-y-0 !z-10 !w-2.5 !h-2.5 handle-dot"
                 :class="h.id === LOOP_BODY_SOURCE_HANDLE ? '!bg-blue-500 !border-blue-300' : '!bg-emerald-500 !border-emerald-300'"
                 :style="{ borderWidth: '2px' }"
               />
@@ -710,7 +710,7 @@ async function handleStopAtBreakpoint() {
               type="source"
               :position="Position.Right"
               :connectable="props.connectable"
-              class="!relative !top-0 !translate-y-0 !z-10 !w-2.5 !h-2.5"
+              class="!relative !top-0 !translate-y-0 !z-10 !w-2.5 !h-2.5 handle-dot"
               :class="h.id === 'default' ? '!bg-orange-500 !border-orange-300' : '!bg-emerald-500 !border-emerald-300'"
               :style="{ borderWidth: '2px' }"
             />
@@ -744,6 +744,15 @@ async function handleStopAtBreakpoint() {
 </template>
 
 <style scoped>
+.handle-dot {
+  transition: scale 0.2s ease, box-shadow 0.2s ease;
+}
+
+.handle-dot:hover {
+  scale: 1.6;
+  box-shadow: 0 0 6px currentColor;
+}
+
 .loop-body-node {
   border-color: rgba(114, 181, 197, 0.5);
   box-shadow: 0 10px 30px rgba(98, 156, 173, 0.14);

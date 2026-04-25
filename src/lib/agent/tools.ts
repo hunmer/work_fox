@@ -96,7 +96,7 @@ export const TOOL_CATEGORY_INFOS: ToolCategoryInfo[] = [
 export const BROWSER_TOOL_LIST: ToolMeta[] = [
   {
     name: 'delay',
-    description: '延迟等待指定时间后继续执行，用于等待页面加载、AJAX 完成或动画结束',
+    description: '延迟',
     category: '辅助工具',
     discoveryCategory: 'utils',
     tags: ['wait', 'delay', 'sleep', 'timing'],

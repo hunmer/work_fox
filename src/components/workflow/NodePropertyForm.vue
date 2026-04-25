@@ -4,13 +4,15 @@ import { useWorkflowStore } from '@/stores/workflow'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import type { WorkflowNode } from '@/lib/workflow/types'
 import { Input } from '@/components/ui/input'
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { CodeEditor } from '@/components/ui/code-editor'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Braces, Info, Plus, Trash2 } from 'lucide-vue-next'
+import { Braces, Info, Plus, Trash2, Timer } from 'lucide-vue-next'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import OutputFieldEditor from './OutputFieldEditor.vue'
 import ConditionEditor from './ConditionEditor.vue'
 import VariablePicker from './VariablePicker.vue'
@@ -123,33 +125,38 @@ function insertArrayVariable(propKey: string, index: number, fieldKey: string, v
   >
     <div
       v-if="activeNode.type !== 'start' && activeNode.type !== 'end'"
-      class="space-y-1"
+      class="flex justify-end"
     >
-      <label class="text-xs font-medium flex items-center gap-1">
-        延迟执行
-        <TooltipProvider :delay-duration="300">
-          <Tooltip>
-            <TooltipTrigger as-child>
-              <Info class="w-3 h-3 text-muted-foreground cursor-help" />
-            </TooltipTrigger>
-            <TooltipContent
-              side="right"
-              class="max-w-[240px]"
-            >
-              <p>执行当前节点前等待的毫秒数，0 表示不延迟</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </label>
-      <Input
-        type="number"
-        :model-value="getFieldValue('_delay') || 0"
-        :min="0"
-        :step="100"
-        class="h-7 text-xs"
-        placeholder="0"
-        @update:model-value="setFieldValue('_delay', Number($event) || 0)"
-      />
+      <Popover>
+        <PopoverTrigger as-child>
+          <button
+            class="relative p-1 rounded hover:bg-muted transition-colors"
+            :class="getFieldValue('_delay') ? 'text-primary' : 'text-muted-foreground'"
+          >
+            <Timer class="w-3.5 h-3.5" />
+            <span
+              v-if="getFieldValue('_delay')"
+              class="absolute -top-1 -right-1 min-w-3.5 h-3.5 px-0.5 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] leading-none font-medium"
+            >{{ Math.ceil((getFieldValue('_delay') || 0) / 1000) }}s</span>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="end"
+          class="w-56 p-3 space-y-2"
+        >
+          <p class="text-xs font-medium">延迟执行</p>
+          <p class="text-xs text-muted-foreground">执行当前节点前等待的毫秒数</p>
+          <Input
+            type="number"
+            :model-value="getFieldValue('_delay') || 0"
+            :min="0"
+            :step="100"
+            class="h-7 text-xs"
+            placeholder="0"
+            @update:model-value="setFieldValue('_delay', Number($event) || 0)"
+          />
+        </PopoverContent>
+      </Popover>
     </div>
 
     <div
@@ -194,23 +201,27 @@ function insertArrayVariable(propKey: string, index: number, fieldKey: string, v
         </button>
       </label>
 
-      <div
+      <InputGroup
         v-if="textModeKeys.has(prop.key) || isTextType(prop.type)"
-        class="flex gap-1"
+        class="h-7"
       >
-        <Input
+        <InputGroupInput
           :model-value="getFieldValue(prop.key)"
           :readonly="prop.readonly"
           :placeholder="prop.label"
-          class="h-7 text-xs flex-1"
+          class="text-xs"
           @update:model-value="setFieldValue(prop.key, $event)"
         />
-        <VariablePicker
+        <InputGroupAddon
           v-if="activeNodeId"
-          :exclude-node-id="activeNodeId"
-          @select="insertVariable(prop.key, $event)"
-        />
-      </div>
+          align="inline-end"
+        >
+          <VariablePicker
+            :exclude-node-id="activeNodeId"
+            @select="insertVariable(prop.key, $event)"
+          />
+        </InputGroupAddon>
+      </InputGroup>
 
       <template v-else>
         <CodeEditor

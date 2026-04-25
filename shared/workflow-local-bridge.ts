@@ -25,7 +25,7 @@ const DELAY_NODE_PROPERTIES: NodeProperty[] = [
 export const LOCAL_BRIDGE_WORKFLOW_NODES: LocalBridgeWorkflowNodeDefinition[] = [
   {
     type: 'delay',
-    label: '延迟等待指定时间后继续执行，用于等待页面加载、AJAX 完成或动画结束',
+    label: '延迟',
     category: '辅助工具',
     icon: 'Circle',
     description: '延迟等待指定毫秒数后继续执行。用于等待页面加载、AJAX 请求返回、动画结束等场景。不依赖标签页。',

@@ -7,6 +7,7 @@ import { createPluginContext } from './plugin-context'
 import type { PluginInfo, PluginInstance } from './plugin-types'
 import { workflowNodeRegistry, type AgentToolDefinition } from './workflow-node-registry'
 import { windowManager } from './window-manager'
+import { desktopNative } from './desktop-native'
 import {
   loadPluginApiModule,
   loadPluginToolsModule,
@@ -138,7 +139,7 @@ export class PluginRuntimeHost {
     if (apiModule) {
       try {
         if (typeof apiModule?.createApi === 'function') {
-          const api = apiModule.createApi({ windowManager })
+          const api = apiModule.createApi({ windowManager, desktopNative })
           workflowNodeRegistry.registerApi(info.id, api)
         }
       } catch (err) {
