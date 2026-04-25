@@ -29,16 +29,13 @@ export const SHORTCUT_ACTIONS: ShortcutAction[] = [
   { id: 'close-tab', label: '关闭当前标签页', defaultAccelerator: 'CmdOrCtrl+W', supportsGlobal: true, group: 'tab' },
   { id: 'next-tab', label: '下一个标签页', defaultAccelerator: 'CmdOrCtrl+Tab', supportsGlobal: true, group: 'tab' },
   { id: 'prev-tab', label: '上一个标签页', defaultAccelerator: 'CmdOrCtrl+Shift+Tab', supportsGlobal: true, group: 'tab' },
-  { id: 'restore-tab', label: '恢复关闭的标签页', defaultAccelerator: 'CmdOrCtrl+Shift+T', supportsGlobal: true, group: 'tab' },
   { id: 'reload-tab', label: '刷新当前页', defaultAccelerator: 'CmdOrCtrl+R', supportsGlobal: true, group: 'navigation' },
   { id: 'force-reload', label: '强制刷新', defaultAccelerator: 'CmdOrCtrl+Shift+R', supportsGlobal: true, group: 'navigation' },
   { id: 'toggle-fullscreen', label: '切换全屏', defaultAccelerator: 'F11', supportsGlobal: true, group: 'view' },
-  { id: 'zoom-in', label: '放大页面', defaultAccelerator: 'CmdOrCtrl+Plus', supportsGlobal: true, group: 'view' },
-  { id: 'zoom-out', label: '缩小页面', defaultAccelerator: 'CmdOrCtrl+-', supportsGlobal: true, group: 'view' },
-  { id: 'zoom-reset', label: '重置页面缩放', defaultAccelerator: 'CmdOrCtrl+0', supportsGlobal: true, group: 'view' },
   { id: 'open-devtools', label: '打开开发者工具', defaultAccelerator: 'F12', supportsGlobal: true, group: 'tools', electronOnly: true },
   { id: 'open-devtools-alt', label: '打开开发者工具 (备用)', defaultAccelerator: 'CmdOrCtrl+Shift+I', supportsGlobal: true, group: 'tools', electronOnly: true },
-  { id: 'toggle-window', label: '唤起/最小化主窗口', defaultAccelerator: '', supportsGlobal: true, group: 'window', electronOnly: true }
+  { id: 'toggle-window', label: '唤起/最小化主窗口', defaultAccelerator: '', supportsGlobal: true, group: 'window', electronOnly: true },
+  { id: 'command-palette', label: '打开命令面板', defaultAccelerator: 'CmdOrCtrl+K', supportsGlobal: false, group: 'tools' }
 ]
 
 export function getMergedBindings(stored: ShortcutBinding[]): ShortcutBinding[] {

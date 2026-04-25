@@ -1,4 +1,4 @@
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, type Ref } from 'vue'
 import { useShortcutStore } from '@/stores/shortcut'
 import { useTabStore } from '@/stores/tab'
 
@@ -37,7 +37,7 @@ function isInputElement(el: EventTarget | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable
 }
 
-export function useShortcutActions() {
+export function useShortcutActions(commandPaletteOpen?: Ref<boolean>) {
   const shortcutStore = useShortcutStore()
   const tabStore = useTabStore()
 
@@ -69,14 +69,8 @@ export function useShortcutActions() {
         if (document.fullscreenElement) document.exitFullscreen()
         else document.documentElement.requestFullscreen()
         break
-      case 'zoom-in':
-        window.dispatchEvent(new CustomEvent('workflow:zoom-in'))
-        break
-      case 'zoom-out':
-        window.dispatchEvent(new CustomEvent('workflow:zoom-out'))
-        break
-      case 'zoom-reset':
-        window.dispatchEvent(new CustomEvent('workflow:zoom-reset'))
+      case 'command-palette':
+        if (commandPaletteOpen) commandPaletteOpen.value = !commandPaletteOpen.value
         break
       case 'reload-tab':
         tabStore.activeStore?.loadData()

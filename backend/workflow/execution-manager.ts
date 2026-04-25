@@ -541,6 +541,7 @@ export class BackendWorkflowExecutionManager {
         nodeId: node.id,
         step: { ...step },
       })
+      this.emitLog(session)
     } catch (error) {
       step.finishedAt = Date.now()
       step.status = 'error'
@@ -556,6 +557,7 @@ export class BackendWorkflowExecutionManager {
         step: { ...step },
         error: createErrorShape('WORKFLOW_ERROR', step.error),
       })
+      this.emitLog(session)
     }
 
     return 'completed'

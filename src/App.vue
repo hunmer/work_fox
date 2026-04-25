@@ -20,7 +20,7 @@ const wsError = ref<string | null>(null)
 const reconnecting = ref(false)
 const reconnectAttempt = ref(0)
 
-useShortcutActions()
+useShortcutActions(commandPaletteOpen)
 
 function onWsDisconnected() {
   wsError.value = '与后端服务的连接已断开'
