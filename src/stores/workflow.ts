@@ -1452,6 +1452,8 @@ export function createWorkflowStore(tabId: string) {
     const workflows = ref<Workflow[]>([])
     const workflowFolders = ref<WorkflowFolder[]>([])
     const currentWorkflow = ref<Workflow | null>(null)
+    const loadState = ref<'idle' | 'loading' | 'loaded' | 'error'>('idle')
+    const loadError = ref<string | null>(null)
     const selectedNodeIds = ref<string[]>([])
     const selectedEmbeddedNode = ref<{
       hostNodeId: string
@@ -1540,7 +1542,7 @@ export function createWorkflowStore(tabId: string) {
     return {
       tabId,
       rightPanelTab,
-      workflows, workflowFolders, currentWorkflow, selectedNodeId, selectedNodeIds,
+      workflows, workflowFolders, currentWorkflow, loadState, loadError, selectedNodeId, selectedNodeIds,
       selectedEmbeddedNode,
       effectiveSelectedNodeId,
       rootFolders, selectedNode, selectedNodes, executionValidationError,

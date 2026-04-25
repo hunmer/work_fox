@@ -81,11 +81,21 @@ export const useTabStore = defineStore('tabs', () => {
     if (reusable) {
       const { tab, store: existingStore } = reusable
       tab.workflowId = workflowId
+      existingStore.loadState = 'loading'
+      existingStore.loadError = null
       void existingStore.loadData().then(() => {
         const wf = existingStore.workflows.find(w => w.id === workflowId)
-        if (!wf) return
+        if (!wf) {
+          existingStore.loadState = 'error'
+          existingStore.loadError = '工作流不存在或已被删除'
+          return
+        }
+        existingStore.loadState = 'loaded'
         existingStore.currentWorkflow = JSON.parse(JSON.stringify(wf))
         updateTabWorkflow(tab.id, wf.id, wf.name)
+      }).catch((err: unknown) => {
+        existingStore.loadState = 'error'
+        existingStore.loadError = err instanceof Error ? err.message : '加载工作流失败'
       })
       return tab.id
     }
@@ -96,13 +106,23 @@ export const useTabStore = defineStore('tabs', () => {
     const existingStore = activeStore.value
 
     if (workflowId) {
+      store.loadState = 'loading'
+      store.loadError = null
       void store.loadData().then(() => {
         const loaded = store.workflows.find(w => w.id === workflowId)
         const fallback = existingStore?.workflows.find(w => w.id === workflowId)
         const wf = loaded || fallback
-        if (!wf) return
+        if (!wf) {
+          store.loadState = 'error'
+          store.loadError = '工作流不存在或已被删除'
+          return
+        }
+        store.loadState = 'loaded'
         store.currentWorkflow = JSON.parse(JSON.stringify(wf))
         updateTabWorkflow(id, wf.id, wf.name)
+      }).catch((err: unknown) => {
+        store.loadState = 'error'
+        store.loadError = err instanceof Error ? err.message : '加载工作流失败'
       })
       const fallback = existingStore?.workflows.find(w => w.id === workflowId)
       if (fallback) {

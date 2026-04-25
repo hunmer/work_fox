@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/empty'
 import { Spinner } from '@/components/ui/spinner'
 import { Button } from '@/components/ui/button'
+import { AlertCircle } from 'lucide-vue-next'
 import {
   Dialog,
   DialogContent,
@@ -425,6 +426,26 @@ function goHome() {
   router.push('/home')
 }
 
+function retryLoad() {
+  const workflowId = props.tab.workflowId
+  if (!workflowId) { goHome(); return }
+  store.loadState = 'loading'
+  store.loadError = null
+  void store.loadData().then(() => {
+    const wf = store.workflows.find(w => w.id === workflowId)
+    if (!wf) {
+      store.loadState = 'error'
+      store.loadError = '工作流不存在或已被删除'
+      return
+    }
+    store.loadState = 'loaded'
+    store.currentWorkflow = JSON.parse(JSON.stringify(wf))
+  }).catch((err: unknown) => {
+    store.loadState = 'error'
+    store.loadError = err instanceof Error ? err.message : '加载工作流失败'
+  })
+}
+
 function openRecentWorkflow(id: string) {
   const wf = store.workflows.find(w => w.id === id)
   if (wf) {
@@ -581,7 +602,7 @@ function onConnect(params: any) {
       </div>
     </div>
 
-    <Empty v-else class="flex-1">
+    <Empty v-else-if="store.loadState === 'loading'" class="flex-1">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Spinner class="size-8" />
@@ -594,6 +615,34 @@ function onConnect(params: any) {
           返回主页
         </Button>
       </EmptyContent>
+    </Empty>
+
+    <Empty v-else-if="store.loadState === 'error'" class="flex-1">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <AlertCircle class="size-8 text-destructive" />
+        </EmptyMedia>
+        <EmptyTitle>加载失败</EmptyTitle>
+        <EmptyDescription>{{ store.loadError || '未知错误' }}</EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent class="flex gap-2">
+        <Button variant="outline" size="sm" @click="goHome">
+          返回主页
+        </Button>
+        <Button variant="outline" size="sm" @click="retryLoad">
+          重试
+        </Button>
+      </EmptyContent>
+    </Empty>
+
+    <Empty v-else class="flex-1">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <Spinner class="size-8" />
+        </EmptyMedia>
+        <EmptyTitle>初始化中</EmptyTitle>
+        <EmptyDescription>正在准备编辑器...</EmptyDescription>
+      </EmptyHeader>
     </Empty>
 
     <WorkflowListDialog
