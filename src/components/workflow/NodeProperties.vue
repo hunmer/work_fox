@@ -3,22 +3,15 @@ import { computed, ref } from 'vue'
 import { useWorkflowStore } from '@/stores/workflow'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import type { OutputField } from '@/lib/workflow/types'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
-import { CodeEditor } from '@/components/ui/code-editor'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Bug, Loader2, CheckCircle2, XCircle, ChevronDown, ChevronRight, Import, FileDown, Info, Braces, Plus, Trash2, Pencil, Check } from 'lucide-vue-next'
+import { Bug, Loader2, CheckCircle2, XCircle, ChevronDown, ChevronRight, Import, FileDown, Plus, Trash2, Pencil, Check } from 'lucide-vue-next'
 import { JsonEditor } from '@/components/ui/json-editor'
 import OutputFieldEditor from './OutputFieldEditor.vue'
-import ConditionEditor from './ConditionEditor.vue'
-import VariablePicker from './VariablePicker.vue'
+import NodePropertyForm from './NodePropertyForm.vue'
 import { LOOP_BODY_NODE_TYPE } from '@shared/workflow-composite'
 import {
   Dialog,
@@ -36,18 +29,6 @@ const selectedNodeId = computed(() => store.effectiveSelectedNodeId)
 const definition = computed(() => {
   if (!store.selectedNode) return null
   return getNodeDefinition(store.selectedNode.type)
-})
-
-const visibleProperties = computed(() => {
-  if (!definition.value || !store.selectedNode) return []
-  return definition.value.properties.filter((prop) => {
-    const rule = prop.visibleWhen
-    if (!rule) return true
-    const actual = store.selectedNode?.data?.[rule.key]
-    if (rule.in?.length) return rule.in.includes(actual)
-    if ('equals' in rule) return actual === rule.equals
-    return true
-  })
 })
 
 const IconComponent = computed(() => {
@@ -71,20 +52,6 @@ type JsonPreset = {
 
 const JSON_PRESETS_KEY = '__jsonPresets'
 const SELECTED_JSON_PRESET_KEY = '__selectedJsonPresetId'
-
-/** 追踪哪些字段处于"文本/变量模式" */
-const textModeKeys = ref<Set<string>>(new Set())
-
-/** 判断字段是否为纯文本类型（无需切换） */
-function isTextType(type: string): boolean {
-  return type === 'text'
-}
-
-function toggleTextMode(key: string) {
-  const next = new Set(textModeKeys.value)
-  next.has(key) ? next.delete(key) : next.add(key)
-  textModeKeys.value = next
-}
 
 // 导入对话框
 const importDialogOpen = ref(false)
@@ -202,46 +169,6 @@ function saveJsonPreset() {
   } catch {
     presetError.value = 'JSON 格式不正确，请检查输入'
   }
-}
-
-/** 插入变量引用到指定字段 */
-function insertVariable(propKey: string, variablePath: string) {
-  const current = getFieldValue(propKey) || ''
-  setFieldValue(propKey, current + variablePath)
-}
-
-/** array 类型：获取数组 */
-function getArrayItems(key: string): Record<string, any>[] {
-  const value = getFieldValue(key)
-  return Array.isArray(value) ? value : []
-}
-
-/** array 类型：添加项 */
-function addArrayItem(prop: any) {
-  const items = [...getArrayItems(prop.key)]
-  const template = prop.itemTemplate || {}
-  const newItem = { ...template, id: Date.now() }
-  items.push(newItem)
-  setFieldValue(prop.key, items)
-}
-
-/** array 类型：删除项 */
-function removeArrayItem(propKey: string, index: number) {
-  const items = [...getArrayItems(propKey)]
-  items.splice(index, 1)
-  setFieldValue(propKey, items)
-}
-
-/** array 类型：更新项字段 */
-function updateArrayItemField(propKey: string, index: number, fieldKey: string, value: any) {
-  const items = [...getArrayItems(propKey)]
-  items[index] = { ...items[index], [fieldKey]: value }
-  setFieldValue(propKey, items)
-}
-
-function insertArrayVariable(propKey: string, index: number, fieldKey: string, variablePath: string) {
-  const current = getArrayItems(propKey)?.[index]?.[fieldKey] || ''
-  updateArrayItemField(propKey, index, fieldKey, `${current}${variablePath}`)
 }
 
 /** 获取/设置节点输出字段 */
@@ -533,290 +460,8 @@ function confirmImport() {
       </div>
 
       <ScrollArea class="flex-1 min-h-0">
-        <div class="p-3 space-y-3">
-          <!-- 通用基础属性：延迟执行 -->
-          <div
-            v-if="store.selectedNode.type !== 'start' && store.selectedNode.type !== 'end'"
-            class="space-y-1"
-          >
-            <label class="text-xs font-medium flex items-center gap-1">
-              延迟执行
-              <TooltipProvider :delay-duration="300">
-                <Tooltip>
-                  <TooltipTrigger as-child>
-                    <Info class="w-3 h-3 text-muted-foreground cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side="right"
-                    class="max-w-[240px]"
-                  >
-                    <p>执行当前节点前等待的毫秒数，0 表示不延迟</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </label>
-            <Input
-              type="number"
-              :model-value="getFieldValue('_delay') || 0"
-              :min="0"
-              :step="100"
-              class="h-7 text-xs"
-              placeholder="0"
-              @update:model-value="setFieldValue('_delay', Number($event) || 0)"
-            />
-          </div>
-
-          <div
-            v-for="prop in visibleProperties"
-            :key="prop.key"
-            class="space-y-1"
-          >
-            <label class="text-xs font-medium flex items-center gap-1">
-              <span class="flex-1 flex items-center gap-1">
-                {{ prop.label }}
-                <span
-                  v-if="prop.required"
-                  class="text-red-500"
-                >*</span>
-                <TooltipProvider
-                  v-if="prop.tooltip"
-                  :delay-duration="300"
-                >
-                  <Tooltip>
-                    <TooltipTrigger as-child>
-                      <Info class="w-3 h-3 text-muted-foreground cursor-help" />
-                    </TooltipTrigger>
-                    <TooltipContent
-                      side="right"
-                      class="max-w-[240px]"
-                    >
-                      <p>{{ prop.tooltip }}</p>
-                      <p class="text-[10px] opacity-60 mt-0.5">类型: {{ prop.type }}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </span>
-              <button
-                v-if="!isTextType(prop.type)"
-                type="button"
-                class="p-0.5 rounded hover:bg-accent transition-colors"
-                :class="textModeKeys.has(prop.key) ? 'text-primary' : 'text-muted-foreground'"
-                title="切换变量模式"
-                @click="toggleTextMode(prop.key)"
-              >
-                <Braces class="w-3.5 h-3.5" />
-              </button>
-            </label>
-
-            <!-- 文本/变量模式：所有类型统一 Input + VariablePicker -->
-            <div
-              v-if="textModeKeys.has(prop.key) || isTextType(prop.type)"
-              class="flex gap-1"
-            >
-              <Input
-                :model-value="getFieldValue(prop.key)"
-                :readonly="prop.readonly"
-                :placeholder="prop.label"
-                class="h-7 text-xs flex-1"
-                @update:model-value="setFieldValue(prop.key, $event)"
-              />
-              <VariablePicker
-                v-if="selectedNodeId"
-                :exclude-node-id="selectedNodeId"
-                @select="insertVariable(prop.key, $event)"
-              />
-            </div>
-
-            <!-- 原生类型模式 -->
-            <template v-else>
-              <CodeEditor
-                v-if="prop.type === 'code'"
-                :model-value="getFieldValue(prop.key)"
-                :language="prop.codeLanguage || 'javascript'"
-                :readonly="prop.readonly"
-                :height="prop.codeHeight || 200"
-                @update:model-value="setFieldValue(prop.key, $event)"
-              />
-
-              <Input
-                v-else-if="prop.type === 'number'"
-                type="number"
-                :model-value="getFieldValue(prop.key)"
-                :readonly="prop.readonly"
-                class="h-7 text-xs"
-                @update:model-value="setFieldValue(prop.key, Number($event))"
-              />
-
-              <Select
-                v-else-if="prop.type === 'select'"
-                :model-value="getFieldValue(prop.key)"
-                @update:model-value="setFieldValue(prop.key, $event)"
-              >
-                <SelectTrigger class="h-7 text-xs w-full">
-                  <SelectValue :placeholder="prop.label" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem
-                    v-for="opt in (prop.options || [])"
-                    :key="opt.value"
-                    :value="opt.value"
-                    class="text-xs"
-                  >
-                    {{ opt.label }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-
-              <div
-                v-else-if="prop.type === 'checkbox'"
-                class="flex items-center gap-2"
-              >
-                <Switch
-                  :model-value="getFieldValue(prop.key)"
-                  :disabled="prop.readonly"
-                  @update:model-value="setFieldValue(prop.key, $event)"
-                />
-                <span class="text-xs text-muted-foreground">{{ prop.readonly ? '(只读)' : '' }}</span>
-              </div>
-
-              <Textarea
-                v-else-if="prop.type === 'textarea'"
-                :model-value="getFieldValue(prop.key)"
-                :rows="prop.rows || 3"
-                :readonly="prop.readonly"
-                class="text-xs min-h-[60px]"
-                :placeholder="prop.label"
-                @update:model-value="setFieldValue(prop.key, $event)"
-              />
-
-              <div
-                v-else-if="prop.type === 'range'"
-                class="space-y-0.5"
-              >
-                <input
-                  type="range"
-                  :value="getFieldValue(prop.key) ?? prop.default ?? 0"
-                  :min="prop.min ?? 0"
-                  :max="prop.max ?? 1"
-                  :step="prop.step ?? 1"
-                  class="w-full h-2 accent-primary"
-                  :disabled="prop.readonly"
-                  @input="setFieldValue(prop.key, Number(($event.target as HTMLInputElement).value))"
-                />
-                <div class="text-[10px] text-muted-foreground text-right">{{ getFieldValue(prop.key) ?? prop.default ?? 0 }}</div>
-              </div>
-
-              <!-- array 类型：动态表单列表 -->
-              <div
-                v-else-if="prop.type === 'array'"
-                class="space-y-2"
-              >
-                <div
-                  v-for="(item, idx) in getArrayItems(prop.key)"
-                  :key="idx"
-                  class="relative rounded border border-border bg-muted/30 p-2 space-y-1.5"
-                >
-                  <button
-                    class="absolute top-1 right-1 p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                    @click="removeArrayItem(prop.key, idx)"
-                  >
-                    <Trash2 class="w-3 h-3" />
-                  </button>
-                  <div
-                    v-for="field in prop.fields"
-                    :key="field.key"
-                    class="space-y-0.5"
-                  >
-                    <label class="text-[10px] text-muted-foreground">{{ field.label }}</label>
-                    <div
-                      v-if="field.type === 'text'"
-                      class="flex gap-1"
-                    >
-                      <Input
-                        type="text"
-                        :model-value="item[field.key]"
-                        :placeholder="field.placeholder || field.label"
-                        class="h-6 text-[11px] flex-1"
-                        @update:model-value="updateArrayItemField(prop.key, idx, field.key, $event)"
-                      />
-                      <VariablePicker
-                        v-if="selectedNodeId"
-                        :exclude-node-id="selectedNodeId"
-                        @select="insertArrayVariable(prop.key, idx, field.key, $event)"
-                      />
-                    </div>
-                    <Textarea
-                      v-else-if="field.type === 'textarea'"
-                      :model-value="item[field.key]"
-                      :rows="field.rows || 2"
-                      :placeholder="field.placeholder || field.label"
-                      class="text-[11px] min-h-[40px]"
-                      @update:model-value="updateArrayItemField(prop.key, idx, field.key, $event)"
-                    />
-                    <Input
-                      v-else-if="field.type === 'number'"
-                      type="number"
-                      :model-value="item[field.key]"
-                      :placeholder="field.placeholder || field.label"
-                      class="h-6 text-[11px]"
-                      @update:model-value="updateArrayItemField(prop.key, idx, field.key, Number($event))"
-                    />
-                    <Select
-                      v-else-if="field.type === 'select'"
-                      :model-value="item[field.key] || field.default"
-                      @update:model-value="updateArrayItemField(prop.key, idx, field.key, $event)"
-                    >
-                      <SelectTrigger class="h-6 text-[11px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem
-                          v-for="opt in (field.options || [])"
-                          :key="opt.value"
-                          :value="opt.value"
-                          class="text-[11px]"
-                        >
-                          {{ opt.label }}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <OutputFieldEditor
-                      v-else-if="field.type === 'output_fields'"
-                      :model-value="Array.isArray(item[field.key]) ? item[field.key] : []"
-                      :exclude-node-id="selectedNodeId"
-                      @update:model-value="updateArrayItemField(prop.key, idx, field.key, $event)"
-                    />
-                  </div>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  class="w-full h-6 text-[11px] gap-1"
-                  @click="addArrayItem(prop)"
-                >
-                  <Plus class="w-3 h-3" />
-                  添加资源
-                </Button>
-              </div>
-
-              <OutputFieldEditor
-                v-else-if="prop.type === 'output_fields'"
-                :model-value="getFieldValue(prop.key) || []"
-                :exclude-node-id="selectedNodeId"
-                @update:model-value="setFieldValue(prop.key, $event)"
-              />
-            </template>
-          </div>
-
-          <div
-            v-if="visibleProperties.length === 0"
-            class="text-xs text-muted-foreground text-center py-4"
-          >
-            该节点无配置参数
-          </div>
-
-          <!-- 条件编辑器（switch 节点） -->
-          <ConditionEditor v-if="definition.type === 'switch'" />
+        <div class="p-3">
+          <NodePropertyForm />
         </div>
       </ScrollArea>
 

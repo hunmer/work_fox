@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Home, Settings, User } from 'lucide-vue-next'
+import { Home, Puzzle, Settings, User } from 'lucide-vue-next'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,6 +15,7 @@ import {
 
 defineEmits<{
   goHome: []
+  openPlugins: []
   openSettings: []
 }>()
 </script>
@@ -33,6 +34,20 @@ defineEmits<{
         </TooltipTrigger>
         <TooltipContent side="right" class="text-xs">
           主页
+        </TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <button
+            class="w-10 h-10 flex items-center justify-center rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            @click="$emit('openPlugins')"
+          >
+            <Puzzle class="w-5 h-5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right" class="text-xs">
+          插件
         </TooltipContent>
       </Tooltip>
 

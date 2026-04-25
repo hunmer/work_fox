@@ -495,19 +495,31 @@ function retryLoad() {
   if (!workflowId) { goHome(); return }
   store.loadState = 'loading'
   store.loadError = null
-  void store.loadData().then(() => {
-    const wf = store.workflows.find(w => w.id === workflowId)
-    if (!wf) {
+
+  const MAX_RETRIES = 5
+  let attempt = 0
+
+  function tryLoad(): Promise<void> {
+    return store.loadData().then(() => {
+      const wf = store.workflows.find(w => w.id === workflowId)
+      if (!wf) {
+        store.loadState = 'error'
+        store.loadError = '工作流不存在或已被删除'
+        return
+      }
+      store.loadState = 'loaded'
+      store.currentWorkflow = JSON.parse(JSON.stringify(wf))
+    }).catch((err: unknown) => {
+      attempt++
+      if (attempt < MAX_RETRIES) {
+        return new Promise<void>(resolve => setTimeout(resolve, 1000)).then(tryLoad)
+      }
       store.loadState = 'error'
-      store.loadError = '工作流不存在或已被删除'
-      return
-    }
-    store.loadState = 'loaded'
-    store.currentWorkflow = JSON.parse(JSON.stringify(wf))
-  }).catch((err: unknown) => {
-    store.loadState = 'error'
-    store.loadError = err instanceof Error ? err.message : '加载工作流失败'
-  })
+      store.loadError = err instanceof Error ? err.message : '加载工作流失败'
+    })
+  }
+
+  void tryLoad()
 }
 
 function openRecentWorkflow(id: string) {
@@ -614,7 +626,6 @@ function onConnect(params: any) {
       @start-edit-name="startEditName"
       @finish-edit-name="finishEditName"
       @cancel-edit-name="cancelEditName"
-      @open-plugins="pluginsDialogOpen = true"
       @open-settings="settingsDialogOpen = true"
       @open-recent="openRecentWorkflow"
       @reset-layout="handleResetLayout"
@@ -629,6 +640,7 @@ function onConnect(params: any) {
     >
       <ActivityBar
         @go-home="goHome"
+        @open-plugins="pluginsDialogOpen = true"
         @open-settings="settingsDialogOpen = true"
       />
 

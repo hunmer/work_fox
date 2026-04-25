@@ -48,7 +48,6 @@ const emit = defineEmits<{
   startEditName: []
   finishEditName: []
   cancelEditName: []
-  openPlugins: []
   openSettings: []
   openRecent: [id: string]
   'reset-layout': []
@@ -164,25 +163,6 @@ refreshMaximized()
             @click="emit('import')"
           >
             导入...
-          </MenubarItem>
-        </MenubarContent>
-      </MenubarMenu>
-      <MenubarMenu>
-        <MenubarTrigger class="text-xs h-6 px-2">
-          视图
-        </MenubarTrigger>
-        <MenubarContent>
-          <MenubarItem
-            class="text-xs"
-            @click="emit('openPlugins')"
-          >
-            插件
-          </MenubarItem>
-          <MenubarItem
-            class="text-xs"
-            @click="emit('openSettings')"
-          >
-            设置
           </MenubarItem>
         </MenubarContent>
       </MenubarMenu>
