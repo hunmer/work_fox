@@ -69,20 +69,20 @@ async function handleCopy() {
     </div>
     <div class="absolute top-2 right-2 z-10 inline-flex overflow-hidden rounded-md border border-border bg-muted/80 text-muted-foreground backdrop-blur-sm">
       <button type="button"
-        class="inline-flex h-7 min-w-8 items-center justify-center px-2 transition-colors hover:bg-muted hover:text-foreground"
+        class="inline-flex p-1.5 items-center justify-center transition-colors hover:bg-muted hover:text-foreground"
         :class="{ 'bg-background text-foreground': currentMode === 'tree' }" title="Tree mode"
         @click.stop="setMode('tree')">
         <Braces class="w-3.5 h-3.5" />
       </button>
       <button type="button"
-        class="inline-flex h-7 min-w-8 items-center justify-center border-l border-border px-2 transition-colors hover:bg-muted hover:text-foreground"
+        class="inline-flex p-1.5 items-center justify-center border-l border-border transition-colors hover:bg-muted hover:text-foreground"
         :class="{ 'bg-background text-foreground': currentMode === 'text' }" title="Text mode"
         @click.stop="setMode('text')">
         <FileText class="w-3.5 h-3.5" />
       </button>
     </div>
     <button v-if="isReadonly" type="button" @click.stop="handleCopy"
-      class="absolute bottom-2 right-2 p-1.5 rounded-md bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors backdrop-blur-sm z-10"
+      class="absolute bottom-2 right-2 p-1.5 rounded-md border border-border bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors backdrop-blur-sm z-10"
       title="复制">
       <component :is="copied ? Check : Copy" class="w-3.5 h-3.5" :class="{ 'text-green-500': copied }" />
     </button>
