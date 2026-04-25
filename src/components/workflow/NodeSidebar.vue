@@ -95,6 +95,11 @@ async function loadPluginNodes() {
   }
 }
 
+function pluginHasConfig(pluginId: string): boolean {
+  const plugin = pluginStore.plugins.find(p => p.id === pluginId)
+  return !!plugin?.config?.length
+}
+
 function openPluginConfig(pluginId: string) {
   const plugin = pluginStore.plugins.find(p => p.id === pluginId)
   if (!plugin?.config?.length) return
@@ -223,7 +228,7 @@ function getIcon(name: string) {
             <CollapsibleTrigger class="flex items-center w-full px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground rounded hover:bg-muted/50">
               <span class="truncate">{{ category }}</span>
               <span class="ml-auto flex items-center gap-1">
-                <template v-if="categoryPluginMap[category as string]">
+                <template v-if="categoryPluginMap[category as string] && pluginHasConfig(categoryPluginMap[category as string])">
                   <Popover>
                     <PopoverTrigger as-child>
                       <Button variant="ghost" size="sm" class="h-5 px-1.5 text-[10px] gap-0.5" @click.stop>
