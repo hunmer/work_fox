@@ -24,6 +24,8 @@ export interface WorkflowCanvasContext {
   onPaneClick: () => void
   onNodesInitialized: (nodes: any[]) => void
   onEdgeInsertNode: (edgeId: string, sourceId: string, targetId: string, sourceHandle: string | null) => void
+  fitView: () => void
+  openNodeSelectAtPosition: (event: MouseEvent) => void
 }
 
 export const WORKFLOW_CANVAS_CONTEXT_KEY: InjectionKey<WorkflowCanvasContext> =

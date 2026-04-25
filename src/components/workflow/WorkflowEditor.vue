@@ -89,6 +89,7 @@ const agentSettings = useAgentSettingsStore()
 const listDialogOpen = ref(false)
 const listDialogCreateMode = ref(false)
 const nodeSelectOpen = ref(false)
+const paneContextMenuPosition = ref<{ x: number; y: number } | null>(null)
 const pluginsDialogOpen = ref(false)
 const settingsDialogOpen = ref(false)
 const pluginPickerOpen = ref(false)
@@ -103,6 +104,7 @@ const {
   zoomIn,
   zoomOut,
   zoomTo,
+  fitView,
   getSelectedNodes,
   getSelectedEdges,
   addSelectedNodes,
@@ -273,6 +275,8 @@ const canvasContext: WorkflowCanvasContext = {
   onPaneClick,
   onNodesInitialized: handleNodesInitialized,
   onEdgeInsertNode,
+  fitView,
+  openNodeSelectAtPosition,
 }
 
 const nodeSidebarContext: NodeSidebarContext = {
@@ -329,7 +333,22 @@ function onNodeSelectDialogClose(open: boolean) {
   if (!open) {
     resetEdgeInsert()
     resetConnectionDrop()
+    paneContextMenuPosition.value = null
   }
+}
+
+function openNodeSelectAtPosition(event: MouseEvent) {
+  const bounds = vueFlowRef.value?.getBoundingClientRect()
+  if (!bounds) return
+  const flowPos = project({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
+  paneContextMenuPosition.value = flowPos
+  nodeSelectOpen.value = true
+}
+
+function onNodeSelectFromPane(type: string) {
+  if (!paneContextMenuPosition.value || !store.currentWorkflow) return
+  store.addNode(type, paneContextMenuPosition.value)
+  paneContextMenuPosition.value = null
 }
 
 function onNodeClick({ node, event }: any) {
@@ -656,7 +675,7 @@ function onConnect(params: any) {
     <NodeSelectDialog
       :open="nodeSelectOpen"
       @update:open="onNodeSelectDialogClose"
-      @select="hasInsertContext() ? onNodeSelectFromEdge($event) : onNodeSelectFromDialog($event)"
+      @select="hasInsertContext() ? onNodeSelectFromEdge($event) : paneContextMenuPosition ? onNodeSelectFromPane($event) : onNodeSelectFromDialog($event)"
     />
 
     <PluginsDialog

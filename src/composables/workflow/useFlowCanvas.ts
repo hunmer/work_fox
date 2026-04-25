@@ -23,6 +23,10 @@ const MIN_CONTAINER_SIZE = {
 
 const GROUP_PADDING = 20
 const GROUP_HEADER_HEIGHT = 32
+const DEFAULT_NODE_SIZE = {
+  width: 220,
+  height: 120,
+}
 
 const resizingNodeIds = new Set<string>()
 
@@ -84,6 +88,24 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     }
   }
 
+  function getNumber(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+  }
+
+  function getRenderedNodeSize(nodeId: string, data: Record<string, unknown> | undefined): { width: number; height: number } {
+    const flowNode = flowStore.findNode(nodeId) as any
+    return {
+      width: getNumber(flowNode?.dimensions?.width)
+        ?? getNumber(flowNode?.width)
+        ?? getNumber(data?.width)
+        ?? DEFAULT_NODE_SIZE.width,
+      height: getNumber(flowNode?.dimensions?.height)
+        ?? getNumber(flowNode?.height)
+        ?? getNumber(data?.height)
+        ?? DEFAULT_NODE_SIZE.height,
+    }
+  }
+
   /** 计算分组的 bounding box (基于子节点位置) */
   function computeGroupBoundingBox(group: WorkflowGroup): { x: number; y: number; width: number; height: number } {
     const workflow = store.currentWorkflow
@@ -103,12 +125,15 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     }
 
     const allBoxes = [
-      ...childNodes.map(n => ({
-        x: n.position.x,
-        y: n.position.y,
-        width: Number(n.data?.width || 220),
-        height: Number(n.data?.height || 120),
-      })),
+      ...childNodes.map(n => {
+        const size = getRenderedNodeSize(n.id, n.data)
+        return {
+          x: n.position.x,
+          y: n.position.y,
+          width: size.width,
+          height: size.height,
+        }
+      }),
       ...childGroups,
     ]
 
