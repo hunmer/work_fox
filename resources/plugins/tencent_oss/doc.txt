@@ -1,0 +1,252 @@
+npm i cos-nodejs-sdk-v5 --save
+初始化 COS 服务
+初始化 COS
+注意：
+建议用户 使用临时密钥 调用 SDK，通过临时授权的方式进一步提高 SDK 使用的安全性。申请临时密钥时，请遵循 最小权限指引原则，防止泄露目标存储桶或对象之外的资源。
+如果您一定要使用永久密钥，建议遵循 最小权限指引原则 对永久密钥的权限范围进行限制。
+使用临时密钥初始化(推荐)
+使用永久密钥初始化(不推荐)
+临时密钥生成和使用请参见 临时密钥生成及使用指引。Node.js SDK 支持通过传入临时密钥进行初始化，请参考以下示例代码：
+const request = require('request');
+const COS = require('cos-nodejs-sdk-v5');
+const cos = new COS({
+    getAuthorization: function (options, callback) {
+        // 初始化时不会调用，只有调用 cos 方法（例如 cos.putObject）时才会进入
+        // 异步获取临时密钥
+        request({
+            url: 'https://example.com/sts', // 替换为自己的获取临时密钥的服务 url
+            data: {
+                // 可从 options 取需要的参数
+            }
+        }, function (err, response, body) {
+            let data = null;
+            let credentials = null;
+            try {
+                data = JSON.parse(body);
+                credentials = data.credentials;
+            } catch(e) {}
+            if (!data || !credentials) return console.error('credentials invalid');
+            callback({
+                TmpSecretId: credentials.tmpSecretId,        // 临时密钥的 tmpSecretId
+                TmpSecretKey: credentials.tmpSecretKey,      // 临时密钥的 tmpSecretKey
+                SecurityToken: credentials.sessionToken, // 临时密钥的 sessionToken
+                // 建议返回服务器时间作为签名的开始时间，避免用户浏览器本地时间偏差过大导致签名错误
+                StartTime: data.startTime, // 时间戳，单位秒，如：1580000000
+                ExpiredTime: data.expiredTime, // 临时密钥失效时间戳，是申请临时密钥时，时间戳加 durationSeconds
+                ScopeLimit: true, // 细粒度控制权限需要设为 true，会限制密钥只在相同请求时重复使用
+            });
+        });
+    }
+});
+配置项
+new COS(options) 构造函数参数说明
+getAuthorization 回调函数说明（使用格式一）
+getAuthorization 回调函数说明（使用格式二）
+参数名
+参数描述
+类型
+是否必填
+SecretId
+用户的 SecretId
+String
+是
+SecretKey
+用户的 SecretKey
+String
+是
+FileParallelLimit
+同一个实例下上传的文件并发数，默认值3
+Number
+否
+ChunkParallelLimit
+同一个上传文件的分块并发数，默认值3
+Number
+否
+ChunkRetryTimes
+分块上传及分块复制时，出错重试次数，默认值2（加第一次，请求共3次）
+Number
+否
+ChunkSize
+分块上传时，每块的字节数大小，单位为 Byte，默认值1048576（1MB）
+Number
+否
+SliceSize
+使用 uploadFiles 批量上传时，文件大小大于该数值将使用分片上传，否则将调用简单上传，单位 Byte，默认值1048576（1MB）
+Number
+否
+CopyChunkParallelLimit
+进行分块复制操作中的复制分块上传的并发数，默认值20
+Number
+否
+CopyChunkSize
+使用 sliceCopyFile 分块复制文件时，每片的大小字节数，单位为 Byte，默认值10485760（10MB）
+Number
+否
+CopySliceSize
+使用 sliceCopyFile 分片复制文件时，文件大小大于该数值将使用分片复制 ，否则将调用简单复制，单位为 Byte，默认值10485760（10MB）
+Number
+否
+ProgressInterval
+上传进度的回调方法 onProgress 的回调频率，单位 ms ，默认值1000
+Number
+否
+Protocol
+发送请求时用的协议，可选项 https:、http:，默认判断当前页面是 http: 时使用 http:，否则使用 https:
+String
+否
+ServiceDomain
+调用 getService 方法时，请求的域名，例如 service.cos.myqcloud.com
+String
+否
+Domain
+调用操作存储桶和对象的 API 时自定义请求域名。可以使用模板，例如"{Bucket}.cos.{Region}.myqcloud.com" ，即在调用 API 时会使用参数中传入的 Bucket 和 Region 进行替换
+String
+否
+UploadQueueSize
+上传队列最长大小，超出队列大小并失败/已完成/已取消状态的任务会被清理，默认1000
+Number
+否
+UploadCheckContentMd5
+强制上传文件校验 Content-MD5，会对文件请求 Body 计算 MD5 并放在 header 的 Content-MD5字段里，默认 false
+Boolean
+否
+Timeout
+超时时间，单位毫秒，默认为0，即不设置超时时间
+Number
+否
+KeepAlive
+多个请求同用 TCP 连接，默认 true，若请求并发量大建议 打开
+Boolean
+否
+StrictSsl
+严格校验 HTTPS 证书，默认 true
+Boolean
+否
+Proxy
+请求时使用 HTTP 代理，例如：http://127.0.0.1:8080
+String
+否
+getAuthorization
+获取签名的回调方法，如果没有 SecretId、SecretKey 时，这个参数必选
+Function
+否
+UseAccelerate
+是否启用全球加速域名，默认为 false。若改为 true，需要存储桶开启全球加速功能，详情请参见 开启全球加速﻿
+Boolean
+否
+获取鉴权凭证
+实例本身的鉴权凭证可以通过实例化时传入的参数控制如何获取，有三种获取方式：
+实例化时，传入 SecretId、SecretKey，每次需要签名都由实例内部计算。
+实例化时，传入 getAuthorization 回调，每次需要签名通过这个回调计算完返回签名给实例。
+实例化时，传入 getSTS 回调，每次需要临时密钥通过这个回调返回给实例，在每次请求时实例内部使用临时密钥计算得到签名。
+使用方式
+注意：
+cos.getObjectUrl 目前只支持回调方式。
+示例默认使用回调方式，相关代码如下。
+回调方式
+Promise 方式
+同步方式
+// 这里省略初始化过程和上传参数
+var cos = new COS({ ... });
+cos.uploadFile({ ... }, function(err, data) {
+  if (err) {
+    console.log('上传出错', err);
+  } else {
+    console.log('上传成功', data);
+  }
+});
+
+
+
+// SECRETID 和 SECRETKEY 请登录 https://console.cloud.tencent.com/cam/capi 进行查看和管理
+const COS = require('cos-nodejs-sdk-v5');
+const cos = new COS({
+    SecretId: process.env.SecretId, // 推荐使用环境变量获取；用户的 SecretId，建议使用子账号密钥，授权遵循最小权限指引，降低使用风险。子账号密钥获取可参考https://cloud.tencent.com/document/product/598/37140
+    SecretKey: process.env.SecretKey, // 推荐使用环境变量获取；用户的 SecretKey，建议使用子账号密钥，授权遵循最小权限指引，降低使用风险。子账号密钥获取可参考https://cloud.tencent.com/document/product/598/37140
+});
+
+cos.putBucket({
+    Bucket: 'examplebucket-1250000000', // 替换为您的存储桶
+    Region: 'COS_REGION'                // 替换为您的存储桶所在地域，如ap-guangzhou
+}, function(err, data) {
+    console.log(err || data);
+});
+
+// SECRETID 和 SECRETKEY 请登录 https://console.cloud.tencent.com/cam/capi 进行查看和管理
+const fs = require('fs');
+const COS = require('cos-nodejs-sdk-v5');
+const cos = new COS({
+    SecretId: process.env.SecretId, // 推荐使用环境变量获取；用户的 SecretId，建议使用子账号密钥，授权遵循最小权限指引，降低使用风险。子账号密钥获取可参考https://cloud.tencent.com/document/product/598/37140
+    SecretKey: process.env.SecretKey, // 推荐使用环境变量获取；用户的 SecretKey，建议使用子账号密钥，授权遵循最小权限指引，降低使用风险。子账号密钥获取可参考https://cloud.tencent.com/document/product/598/37140
+});
+
+cos.putObject({
+    Bucket: 'examplebucket-1250000000', // 替换为您的存储桶
+    Region: 'COS_REGION',               // 替换为您的存储桶所在地域，如ap-guangzhou
+    Key: 'exampleobject',               // 替换为您的对象键
+    StorageClass: 'STANDARD',
+    Body: fs.createReadStream('./exampleobject'), // 替换为本地文件读流
+    onProgress: function(progressData) {
+        console.log(JSON.stringify(progressData));
+    }
+}, function(err, data) {
+    console.log(err || data);
+});
+
+// SECRETID 和 SECRETKEY 请登录 https://console.cloud.tencent.com/cam/capi 进行查看和管理
+const fs = require('fs');
+const COS = require('cos-nodejs-sdk-v5');
+const cos = new COS({
+    SecretId: process.env.SecretId, // 推荐使用环境变量获取；用户的 SecretId，建议使用子账号密钥，授权遵循最小权限指引，降低使用风险。子账号密钥获取可参考https://cloud.tencent.com/document/product/598/37140
+    SecretKey: process.env.SecretKey, // 推荐使用环境变量获取；用户的 SecretKey，建议使用子账号密钥，授权遵循最小权限指引，降低使用风险。子账号密钥获取可参考https://cloud.tencent.com/document/product/598/37140
+});
+
+cos.getObject({
+    Bucket: 'examplebucket-1250000000',    // 替换为您的存储桶
+    Region: 'COS_REGION',                  // 替换为您的存储桶所在地域，如ap-guangzhou
+    Key: 'exampleobject',                  // 替换为您的对象键
+    Output: fs.createWriteStream('./exampleobject'),  // 替换为本地文件写流
+}, function(err, data) {
+    console.log(err || data);
+});
+
+// SECRETID 和 SECRETKEY 请登录 https://console.cloud.tencent.com/cam/capi 进行查看和管理
+const COS = require('cos-nodejs-sdk-v5');
+const cos = new COS({
+    SecretId: process.env.SecretId, // 推荐使用环境变量获取；用户的 SecretId，建议使用子账号密钥，授权遵循最小权限指引，降低使用风险。子账号密钥获取可参考https://cloud.tencent.com/document/product/598/37140
+    SecretKey: process.env.SecretKey, // 推荐使用环境变量获取；用户的 SecretKey，建议使用子账号密钥，授权遵循最小权限指引，降低使用风险。子账号密钥获取可参考https://cloud.tencent.com/document/product/598/37140
+});
+
+cos.getService(function (err, data) {
+    console.log(data && data.Buckets);
+});
+
+// SECRETID 和 SECRETKEY 请登录 https://console.cloud.tencent.com/cam/capi 进行查看和管理
+const COS = require('cos-nodejs-sdk-v5');
+const cos = new COS({
+    SecretId: process.env.SecretId, // 推荐使用环境变量获取；用户的 SecretId，建议使用子账号密钥，授权遵循最小权限指引，降低使用风险。子账号密钥获取可参考https://cloud.tencent.com/document/product/598/37140
+    SecretKey: process.env.SecretKey, // 推荐使用环境变量获取；用户的 SecretKey，建议使用子账号密钥，授权遵循最小权限指引，降低使用风险。子账号密钥获取可参考https://cloud.tencent.com/document/product/598/37140
+});
+
+cos.deleteObject({
+    Bucket: 'examplebucket-1250000000',  // 替换为您的存储桶
+    Region: 'COS_REGION',                // 替换为您的存储桶所在地域，如ap-guangzhou
+    Key: 'exampleobject'                 // 替换为您的对象键
+}, function(err, data) {
+    console.log(err || data);
+});
+
+// SECRETID 和 SECRETKEY 请登录 https://console.cloud.tencent.com/cam/capi 进行查看和管理
+const COS = require('cos-nodejs-sdk-v5');
+const cos = new COS({
+    SecretId: process.env.SecretId, // 推荐使用环境变量获取；用户的 SecretId，建议使用子账号密钥，授权遵循最小权限指引，降低使用风险。子账号密钥获取可参考https://cloud.tencent.com/document/product/598/37140
+    SecretKey: process.env.SecretKey, // 推荐使用环境变量获取；用户的 SecretKey，建议使用子账号密钥，授权遵循最小权限指引，降低使用风险。子账号密钥获取可参考https://cloud.tencent.com/document/product/598/37140
+});
+
+cos.getBucket({
+    Bucket: 'examplebucket-1250000000',  // 替换为您的存储桶
+    Region: 'COS_REGION',                // 替换为您的存储桶所在地域，如ap-guangzhou
+    Prefix: 'a/',                        // 替换为您希望查询的目录前缀，如果是根目录则无需传递
+}, function(err, data) {
+    console.log(err || data.Contents);
+});
