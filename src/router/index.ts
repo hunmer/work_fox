@@ -45,11 +45,9 @@ router.beforeEach((to, from) => {
   const isInitialLoad = from === START_LOCATION
   const isHome = to.path === '/' || to.path === '/home'
 
-  if (isHome && isInitialLoad && localStorage.getItem(REOPEN_EDITOR_KEY) === '1') {
-    const savedWorkflowId = localStorage.getItem(REOPEN_WORKFLOW_ID_KEY)
-    const target = savedWorkflowId
-      ? { path: '/editor', query: { workflow_id: savedWorkflowId } }
-      : '/editor'
+  const savedWorkflowId = localStorage.getItem(REOPEN_WORKFLOW_ID_KEY)
+  if (isHome && isInitialLoad && localStorage.getItem(REOPEN_EDITOR_KEY) === '1' && savedWorkflowId) {
+    const target = { path: '/editor', query: { workflow_id: savedWorkflowId } }
     localStorage.removeItem(REOPEN_WORKFLOW_ID_KEY)
     return target
   }

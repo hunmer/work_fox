@@ -106,9 +106,9 @@ const stateBackground = computed(() => {
 const stateBadge = computed(() => {
   switch (currentNodeState.value) {
     case 'disabled':
-      return '已禁
+      return '已禁'
     case 'skipped':
-      return '已跳
+      return '已跳'
     default:
       return ''
   }
@@ -186,7 +186,8 @@ const customViewProps = computed(() => {
     if (Array.isArray(items)) {
       return { items: nodeStatus.value === 'completed' ? items : [] }
     }
-    // items 是变量表达式，从执行结果取解析后的数    const outputItems = executionStep.value?.output?.items
+    // items 是变量表达式，从执行结果取解析后的数
+    const outputItems = executionStep.value?.output?.items
     if (Array.isArray(outputItems)) {
       return { items: outputItems }
     }
@@ -196,7 +197,8 @@ const customViewProps = computed(() => {
     const tracks = props.data?.tracks
     const volume = props.data?.volume ?? 80
     const loop = props.data?.loop ?? false
-    // 静态数组：执行完成后才显示，与 gallery_preview 行为一    if (Array.isArray(tracks)) {
+    // 静态数组：执行完成后才显示，与 gallery_preview 行为一
+    if (Array.isArray(tracks)) {
       return {
         tracks: nodeStatus.value === 'completed' ? tracks : [],
         volume,

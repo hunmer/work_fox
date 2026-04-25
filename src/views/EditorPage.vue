@@ -9,7 +9,12 @@ const router = useRouter()
 const tabStore = useTabStore()
 
 function syncHashWithActiveTab(tab: { workflowId: string | null } | null) {
-  const targetQuery = tab?.workflowId
+  if (!tab) {
+    router.replace('/home')
+    return
+  }
+
+  const targetQuery = tab.workflowId
     ? { workflow_id: tab.workflowId }
     : undefined
 
