@@ -9,8 +9,107 @@ import JsonEditor from '@/components/ui/json-editor/JsonEditor.vue'
 import { Play, Pause, Square, ChevronDown, ChevronUp, CheckCircle, XCircle, Loader2, Circle, Trash2, AlertTriangle, Info, AlertCircle as AlertCircleIcon, Copy, Check, MoreHorizontal, FolderOpen } from 'lucide-vue-next'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { executionLogBackendApi } from '@/lib/backend-api/execution-log'
-import type { ExecutionLog } from '@/lib/workflow/types'
+import type { ExecutionLog, ExecutionStep, WorkflowNode } from '@/lib/workflow/types'
 import { WORKFLOW_EXEC_BAR_LAYOUT_KEY } from './workflowLayoutContext'
+
+// ====== 步骤分组：loop / sub_workflow 子节点包裹 ======
+
+type StepGroupItem =
+  | { type: 'single'; step: ExecutionStep }
+  | { type: 'group'; groupKey: string; parentLabel: string; parentType: string; hue: number; steps: ExecutionStep[] }
+
+const SCOPE_PARENT_TYPES = new Set(['loop', 'sub_workflow'])
+
+const snapshotNodeMap = computed(() => {
+  if (!displayLog.value?.snapshot) return new Map<string, WorkflowNode>()
+  return new Map(displayLog.value.snapshot.nodes.map(n => [n.id, n]))
+})
+
+/** 将父节点 ID 哈希为色相值 (0–345) */
+function parentIdToHue(id: string): number {
+  let hash = 0
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return (Math.abs(hash) % 24) * 15
+}
+
+function stepsOfItem(item: StepGroupItem): ExecutionStep[] {
+  return item.type === 'single' ? [item.step] : item.steps
+}
+
+function itemKey(item: StepGroupItem): string {
+  return item.type === 'single'
+    ? `s-${item.step.nodeId}-${item.step.startedAt}`
+    : `g-${item.groupKey}`
+}
+
+/** 将扁平步骤列表按 scope 父节点分组 */
+const groupedSteps = computed<StepGroupItem[]>(() => {
+  const log = displayLog.value
+  if (!log?.snapshot) {
+    return log ? log.steps.map(s => ({ type: 'single' as const, step: s })) : []
+  }
+
+  const nodeMap = snapshotNodeMap.value
+  const result: StepGroupItem[] = []
+  let currentGroup: { groupKey: string; parentLabel: string; parentType: string; steps: ExecutionStep[] } | null = null
+
+  /** 关闭当前分组，推入 result */
+  function flushGroup() {
+    if (!currentGroup) return
+    result.push({
+      type: 'group',
+      ...currentGroup,
+      hue: parentIdToHue(currentGroup.groupKey),
+    })
+    currentGroup = null
+  }
+
+  for (const step of log.steps) {
+    const node = nodeMap.get(step.nodeId)
+
+    // 1) 节点本身是 scope 父节点（loop / sub_workflow）
+    if (node && SCOPE_PARENT_TYPES.has(node.type)) {
+      const gid = step.nodeId
+      if (currentGroup && currentGroup.groupKey === gid) {
+        currentGroup.steps.push(step)
+      } else {
+        flushGroup()
+        currentGroup = { groupKey: gid, parentLabel: node.label, parentType: node.type, steps: [step] }
+      }
+      continue
+    }
+
+    // 2) 节点有 composite 元信息指向 scope 父节点
+    if (node?.composite?.rootId) {
+      const root = nodeMap.get(node.composite.rootId)
+      if (root && SCOPE_PARENT_TYPES.has(root.type)) {
+        const gid = root.id
+        if (currentGroup && currentGroup.groupKey === gid) {
+          currentGroup.steps.push(step)
+        } else {
+          flushGroup()
+          currentGroup = { groupKey: gid, parentLabel: root.label, parentType: root.type, steps: [step] }
+        }
+        continue
+      }
+    }
+
+    // 3) 节点不在 snapshot 中（嵌入式子工作流 / 引用工作流的节点），归入最近活跃分组
+    if (!node && currentGroup) {
+      currentGroup.steps.push(step)
+      continue
+    }
+
+    // 4) 独立步骤
+    flushGroup()
+    result.push({ type: 'single', step })
+  }
+
+  flushGroup()
+  return result
+})
 
 const stepTabs = ref<Record<string, string>>({})
 const copiedNodeId = ref<string | null>(null)
@@ -337,11 +436,22 @@ function setExpanded(nextExpanded: boolean) {
               v-if="displayLog"
               class="execution-cards flex-1 min-h-0 flex gap-2 p-2 overflow-x-auto"
             >
-              <div
-                v-for="step in displayLog.steps"
-                :key="step.nodeId"
-                class="shrink-0 w-[280px] border border-border rounded-md flex flex-col h-full bg-background overflow-hidden"
-              >
+              <template v-for="item in groupedSteps" :key="itemKey(item)">
+                <!-- 分组容器：group 带背景/padding，single 用 display:contents 透明 -->
+                <div
+                  :class="item.type === 'group'
+                    ? 'shrink-0 flex gap-2 p-2 rounded-lg h-full'
+                    : 'contents'"
+                  :style="item.type === 'group'
+                    ? { backgroundColor: `hsla(${item.hue}, 55%, 50%, 0.07)`, borderLeft: `3px solid hsl(${item.hue}, 55%, 55%)` }
+                    : undefined"
+                >
+                  <template v-for="(step, stepIdx) in stepsOfItem(item)" :key="`${step.nodeId}-${stepIdx}`">
+                    <div
+                      class="shrink-0 w-[280px] border border-border rounded-md flex flex-col h-full overflow-hidden"
+                      :class="item.type === 'single' ? 'bg-background' : ''"
+                      :style="item.type === 'group' ? { backgroundColor: `hsla(${item.hue}, 45%, 50%, 0.05)` } : undefined"
+                    >
                 <!-- 卡片 Header：状态 + 名称 + 时间 -->
                 <div class="flex items-center gap-1.5 px-2.5 py-1.5 border-b border-border">
                   <CheckCircle
@@ -489,7 +599,10 @@ function setExpanded(nextExpanded: boolean) {
                     </ScrollArea>
                   </TabsContent>
                 </Tabs>
-              </div>
+                    </div>
+                  </template>
+                </div>
+              </template>
             </div>
             <div
               v-else
