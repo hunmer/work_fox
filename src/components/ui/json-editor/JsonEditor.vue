@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import JsonEditorVue from 'json-editor-vue'
+import { Copy, Check } from 'lucide-vue-next'
 import { useThemeStore } from '@/stores/theme'
 
 const props = withDefaults(defineProps<{
@@ -28,18 +29,31 @@ const themeStore = useThemeStore()
 const isDark = computed(() => themeStore.isDark)
 
 const value = computed(() => props.modelValue)
+const copied = ref(false)
 
 function handleChange(val: any) {
   if (!props.readonly) emit('update:modelValue', val)
 }
+
+async function handleCopy() {
+  const text = typeof value.value === 'string' ? value.value : JSON.stringify(value.value, null, 2)
+  await navigator.clipboard.writeText(text)
+  copied.value = true
+  setTimeout(() => { copied.value = false }, 1500)
+}
 </script>
 
 <template>
-  <div class="json-editor-wrapper rounded-md border border-border overflow-auto w-full"
+  <div class="json-editor-wrapper rounded-md border border-border overflow-auto w-full relative"
     :class="{ 'jse-theme-dark': isDark, 'jse-readonly': readonly }"
     :style="{ height: typeof height === 'number' ? `${height}px` : height }">
     <JsonEditorVue :model-value="value" :mode="mode" :read-only="readonly" :main-menu-bar="mainMenuBar"
       :navigation-bar="navigationBar" :status-bar="statusBar" @update:model-value="handleChange" />
+    <button v-if="readonly" @click="handleCopy"
+      class="absolute bottom-2 right-2 p-1.5 rounded-md bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors backdrop-blur-sm z-10"
+      title="复制">
+      <component :is="copied ? Check : Copy" class="w-3.5 h-3.5" :class="{ 'text-green-500': copied }" />
+    </button>
   </div>
 </template>
 

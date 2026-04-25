@@ -150,7 +150,15 @@ module.exports = {
       description: '使用 GPT 模型进行对话，支持多轮对话和 JSON 输出',
       properties: [
         { key: 'apiKey', label: 'API Key', type: 'text', required: true, tooltip: 'OpenAI API Key', default: CONFIG_APIKEY },
-        { key: 'messages', label: '消息列表', type: 'object', required: true, tooltip: '消息数组，如 [{"role":"user","content":"你好"}]' },
+        { key: 'messages', label: '消息列表', type: 'array', required: true, tooltip: '对话消息列表', fields: [
+          { key: 'role', label: '角色', type: 'select', options: [
+            { label: '用户', value: 'user' },
+            { label: '助手', value: 'assistant' },
+            { label: '系统', value: 'system' },
+            { label: '开发者', value: 'developer' },
+          ], default: 'user' },
+          { key: 'content', label: '内容', type: 'text', placeholder: '消息内容' },
+        ] },
         { key: 'system', label: '系统提示', type: 'textarea', rows: 3, tooltip: '系统提示词（会作为第一条 system 消息插入）' },
         { key: 'model', label: '模型', type: 'select', default: 'gpt-4o', options: [
           { label: 'gpt-4o (默认)', value: 'gpt-4o' },

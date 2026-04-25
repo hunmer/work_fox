@@ -745,6 +745,14 @@ function confirmImport() {
                         @select="insertArrayVariable(prop.key, idx, field.key, $event)"
                       />
                     </div>
+                    <Textarea
+                      v-else-if="field.type === 'textarea'"
+                      :model-value="item[field.key]"
+                      :rows="field.rows || 2"
+                      :placeholder="field.placeholder || field.label"
+                      class="text-[11px] min-h-[40px]"
+                      @update:model-value="updateArrayItemField(prop.key, idx, field.key, $event)"
+                    />
                     <Input
                       v-else-if="field.type === 'number'"
                       type="number"

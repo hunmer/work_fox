@@ -126,11 +126,12 @@ export interface OutputField {
 export interface ArrayFieldItem {
   key: string
   label: string
-  type: 'text' | 'number' | 'select' | 'checkbox' | 'output_fields'
+  type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'output_fields'
   required?: boolean
   default?: any
   options?: { label: string; value: string }[]
   placeholder?: string
+  rows?: number
 }
 
 export interface NodePropertyVisibleWhen {
@@ -143,12 +144,24 @@ export interface NodePropertyVisibleWhen {
 export interface NodeProperty {
   key: string
   label: string
-  type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'code' | 'conditions' | 'array' | 'output_fields'
+  type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'code' | 'conditions' | 'array' | 'output_fields' | 'object' | 'range'
   required?: boolean
   readonly?: boolean
   default?: any
   options?: { label: string; value: string }[]
   tooltip?: string
+  /** textarea 行数 */
+  rows?: number
+  /** range 最小值 */
+  min?: number
+  /** range 最大值 */
+  max?: number
+  /** range 步长 */
+  step?: number
+  /** code 编辑器语言 */
+  codeLanguage?: string
+  /** code 编辑器高度 */
+  codeHeight?: number
   /** array 类型的子字段定义 */
   fields?: ArrayFieldItem[]
   /** 新增项的默认值模板 */

@@ -6,6 +6,7 @@ import { NodeResizer } from '@vue-flow/node-resizer'
 import { X, CircleSlash, SkipForward, FileText, CircleCheck, CircleX, ChevronRight, ChevronDown, Play, Loader2, Square, Flag } from 'lucide-vue-next'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
+import JsonEditor from '@/components/ui/json-editor/JsonEditor.vue'
 import { useWorkflowStore } from '@/stores/workflow'
 import { resolveInteraction, rejectInteraction } from '@/lib/backend-api/interaction'
 import type { NodeBreakpoint, NodeRunState } from '@/lib/workflow/types'
@@ -14,6 +15,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import {
   Tooltip,
   TooltipContent,
