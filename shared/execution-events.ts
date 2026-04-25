@@ -34,6 +34,7 @@ export interface WorkflowStartedEvent extends ExecutionEventBase {
 export interface WorkflowPausedEvent extends ExecutionEventBase {
   status: 'paused'
   currentNodeId?: string
+  reason?: 'manual' | 'breakpoint-start' | 'breakpoint-end'
 }
 
 export interface WorkflowResumedEvent extends ExecutionEventBase {
@@ -106,6 +107,7 @@ export interface ExecutionRecoveryState {
   workflowId: string
   status: EngineStatus
   currentNodeId?: string
+  pauseReason?: WorkflowPausedEvent['reason']
   updatedAt: number
   active: boolean
   log: ExecutionLog

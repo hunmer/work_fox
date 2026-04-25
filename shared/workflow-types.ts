@@ -11,6 +11,7 @@ export interface WorkflowFolder {
 }
 
 export type NodeRunState = 'normal' | 'disabled' | 'skipped'
+export type NodeBreakpoint = 'start' | 'end'
 
 export interface ConditionItem {
   id: string
@@ -35,6 +36,7 @@ export interface WorkflowNode {
   position: { x: number; y: number }
   data: Record<string, unknown>
   nodeState?: NodeRunState
+  breakpoint?: NodeBreakpoint
   composite?: WorkflowNodeCompositeMeta
 }
 

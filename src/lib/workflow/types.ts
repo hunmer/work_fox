@@ -11,6 +11,7 @@ export interface WorkflowFolder {
 
 /** 节点运行状态 */
 export type NodeRunState = 'normal' | 'disabled' | 'skipped'
+export type NodeBreakpoint = 'start' | 'end'
 
 /** 选择器条件项 */
 export interface ConditionItem {
@@ -37,6 +38,7 @@ export interface WorkflowNode {
   position: { x: number; y: number }
   data: Record<string, any> // 节点参数
   nodeState?: NodeRunState // 节点运行状态，默认 'normal'
+  breakpoint?: NodeBreakpoint
   composite?: WorkflowNodeCompositeMeta
 }
 

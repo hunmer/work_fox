@@ -3,12 +3,12 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import type { NodeProps } from '@vue-flow/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
-import { X, CircleSlash, SkipForward, FileText, CircleCheck, CircleX, ChevronRight, ChevronDown, Play, Loader2 } from 'lucide-vue-next'
+import { X, CircleSlash, SkipForward, FileText, CircleCheck, CircleX, ChevronRight, ChevronDown, Play, Loader2, Square, Flag } from 'lucide-vue-next'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
 import { useWorkflowStore } from '@/stores/workflow'
 import { resolveInteraction, rejectInteraction } from '@/lib/backend-api/interaction'
-import type { NodeRunState } from '@/lib/workflow/types'
+import type { NodeBreakpoint, NodeRunState } from '@/lib/workflow/types'
 import {
   Popover,
   PopoverContent,
@@ -48,6 +48,11 @@ const isBoundaryNode = computed(() => definition.value?.type === 'start' || defi
 const currentNodeState = computed<NodeRunState>(() => {
   const node = store.currentWorkflow?.nodes.find((n) => n.id === props.id)
   return node?.nodeState || 'normal'
+})
+
+const currentBreakpoint = computed<NodeBreakpoint | null>(() => {
+  const node = store.currentWorkflow?.nodes.find((n) => n.id === props.id)
+  return node?.breakpoint || null
 })
 
 /** 执行时的节点状*/
@@ -109,6 +114,17 @@ const stateBadge = computed(() => {
       return '已禁'
     case 'skipped':
       return '已跳'
+    default:
+      return ''
+  }
+})
+
+const breakpointBadge = computed(() => {
+  switch (currentBreakpoint.value) {
+    case 'start':
+      return '开始断点'
+    case 'end':
+      return '结束断点'
     default:
       return ''
   }
@@ -329,6 +345,12 @@ const isPartialTesting = computed(() => {
     && store.executionLog?.snapshot?.nodes[0]?.id === String(props.id)
 })
 
+const isPausedAtThisNode = computed(() => {
+  return store.executionStatus === 'paused'
+    && store.pausedNodeId === String(props.id)
+    && (store.pausedReason === 'breakpoint-start' || store.pausedReason === 'breakpoint-end')
+})
+
 /** 测试当前节点 */
 async function handleTestNode() {
   if (isCurrentNodeDebugging.value) {
@@ -341,6 +363,14 @@ async function handleTestNode() {
 async function handlePartialTest() {
   if (store.executionStatus === 'running' || store.executionStatus === 'paused') return
   await store.startPartialExecution(String(props.id))
+}
+
+async function handleResumeFromBreakpoint() {
+  await store.resumeExecution()
+}
+
+async function handleStopAtBreakpoint() {
+  await store.stopExecution()
 }
 </script>
 
@@ -394,6 +424,15 @@ async function handlePartialTest() {
             : 'bg-yellow-500 text-white'"
         >
           {{ stateBadge }}
+        </span>
+
+        <span
+          v-if="breakpointBadge"
+          class="absolute -bottom-2 left-2 inline-flex items-center gap-1 text-[10px] px-1.5 py-0 rounded-full font-medium z-10 text-white"
+          :class="currentBreakpoint === 'start' ? 'bg-blue-500' : 'bg-purple-500'"
+        >
+          <Flag class="w-2.5 h-2.5" />
+          {{ breakpointBadge }}
         </span>
 
         <!-- 日志图标（执行结束后有日志时显示-->
@@ -466,6 +505,27 @@ async function handlePartialTest() {
               &#23616;&#37096;&#27979;&#35797;
             </button>
           </div>
+        </div>
+
+        <div
+          v-if="isPausedAtThisNode"
+          class="nodrag nopan mx-2 mb-2 flex items-center gap-1 rounded border border-blue-500/30 bg-blue-500/10 p-1"
+          @click.stop
+        >
+          <button
+            class="inline-flex h-6 flex-1 items-center justify-center gap-1 rounded bg-blue-500 px-2 text-[10px] font-medium text-white hover:bg-blue-600"
+            @click.stop="handleResumeFromBreakpoint"
+          >
+            <Play class="w-3 h-3" />
+            继续运行
+          </button>
+          <button
+            class="inline-flex h-6 flex-1 items-center justify-center gap-1 rounded bg-destructive px-2 text-[10px] font-medium text-destructive-foreground hover:bg-destructive/90"
+            @click.stop="handleStopAtBreakpoint"
+          >
+            <Square class="w-3 h-3" />
+            中断
+          </button>
         </div>
 
         <!-- 自定义视图内容区 -->

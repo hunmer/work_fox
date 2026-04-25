@@ -4,13 +4,13 @@ import { VueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { MiniMap } from '@vue-flow/minimap'
 import { Controls } from '@vue-flow/controls'
-import { Plus, Maximize, CircleCheck, CircleSlash, SkipForward, Info, Group, Trash2 } from 'lucide-vue-next'
+import { Plus, Maximize, CircleCheck, CircleSlash, SkipForward, Info, Group, Trash2, Flag, FlagOff } from 'lucide-vue-next'
 import CustomEdge from './CustomEdge.vue'
 import CanvasToolbar from './CanvasToolbar.vue'
 import { WORKFLOW_CANVAS_CONTEXT_KEY } from './workflowCanvasContext'
 import { useWorkflowStore } from '@/stores/workflow'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
-import type { NodeRunState } from '@/lib/workflow/types'
+import type { NodeBreakpoint, NodeRunState } from '@/lib/workflow/types'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -105,6 +105,12 @@ function handleFitView() {
 function setNodeState(state: NodeRunState) {
   for (const id of targetNodeIds.value) {
     store.updateNodeState(id, state)
+  }
+}
+
+function setNodeBreakpoint(breakpoint: NodeBreakpoint | null) {
+  for (const id of targetNodeIds.value) {
+    store.updateNodeBreakpoint(id, breakpoint)
   }
 }
 
@@ -229,6 +235,19 @@ function handleBatchDelete() {
             <ContextMenuItem @click="setNodeState('skipped')">
               <SkipForward class="w-4 h-4 mr-2 text-yellow-500" />
               跳过（跳过执行）
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem @click="setNodeBreakpoint('start')">
+              <Flag class="w-4 h-4 mr-2 text-blue-500" />
+              设置开始断点
+            </ContextMenuItem>
+            <ContextMenuItem @click="setNodeBreakpoint('end')">
+              <Flag class="w-4 h-4 mr-2 text-purple-500" />
+              设置结束断点
+            </ContextMenuItem>
+            <ContextMenuItem @click="setNodeBreakpoint(null)">
+              <FlagOff class="w-4 h-4 mr-2 text-muted-foreground" />
+              取消断点
             </ContextMenuItem>
             <template v-if="!isBoundaryNode">
               <ContextMenuSeparator />

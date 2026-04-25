@@ -62,6 +62,8 @@ interface ExecutionSession {
   executionOrder: WorkflowNode[]
   currentIndex: number
   pauseRequested: boolean
+  pauseReason?: 'manual' | 'breakpoint-start' | 'breakpoint-end'
+  pauseNodeId?: string
   stopRequested: boolean
   startedAt: number
   finishedAt?: number
@@ -73,6 +75,7 @@ interface ExecutionSession {
   eventSequence: number
   recentEvents: ExecutionBacklogEvent[]
   loopStack: LoopExecutionFrame[]
+  breakpointBypassKeys: Set<string>
 }
 
 interface FinishedExecutionRecovery {
@@ -204,6 +207,8 @@ export class BackendWorkflowExecutionManager {
       executionOrder: [],
       currentIndex: 0,
       pauseRequested: false,
+      pauseReason: undefined,
+      pauseNodeId: undefined,
       stopRequested: false,
       startedAt: Date.now(),
       steps: [],
@@ -213,6 +218,7 @@ export class BackendWorkflowExecutionManager {
       eventSequence: 0,
       recentEvents: [],
       loopStack: [],
+      breakpointBypassKeys: new Set(),
     }
   }
 
@@ -252,8 +258,15 @@ export class BackendWorkflowExecutionManager {
       return { executionId, status: session.status }
     }
 
+    const previousPauseReason = session.pauseReason
     session.pauseRequested = false
+    session.pauseReason = undefined
+    session.pauseNodeId = undefined
     session.status = 'running'
+    const currentNode = session.executionOrder[session.currentIndex]
+    if (previousPauseReason === 'breakpoint-start' && currentNode?.breakpoint === 'start') {
+      session.breakpointBypassKeys.add(this.getBreakpointKey(currentNode.id, 'start'))
+    }
     this.emitEvent(session, 'workflow:resumed', {
       executionId: session.id,
       workflowId: session.workflow.id,
@@ -353,6 +366,8 @@ export class BackendWorkflowExecutionManager {
       if (session.pauseRequested) {
         session.currentIndex = i
         session.status = 'paused'
+        session.pauseReason = 'manual'
+        session.pauseNodeId = session.executionOrder[i]?.id
         this.emitLog(session)
         this.emitEvent(session, 'workflow:paused', {
           executionId: session.id,
@@ -360,6 +375,7 @@ export class BackendWorkflowExecutionManager {
           timestamp: Date.now(),
           status: 'paused',
           currentNodeId: session.executionOrder[i]?.id,
+          reason: 'manual',
         })
         return
       }
@@ -393,6 +409,11 @@ export class BackendWorkflowExecutionManager {
         continue
       }
 
+      if (this.shouldPauseAtBreakpoint(session, node, 'start')) {
+        this.pauseAtBreakpoint(session, i, node, 'start')
+        return
+      }
+
       const result = await this.executeNode(session, node)
       if (result === 'interrupted') {
         i -= 1
@@ -404,6 +425,11 @@ export class BackendWorkflowExecutionManager {
         this.emitLog(session)
         this.emitWorkflowError(session)
         this.persistAndCleanup(session)
+        return
+      }
+
+      if (this.shouldPauseAtBreakpoint(session, node, 'end')) {
+        this.pauseAtBreakpoint(session, i + 1, node, 'end')
         return
       }
     }
@@ -1065,6 +1091,32 @@ if (typeof main === 'function') return main({ params, context })`)
     this.emitLog(session)
   }
 
+  private shouldPauseAtBreakpoint(session: ExecutionSession, node: WorkflowNode, breakpoint: 'start' | 'end'): boolean {
+    if (node.breakpoint !== breakpoint) return false
+    return !session.breakpointBypassKeys.has(this.getBreakpointKey(node.id, breakpoint))
+  }
+
+  private pauseAtBreakpoint(session: ExecutionSession, nextIndex: number, node: WorkflowNode, breakpoint: 'start' | 'end'): void {
+    session.currentIndex = nextIndex
+    session.status = 'paused'
+    session.pauseReason = breakpoint === 'start' ? 'breakpoint-start' : 'breakpoint-end'
+    session.pauseNodeId = node.id
+    session.breakpointBypassKeys.add(this.getBreakpointKey(node.id, breakpoint))
+    this.emitLog(session)
+    this.emitEvent(session, 'workflow:paused', {
+      executionId: session.id,
+      workflowId: session.workflow.id,
+      timestamp: Date.now(),
+      status: 'paused',
+      currentNodeId: node.id,
+      reason: session.pauseReason,
+    })
+  }
+
+  private getBreakpointKey(nodeId: string, breakpoint: 'start' | 'end'): string {
+    return `${nodeId}:${breakpoint}`
+  }
+
   private isNodeReachable(session: ExecutionSession, nodeId: string, visited?: Set<string>): boolean {
     const seen = visited || new Set<string>()
     if (seen.has(nodeId)) return false
@@ -1373,7 +1425,8 @@ if (typeof main === 'function') return main({ params, context })`)
       executionId: session.id,
       workflowId: session.workflow.id,
       status: session.status,
-      currentNodeId: session.executionOrder[session.currentIndex]?.id,
+      currentNodeId: session.pauseNodeId || session.executionOrder[session.currentIndex]?.id,
+      pauseReason: session.pauseReason,
       updatedAt: session.lastUpdatedAt,
       active,
       log: this.currentLog(session),

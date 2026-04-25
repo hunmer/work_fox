@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch, inject, provide, type Ref, type App } from 'vue'
-import type { Workflow, WorkflowFolder, WorkflowNode, ExecutionLog, EmbeddedWorkflow, WorkflowGroup } from '@/lib/workflow/types'
+import type { Workflow, WorkflowFolder, WorkflowNode, ExecutionLog, EmbeddedWorkflow, WorkflowGroup, NodeBreakpoint } from '@/lib/workflow/types'
 import type { EngineStatus } from '@shared/workflow-types'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { executeRendererWorkflowTool } from '@/lib/agent/workflow-renderer-tools'
@@ -783,6 +783,17 @@ function createEditActions(
     if (node) node.nodeState = nodeState
   }
 
+  function updateNodeBreakpoint(nodeId: string, breakpoint: NodeBreakpoint | null): void {
+    undoRedo.pushUndo('修改节点断点')
+    const node = currentWorkflow.value?.nodes.find((n) => n.id === nodeId)
+    if (!node) return
+    if (breakpoint) {
+      node.breakpoint = breakpoint
+    } else {
+      delete node.breakpoint
+    }
+  }
+
   function addEdge(source: string, target: string, sourceHandle: string | null = null, targetHandle: string | null = null): void {
     if (!currentWorkflow.value) return
     const connectCheck = canConnectNodes(source, target, sourceHandle)
@@ -815,6 +826,7 @@ function createEditActions(
     updateNodePosition,
     updateNodeLabel,
     updateNodeState,
+    updateNodeBreakpoint,
     addEdge,
     removeEdge,
     canDeleteNode,
@@ -841,6 +853,8 @@ function createExecutionActions(
 ) {
   let currentExecutionId: string | null = null
   let startingExecution = false
+  const pausedNodeId = ref<string | null>(null)
+  const pausedReason = ref<'manual' | 'breakpoint-start' | 'breakpoint-end' | null>(null)
   const backendConnectionState = ref<'idle' | 'connected' | 'reconnecting' | 'error'>('idle')
   const backendReconnectAttempt = ref(0)
   const backendLastError = ref<string | null>(null)
@@ -871,6 +885,8 @@ function createExecutionActions(
     executionStatus.value = recovery.status
     executionLog.value = recovery.log
     executionContext.value = recovery.context as Record<string, any>
+    pausedNodeId.value = recovery.status === 'paused' ? recovery.currentNodeId || null : null
+    pausedReason.value = recovery.status === 'paused' ? recovery.pauseReason || 'manual' : null
 
     if (!recovery.active && (recovery.status === 'completed' || recovery.status === 'error')) {
       if (execLogMgr.selectedExecutionLogId.value !== recovery.log.id) {
@@ -890,13 +906,19 @@ function createExecutionActions(
         executionStatus.value = 'running'
         executionLog.value = null
         executionContext.value = {}
+        pausedNodeId.value = null
+        pausedReason.value = null
         execLogMgr.selectedExecutionLogId.value = null
         break
       case 'workflow:paused':
         executionStatus.value = 'paused'
+        pausedNodeId.value = (payload as ExecutionEventMap['workflow:paused']).currentNodeId || null
+        pausedReason.value = (payload as ExecutionEventMap['workflow:paused']).reason || 'manual'
         break
       case 'workflow:resumed':
         executionStatus.value = 'running'
+        pausedNodeId.value = null
+        pausedReason.value = null
         break
       case 'execution:log':
         executionLog.value = (payload as ExecutionEventMap['execution:log']).log
@@ -907,6 +929,8 @@ function createExecutionActions(
       case 'workflow:completed':
         currentExecutionId = payload.executionId
         executionStatus.value = 'completed'
+        pausedNodeId.value = null
+        pausedReason.value = null
         executionLog.value = (payload as ExecutionEventMap['workflow:completed']).log
         executionContext.value = (payload as ExecutionEventMap['workflow:completed']).context as Record<string, any>
         if (currentWorkflow.value) {
@@ -917,6 +941,8 @@ function createExecutionActions(
       case 'workflow:error':
         currentExecutionId = payload.executionId
         executionStatus.value = 'error'
+        pausedNodeId.value = null
+        pausedReason.value = null
         if ((payload as ExecutionEventMap['workflow:error']).log) {
           executionLog.value = (payload as ExecutionEventMap['workflow:error']).log || null
           if (currentWorkflow.value) {
@@ -1057,6 +1083,8 @@ function createExecutionActions(
     pauseExecution,
     resumeExecution,
     stopExecution,
+    pausedNodeId,
+    pausedReason,
     backendConnectionState,
     backendReconnectAttempt,
     backendLastError,
@@ -1718,6 +1746,8 @@ export function createWorkflowStore(tabId: string) {
       effectiveSelectedNodeId,
       rootFolders, selectedNode, selectedNodes, executionValidationError,
       executionStatus, executionLog, executionContext,
+      pausedNodeId: execActions.pausedNodeId,
+      pausedReason: execActions.pausedReason,
       executionLogs: execLogMgr.executionLogs,
       selectedExecutionLogId: execLogMgr.selectedExecutionLogId,
       selectedExecutionLog,
