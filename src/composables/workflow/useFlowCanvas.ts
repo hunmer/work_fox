@@ -484,6 +484,7 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
           childGroupIds: group.childGroupIds,
           locked: group.locked,
           disabled: group.disabled,
+          color: group.color,
           width: bb.width,
           height: bb.height,
         }

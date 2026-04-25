@@ -1105,6 +1105,41 @@ function createGroupActions(
     }
   }
 
+  function computeGroupBounds(group: WorkflowGroup): { x: number; y: number; width: number; height: number } | null {
+    if (typeof group.x === 'number' && typeof group.y === 'number' && typeof group.width === 'number' && typeof group.height === 'number') {
+      return { x: group.x, y: group.y, width: group.width, height: group.height }
+    }
+
+    const nodeBounds = computeNodeBounds(getDescendantNodeIds(group.id))
+    if (!nodeBounds) return null
+    return nodeBounds
+  }
+
+  function computeGroupItemBounds(nodeIds: string[], groupIds: string[]): { x: number; y: number; width: number; height: number } | null {
+    const nodeBounds = computeNodeBounds(nodeIds)
+    const boxes = [
+      ...(nodeBounds ? [nodeBounds] : []),
+      ...groupIds
+        .map(id => getGroupById(id))
+        .filter((group): group is WorkflowGroup => !!group)
+        .map(group => computeGroupBounds(group))
+        .filter((bounds): bounds is { x: number; y: number; width: number; height: number } => !!bounds),
+    ]
+    if (boxes.length === 0) return null
+
+    const minX = Math.min(...boxes.map(box => box.x))
+    const minY = Math.min(...boxes.map(box => box.y))
+    const maxX = Math.max(...boxes.map(box => box.x + box.width))
+    const maxY = Math.max(...boxes.map(box => box.y + box.height))
+
+    return {
+      x: minX - GROUP_PADDING,
+      y: minY - GROUP_HEADER_HEIGHT - GROUP_PADDING,
+      width: Math.max(100, maxX - minX + GROUP_PADDING * 2),
+      height: Math.max(60, maxY - minY + GROUP_HEADER_HEIGHT + GROUP_PADDING * 2),
+    }
+  }
+
   // ── 查询方法 ──
 
   function getGroupOfNode(nodeId: string): WorkflowGroup | undefined {
@@ -1160,17 +1195,27 @@ function createGroupActions(
       savedNodeStates: {},
     }
 
-    // 从其他分组中移除这些节点（一对一关系）
+    const childGroupIds = new Set<string>()
+
+    // 已经属于分组的节点不拆出原分组，而是把原分组嵌套到新分组中
     for (const nodeId of nodeIds) {
       const oldGroup = getGroupOfNode(nodeId)
       if (oldGroup) {
-        oldGroup.childNodeIds = oldGroup.childNodeIds.filter(id => id !== nodeId)
-        // 空分组不自动删除，保留供后续添加
+        childGroupIds.add(oldGroup.id)
+        continue
       }
       newGroup.childNodeIds.push(nodeId)
     }
 
-    const bounds = computeNodeBounds(newGroup.childNodeIds)
+    for (const childGroupId of childGroupIds) {
+      const parentGroup = getParentGroup(childGroupId)
+      if (parentGroup) {
+        parentGroup.childGroupIds = parentGroup.childGroupIds.filter(id => id !== childGroupId)
+      }
+      newGroup.childGroupIds.push(childGroupId)
+    }
+
+    const bounds = computeGroupItemBounds(newGroup.childNodeIds, newGroup.childGroupIds)
     if (bounds) {
       Object.assign(newGroup, bounds)
     }
@@ -1282,6 +1327,13 @@ function createGroupActions(
   }
 
   const updateGroupSize = updateGroupBounds
+
+  function updateGroupColor(groupId: string, color?: string): void {
+    const group = getGroupById(groupId)
+    if (!group) return
+    undoRedo.pushUndo('修改分组颜色')
+    group.color = color
+  }
 
   // ── 状态切换 ──
 
@@ -1445,6 +1497,7 @@ function createGroupActions(
     renameGroup,
     updateGroupBounds,
     updateGroupSize,
+    updateGroupColor,
     toggleGroupLock,
     toggleGroupDisabled,
     arrangeGroupNodes,
