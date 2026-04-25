@@ -76,8 +76,21 @@ const nodeLogsSummary = computed(() => {
   return lines.join('\n')
 })
 
+const isPausedAtThisNode = computed(() => {
+  return store.executionStatus === 'paused'
+    && store.pausedNodeId === String(props.id)
+    && (
+      store.pausedReason === 'breakpoint-start'
+      || store.pausedReason === 'breakpoint-end'
+      || !!currentBreakpoint.value
+    )
+})
+
 /** 节点状态对应的样式 */
 const statusColor = computed(() => {
+  if (isPausedAtThisNode.value) {
+    return 'border-blue-600 ring-2 ring-blue-500 shadow-blue-500/40 shadow-md animate-pulse'
+  }
   switch (nodeStatus.value) {
     case 'running':
       return 'border-blue-500 shadow-blue-500/30 shadow-md animate-pulse'
@@ -343,12 +356,6 @@ const isCurrentNodeDebugging = computed(() => {
 const isPartialTesting = computed(() => {
   return store.executionStatus === 'running'
     && store.executionLog?.snapshot?.nodes[0]?.id === String(props.id)
-})
-
-const isPausedAtThisNode = computed(() => {
-  return store.executionStatus === 'paused'
-    && store.pausedNodeId === String(props.id)
-    && (store.pausedReason === 'breakpoint-start' || store.pausedReason === 'breakpoint-end')
 })
 
 /** 测试当前节点 */
