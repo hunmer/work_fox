@@ -23,6 +23,7 @@ module.exports = {
         { key: 'apiKey', label: 'API Key', type: 'text', required: true, tooltip: 'OpenAI API Key', default: CONFIG_APIKEY },
         { key: 'prompt', label: '图片描述', type: 'textarea', required: true, tooltip: '描述你想生成的图片内容' },
         { key: 'model', label: '模型', type: 'select', default: 'gpt-image-1', options: [
+          { label: 'gpt-image-2', value: 'gpt-image-2' },
           { label: 'gpt-image-1 (默认)', value: 'gpt-image-1' },
           { label: 'gpt-image-1.5', value: 'gpt-image-1.5' },
           { label: 'gpt-image-1-mini', value: 'gpt-image-1-mini' },
@@ -168,6 +169,17 @@ module.exports = {
           { label: 'gpt-4.1-nano', value: 'gpt-4.1-nano' },
           { label: 'o3', value: 'o3' },
           { label: 'o4-mini', value: 'o4-mini' },
+          { label: 'gpt-5', value: 'gpt-5' },
+          { label: 'gpt-5-mini', value: 'gpt-5-mini' },
+          { label: 'gpt-5.1', value: 'gpt-5.1' },
+          { label: 'gpt-5.1-thinking', value: 'gpt-5.1-thinking' },
+          { label: 'gpt-5.2', value: 'gpt-5.2' },
+          { label: 'gpt-5.2-pro', value: 'gpt-5.2-pro' },
+          { label: 'gpt-5.4', value: 'gpt-5.4' },
+          { label: 'gpt-5.4-mini', value: 'gpt-5.4-mini' },
+          { label: 'gpt-5.4-nano', value: 'gpt-5.4-nano' },
+          { label: 'gpt-5.4-pro', value: 'gpt-5.4-pro' },
+          { label: 'gpt-5.5', value: 'gpt-5.5' },
         ] },
         { key: 'temperature', label: '温度', type: 'range', default: 1, min: 0, max: 2, step: 0.1, tooltip: '0-2，越高越随机' },
         { key: 'max_tokens', label: '最大 Token', type: 'number', tooltip: '最大输出 token 数' },
@@ -189,37 +201,49 @@ module.exports = {
         ] },
       ],
       handler: async (ctx, args) => {
-        const client = createClient(args)
-        let messages = args.messages
-        if (typeof messages === 'string') {
-          try { messages = JSON.parse(messages) } catch { messages = [{ role: 'user', content: messages }] }
-        }
-        if (!Array.isArray(messages)) messages = [messages]
-        if (args.system) {
-          messages = [{ role: 'system', content: args.system }, ...messages]
-        }
-        const params = {
-          model: args.model || 'gpt-4o',
-          messages,
-          ...pick(args, ['temperature', 'max_tokens']),
-        }
-        if (args.response_format === 'json_object') {
-          params.response_format = { type: 'json_object' }
-        }
-        ctx.logger.info(`Chat - 模型: ${params.model}, 消息数: ${messages.length}`)
-        const result = await client.chat.completions.create(params)
-        const choice = result.choices?.[0]
-        ctx.logger.info(`Chat 完成, finish_reason: ${choice?.finish_reason}`)
-        return {
-          success: true,
-          message: choice?.message?.content || '',
-          data: {
-            content: choice?.message?.content,
-            role: choice?.message?.role,
-            finish_reason: choice?.finish_reason,
-            usage: result.usage,
-            model: result.model,
-          },
+        try {
+          const client = createClient(args)
+          let messages = args.messages
+          if (typeof messages === 'string') {
+            try { messages = JSON.parse(messages) } catch { messages = [{ role: 'user', content: messages }] }
+          }
+          if (!Array.isArray(messages)) messages = [messages]
+          messages = messages.map(m => ({
+            role: m.role || 'user',
+            content: m.content,
+          }))
+          if (args.system) {
+            messages = [{ role: 'system', content: args.system }, ...messages]
+          }
+          const params = {
+            model: args.model || 'gpt-4o',
+            messages,
+            ...pick(args, ['temperature', 'max_tokens']),
+          }
+          if (args.response_format === 'json_object') {
+            params.response_format = { type: 'json_object' }
+          }
+          ctx.logger.info(`Chat - 模型: ${params.model}, 消息数: ${messages.length}`)
+          ctx.logger.info(`Chat - messages: ${JSON.stringify(messages)}`)
+          const result = await client.chat.completions.create(params)
+          ctx.logger.info(`Chat - SDK 返回: ${JSON.stringify(result).substring(0, 500)}`)
+          const choice = result.choices?.[0]
+          ctx.logger.info(`Chat 完成, finish_reason: ${choice?.finish_reason}`)
+          return {
+            success: true,
+            message: choice?.message?.content || '',
+            data: {
+              content: choice?.message?.content,
+              role: choice?.message?.role,
+              finish_reason: choice?.finish_reason,
+              usage: result.usage,
+              model: result.model,
+            },
+          }
+        } catch (err) {
+          ctx.logger.error(`Chat 失败: ${err.message}`)
+          ctx.logger.error(`Chat 错误堆栈: ${err.stack}`)
+          return { success: false, message: `Chat 失败: ${err.message}`, data: {} }
         }
       },
     },

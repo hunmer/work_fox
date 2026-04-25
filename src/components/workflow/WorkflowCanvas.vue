@@ -4,7 +4,7 @@ import { VueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { MiniMap } from '@vue-flow/minimap'
 import { Controls } from '@vue-flow/controls'
-import { Plus, Maximize, CircleCheck, CircleSlash, SkipForward, Info, Group, Trash2, Flag, FlagOff } from 'lucide-vue-next'
+import { Plus, Maximize, CircleCheck, CircleSlash, SkipForward, Info, Group, Trash2, Flag, FlagOff, Settings, Copy, FolderTree } from 'lucide-vue-next'
 import CustomEdge from './CustomEdge.vue'
 import CanvasToolbar from './CanvasToolbar.vue'
 import { WORKFLOW_CANVAS_CONTEXT_KEY } from './workflowCanvasContext'
@@ -16,6 +16,9 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
 
@@ -212,10 +215,18 @@ function handleBatchDelete() {
 
           <!-- 多选菜单 -->
           <template v-if="isMultiSelect">
-            <ContextMenuItem @click="handleMergeToGroup">
-              <Group class="w-4 h-4 mr-2" />
-              合并成组
-            </ContextMenuItem>
+            <ContextMenuSub>
+              <ContextMenuSubTrigger>
+                <Group class="w-4 h-4 mr-2" />
+                分组
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent>
+                <ContextMenuItem @click="handleMergeToGroup">
+                  <Group class="w-4 h-4 mr-2" />
+                  合并成组
+                </ContextMenuItem>
+              </ContextMenuSubContent>
+            </ContextMenuSub>
             <ContextMenuItem class="text-destructive" @click="handleBatchDelete">
               <Trash2 class="w-4 h-4 mr-2" />
               批量删除
@@ -224,32 +235,62 @@ function handleBatchDelete() {
 
           <!-- 单选菜单 -->
           <template v-else>
-            <ContextMenuItem @click="setNodeState('normal')">
-              <CircleCheck class="w-4 h-4 mr-2 text-green-500" />
-              正常
-            </ContextMenuItem>
-            <ContextMenuItem @click="setNodeState('disabled')">
-              <CircleSlash class="w-4 h-4 mr-2 text-red-500" />
-              禁用（中止执行）
-            </ContextMenuItem>
-            <ContextMenuItem @click="setNodeState('skipped')">
-              <SkipForward class="w-4 h-4 mr-2 text-yellow-500" />
-              跳过（跳过执行）
-            </ContextMenuItem>
-            <ContextMenuSeparator />
-            <ContextMenuItem @click="setNodeBreakpoint('start')">
-              <Flag class="w-4 h-4 mr-2 text-blue-500" />
-              设置开始断点
-            </ContextMenuItem>
-            <ContextMenuItem @click="setNodeBreakpoint('end')">
-              <Flag class="w-4 h-4 mr-2 text-purple-500" />
-              设置结束断点
-            </ContextMenuItem>
-            <ContextMenuItem @click="setNodeBreakpoint(null)">
-              <FlagOff class="w-4 h-4 mr-2 text-muted-foreground" />
-              取消断点
-            </ContextMenuItem>
+            <ContextMenuSub>
+              <ContextMenuSubTrigger>
+                <Settings class="w-4 h-4 mr-2" />
+                节点状态
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent>
+                <ContextMenuItem @click="setNodeState('normal')">
+                  <CircleCheck class="w-4 h-4 mr-2 text-green-500" />
+                  正常
+                </ContextMenuItem>
+                <ContextMenuItem @click="setNodeState('disabled')">
+                  <CircleSlash class="w-4 h-4 mr-2 text-red-500" />
+                  禁用（中止执行）
+                </ContextMenuItem>
+                <ContextMenuItem @click="setNodeState('skipped')">
+                  <SkipForward class="w-4 h-4 mr-2 text-yellow-500" />
+                  跳过（跳过执行）
+                </ContextMenuItem>
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+            <ContextMenuSub>
+              <ContextMenuSubTrigger>
+                <Flag class="w-4 h-4 mr-2" />
+                断点设置
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent>
+                <ContextMenuItem @click="setNodeBreakpoint('start')">
+                  <Flag class="w-4 h-4 mr-2 text-blue-500" />
+                  设置开始断点
+                </ContextMenuItem>
+                <ContextMenuItem @click="setNodeBreakpoint('end')">
+                  <Flag class="w-4 h-4 mr-2 text-purple-500" />
+                  设置结束断点
+                </ContextMenuItem>
+                <ContextMenuItem @click="setNodeBreakpoint(null)">
+                  <FlagOff class="w-4 h-4 mr-2 text-muted-foreground" />
+                  取消断点
+                </ContextMenuItem>
+              </ContextMenuSubContent>
+            </ContextMenuSub>
             <template v-if="!isBoundaryNode">
+              <ContextMenuSub>
+                <ContextMenuSubTrigger>
+                  <FolderTree class="w-4 h-4 mr-2" />
+                  分组
+                </ContextMenuSubTrigger>
+                <ContextMenuSubContent>
+                  <ContextMenuItem
+                    v-if="availableGroups.length > 0"
+                    @click="handleShowGroupPicker"
+                  >
+                    <Group class="w-4 h-4 mr-2" />
+                    加入分组
+                  </ContextMenuItem>
+                </ContextMenuSubContent>
+              </ContextMenuSub>
               <ContextMenuSeparator />
               <ContextMenuItem @click="handleShowNodeInfo">
                 <Info class="w-4 h-4 mr-2" />
@@ -259,14 +300,8 @@ function handleBatchDelete() {
                 v-if="targetNodeIds[0] && store.canCloneNode(targetNodeIds[0])"
                 @click="handleCloneNode"
               >
+                <Copy class="w-4 h-4 mr-2" />
                 复制节点
-              </ContextMenuItem>
-              <ContextMenuItem
-                v-if="availableGroups.length > 0"
-                @click="handleShowGroupPicker"
-              >
-                <Group class="w-4 h-4 mr-2" />
-                加入分组
               </ContextMenuItem>
               <ContextMenuItem
                 v-if="targetNodeIds[0] && store.canDeleteNode(targetNodeIds[0])"

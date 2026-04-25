@@ -1,19 +1,23 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import JsonEditorVue from 'json-editor-vue'
-import { Copy, Check } from 'lucide-vue-next'
+import { Copy, Check, Braces, FileText } from 'lucide-vue-next'
 import { useThemeStore } from '@/stores/theme'
+
+type JsonEditorMode = 'tree' | 'text' | 'table'
 
 const props = withDefaults(defineProps<{
   modelValue?: any
   readonly?: boolean
-  mode?: 'tree' | 'text' | 'table'
+  readOnly?: boolean
+  mode?: JsonEditorMode
   height?: number | string
   mainMenuBar?: boolean
   navigationBar?: boolean
   statusBar?: boolean
 }>(), {
   readonly: false,
+  readOnly: false,
   mode: 'tree',
   height: '100%',
   mainMenuBar: false,
@@ -23,20 +27,32 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [value: any]
+  'update:mode': [value: JsonEditorMode]
 }>()
 
 const themeStore = useThemeStore()
 const isDark = computed(() => themeStore.isDark)
+const isReadonly = computed(() => props.readonly || props.readOnly)
 
 const value = computed(() => props.modelValue)
+const currentMode = ref<JsonEditorMode>(props.mode)
 const copied = ref(false)
 
+watch(() => props.mode, (mode) => {
+  currentMode.value = mode
+})
+
 function handleChange(val: any) {
-  if (!props.readonly) emit('update:modelValue', val)
+  if (!isReadonly.value) emit('update:modelValue', val)
+}
+
+function setMode(mode: 'tree' | 'text') {
+  currentMode.value = mode
+  emit('update:mode', mode)
 }
 
 async function handleCopy() {
-  const text = typeof value.value === 'string' ? value.value : JSON.stringify(value.value, null, 2)
+  const text = typeof value.value === 'string' ? value.value : JSON.stringify(value.value, null, 2) ?? ''
   await navigator.clipboard.writeText(text)
   copied.value = true
   setTimeout(() => { copied.value = false }, 1500)
@@ -45,11 +61,27 @@ async function handleCopy() {
 
 <template>
   <div class="json-editor-wrapper rounded-md border border-border overflow-auto w-full relative"
-    :class="{ 'jse-theme-dark': isDark, 'jse-readonly': readonly }"
+    :class="{ 'jse-theme-dark': isDark, 'jse-readonly': isReadonly }"
     :style="{ height: typeof height === 'number' ? `${height}px` : height }">
-    <JsonEditorVue :model-value="value" :mode="mode" :read-only="readonly" :main-menu-bar="mainMenuBar"
-      :navigation-bar="navigationBar" :status-bar="statusBar" @update:model-value="handleChange" />
-    <button v-if="readonly" @click="handleCopy"
+    <div class="json-editor-host">
+      <JsonEditorVue :model-value="value" :mode="currentMode" :read-only="isReadonly" :mainMenuBar="mainMenuBar"
+        :navigationBar="navigationBar" :statusBar="statusBar" @update:model-value="handleChange" />
+    </div>
+    <div class="absolute top-2 right-2 z-10 inline-flex overflow-hidden rounded-md border border-border bg-muted/80 text-muted-foreground backdrop-blur-sm">
+      <button type="button"
+        class="inline-flex h-7 min-w-8 items-center justify-center px-2 transition-colors hover:bg-muted hover:text-foreground"
+        :class="{ 'bg-background text-foreground': currentMode === 'tree' }" title="Tree mode"
+        @click.stop="setMode('tree')">
+        <Braces class="w-3.5 h-3.5" />
+      </button>
+      <button type="button"
+        class="inline-flex h-7 min-w-8 items-center justify-center border-l border-border px-2 transition-colors hover:bg-muted hover:text-foreground"
+        :class="{ 'bg-background text-foreground': currentMode === 'text' }" title="Text mode"
+        @click.stop="setMode('text')">
+        <FileText class="w-3.5 h-3.5" />
+      </button>
+    </div>
+    <button v-if="isReadonly" type="button" @click.stop="handleCopy"
       class="absolute bottom-2 right-2 p-1.5 rounded-md bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors backdrop-blur-sm z-10"
       title="复制">
       <component :is="copied ? Check : Copy" class="w-3.5 h-3.5" :class="{ 'text-green-500': copied }" />
@@ -58,8 +90,9 @@ async function handleCopy() {
 </template>
 
 <style>
-.json-editor-wrapper>div,
-.json-editor-wrapper .jse-main {
+.json-editor-host,
+.json-editor-host>div,
+.json-editor-host .jse-main {
   height: 100%;
 }
 
@@ -68,26 +101,24 @@ async function handleCopy() {
 }
 
 .json-editor-wrapper .jse-json-node,
-json-editor-wrapper .jse-value,
+.json-editor-wrapper .jse-value,
 .json-editor-wrapper .jse-key,
 .json-editor-wrapper .jse-string,
 .json-editor-wrapper .jse-number {
   font-size: 12px;
 }
 
-.json-editor-wrapper.jse-readonly .jse-value,
-.json-editor-wrapper.jse-readonly .jse-key,
-.json-editor-wrapper.jse-readonly .jse-string,
-.json-editor-wrapper.jse-readonly .jse-number,
-.json-editor-wrapper.jse-readonly .jse-boolean,
-.json-editor-wrapper.jse-readonly .jse-null {
-  pointer-events: none;
-}
-
 .json-editor-wrapper.jse-readonly .jse-context-menu,
 .json-editor-wrapper.jse-readonly .jse-main-menu,
-.json-editor-wrapper.jse-readonly .jse-selection {
+.json-editor-wrapper.jse-readonly .jse-selection,
+.json-editor-wrapper.jse-readonly .jse-modal,
+.json-editor-wrapper.jse-readonly .jse-tooltip {
   display: none !important;
+}
+
+.json-editor-wrapper.jse-readonly .jse-contents {
+  pointer-events: none;
+  user-select: text;
 }
 
 .jse-theme-dark {
