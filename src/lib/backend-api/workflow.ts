@@ -32,8 +32,12 @@ export const workflowBackendApi = {
   deletePluginScheme(workflowId: string, pluginId: string, schemeName: string) {
     return wsBridge.invoke('workflow:delete-plugin-scheme', { workflowId, pluginId, schemeName })
   },
-  execute(workflowId: string, input?: Record<string, unknown>) {
-    return wsBridge.invoke('workflow:execute', { workflowId, input })
+  execute(
+    workflowId: string,
+    input?: Record<string, unknown>,
+    snapshot?: { nodes: WorkflowNode[]; edges: Workflow['edges'] },
+  ) {
+    return wsBridge.invoke('workflow:execute', { workflowId, input, snapshot })
   },
   debugNode(
     workflowId: string,

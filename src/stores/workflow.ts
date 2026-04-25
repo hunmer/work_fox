@@ -37,16 +37,16 @@ export interface WorkflowChanges {
 
 export type WorkflowStore = ReturnType<typeof createWorkflowStore>
 
-// ====== 纯函数 ======
+// ====== 纯函�?======
 
 function validateWorkflowExecution(workflow: Workflow): string | null {
   const nodes = workflow.nodes
   const startNodes = nodes.filter((n) => n.type === 'start')
   const endNodes = nodes.filter((n) => n.type === 'end')
-  if (startNodes.length === 0) return '缺少「开始」节点'
-  if (endNodes.length === 0) return '缺少「结束」节点'
-  if (startNodes.length > 1) return '只能有一个「开始」节点'
-  if (endNodes.length > 1) return '只能有一个「结束」节点'
+  if (startNodes.length === 0) return '缺少「开始」节�?
+  if (endNodes.length === 0) return '缺少「结束」节�?
+  if (startNodes.length > 1) return '只能有一个「开始」节�?
+  if (endNodes.length > 1) return '只能有一个「结束」节�?
 
   const visited = new Set<string>([startNodes[0].id])
   const queue = [startNodes[0].id]
@@ -59,7 +59,41 @@ function validateWorkflowExecution(workflow: Workflow): string | null {
       }
     }
   }
-  return visited.has(endNodes[0].id) ? null : '「开始」与「结束」节点未连通'
+  return visited.has(endNodes[0].id) ? null : '「开始」与「结束」节点未连�?
+}
+
+function buildPartialWorkflowSnapshot(
+  workflow: Workflow,
+  firstNodeId: string,
+): { nodes: WorkflowNode[]; edges: Workflow['edges'] } | null {
+  const firstNode = workflow.nodes.find((node) => node.id === firstNodeId)
+  if (!firstNode) return null
+
+  const reachableIds = new Set<string>([firstNodeId])
+  const queue = [firstNodeId]
+
+  while (queue.length > 0) {
+    const sourceId = queue.shift()!
+    for (const edge of workflow.edges) {
+      if (edge.source !== sourceId || reachableIds.has(edge.target)) continue
+      reachableIds.add(edge.target)
+      queue.push(edge.target)
+    }
+  }
+
+  const partialNodes = workflow.nodes.filter((node) => reachableIds.has(node.id))
+  const partialEdges = workflow.edges.filter((edge) =>
+    reachableIds.has(edge.source) && reachableIds.has(edge.target),
+  )
+
+  return {
+    nodes: partialNodes.map((node) =>
+      node.id === firstNodeId
+        ? { ...node, type: 'start', label: node.label || 'Partial test start' }
+        : node,
+    ),
+    edges: partialEdges,
+  }
 }
 
 function summarizeChanges(changes: WorkflowChanges): string {
@@ -68,10 +102,10 @@ function summarizeChanges(changes: WorkflowChanges): string {
   if (changes.deleteNodeIds.length) parts.push(`-${changes.deleteNodeIds.length}节点`)
   if (changes.upsertEdges.length) parts.push(`+${changes.upsertEdges.length}连线`)
   if (changes.deleteEdgeIds.length) parts.push(`-${changes.deleteEdgeIds.length}连线`)
-  return parts.join(' ') || '无变更'
+  return parts.join(' ') || '无变�?
 }
 
-// ====== Undo/Redo 管理器 ======
+// ====== Undo/Redo 管理�?======
 
 function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () => any) {
   const MAX_HISTORY = 1000
@@ -471,7 +505,7 @@ function createEditActions(
   function canConnectNodes(sourceId: string, targetId: string, sourceHandle: string | null = null): { ok: boolean; reason?: string } {
     const source = getNode(sourceId)
     const target = getNode(targetId)
-    if (!source || !target) return { ok: false, reason: '连线节点不存在' }
+    if (!source || !target) return { ok: false, reason: '连线节点不存�? }
 
     const sourceScopeId = getConnectionScopeOwnerId(sourceId, sourceHandle)
     const targetScopeId = getScopeOwnerId(targetId)
@@ -480,7 +514,7 @@ function createEditActions(
     }
 
     if (target.composite?.generated && target.id !== source.id) {
-      return { ok: false, reason: '内部锚点节点不允许手动作为连线目标' }
+      return { ok: false, reason: '内部锚点节点不允许手动作为连线目�? }
     }
 
     return { ok: true }
@@ -618,7 +652,7 @@ function createEditActions(
     currentWorkflow.value = {
       id: workflowId, name, folderId,
       nodes: [
-        { id: startNodeId, type: 'start', label: '开始', position: { x: 100, y: 250 }, data: {} },
+        { id: startNodeId, type: 'start', label: '开�?, position: { x: 100, y: 250 }, data: {} },
         { id: endNodeId, type: 'end', label: '结束', position: { x: 600, y: 250 }, data: {} },
       ],
       edges: [], createdAt: Date.now(), updatedAt: Date.now(),
@@ -710,7 +744,7 @@ function createEditActions(
   }
 
   function updateNodeData(nodeId: string, data: Record<string, any>): void {
-    undoRedo.pushUndo('修改节点属性')
+    undoRedo.pushUndo('修改节点属�?)
     const node = currentWorkflow.value?.nodes.find((n) => n.id === nodeId)
     if (node) node.data = { ...node.data, ...data }
   }
@@ -744,7 +778,7 @@ function createEditActions(
   }
 
   function updateNodeState(nodeId: string, nodeState: import('@/lib/workflow/types').NodeRunState): void {
-    undoRedo.pushUndo('修改节点状态')
+    undoRedo.pushUndo('修改节点状�?)
     const node = currentWorkflow.value?.nodes.find((n) => n.id === nodeId)
     if (node) node.nodeState = nodeState
   }
@@ -977,6 +1011,37 @@ function createExecutionActions(
     }
   }
 
+  async function startPartialExecution(nodeId: string): Promise<{ executionId: string | null; status: EngineStatus }> {
+    if (!currentWorkflow.value || startingExecution) {
+      return { executionId: null, status: executionStatus.value }
+    }
+
+    const snapshot = buildPartialWorkflowSnapshot(currentWorkflow.value, nodeId)
+    if (!snapshot) {
+      return { executionId: null, status: executionStatus.value }
+    }
+
+    startingExecution = true
+    try {
+      backendLastError.value = null
+      await saveWorkflow(currentWorkflow.value)
+      const result = await createWorkflowDomainApi().workflow.execute(
+        currentWorkflow.value.id,
+        {},
+        snapshot,
+      )
+      currentExecutionId = result.executionId
+      executionStatus.value = result.status as EngineStatus
+      return { executionId: currentExecutionId, status: executionStatus.value }
+    } catch (error) {
+      backendLastError.value = error instanceof Error ? error.message : String(error)
+      executionStatus.value = 'error'
+      return { executionId: currentExecutionId, status: executionStatus.value }
+    } finally {
+      startingExecution = false
+    }
+  }
+
   function pauseExecution(): void {
     if (!currentExecutionId) return
     createWorkflowDomainApi().workflow.pause(currentExecutionId)
@@ -998,6 +1063,7 @@ function createExecutionActions(
 
   return {
     startExecution,
+    startPartialExecution,
     pauseExecution,
     resumeExecution,
     stopExecution,
@@ -1007,7 +1073,7 @@ function createExecutionActions(
   }
 }
 
-// ====== 单节点调试 ======
+// ====== 单节点调�?======
 
 function createDebugActions(
   currentWorkflow: Ref<Workflow | null>,
@@ -1062,7 +1128,7 @@ function createGroupActions(
   currentWorkflow: Ref<Workflow | null>,
   undoRedo: ReturnType<typeof createUndoRedoManager>,
 ) {
-  // ── 辅助：确保 groups 数组存在 ──
+  // ── 辅助：确�?groups 数组存在 ──
   function ensureGroups(): WorkflowGroup[] {
     if (!currentWorkflow.value) return []
     if (!currentWorkflow.value.groups) {
@@ -1197,8 +1263,7 @@ function createGroupActions(
 
     const childGroupIds = new Set<string>()
 
-    // 已经属于分组的节点不拆出原分组，而是把原分组嵌套到新分组中
-    for (const nodeId of nodeIds) {
+    // 已经属于分组的节点不拆出原分组，而是把原分组嵌套到新分组�?    for (const nodeId of nodeIds) {
       const oldGroup = getGroupOfNode(nodeId)
       if (oldGroup) {
         childGroupIds.add(oldGroup.id)
@@ -1242,8 +1307,7 @@ function createGroupActions(
       // 子节点的分组关系不变（它们仍由各自分组管理）
     }
 
-    // 移除该分组
-    currentWorkflow.value.groups = groups.filter(g => g.id !== groupId)
+    // 移除该分�?    currentWorkflow.value.groups = groups.filter(g => g.id !== groupId)
   }
 
   function deleteGroup(groupId: string): void {
@@ -1252,26 +1316,22 @@ function createGroupActions(
     if (!group) return
     undoRedo.pushUndo('删除分组')
 
-    // 递归删除子分组
-    for (const childGroupId of [...group.childGroupIds]) {
+    // 递归删除子分�?    for (const childGroupId of [...group.childGroupIds]) {
       deleteGroup(childGroupId)
     }
 
-    // 删除子节点
-    const nodesToRemove = new Set(group.childNodeIds)
+    // 删除子节�?    const nodesToRemove = new Set(group.childNodeIds)
     currentWorkflow.value.nodes = currentWorkflow.value.nodes.filter(n => !nodesToRemove.has(n.id))
     currentWorkflow.value.edges = currentWorkflow.value.edges.filter(
       e => !nodesToRemove.has(e.source) && !nodesToRemove.has(e.target)
     )
 
-    // 从父分组中移除引用
-    const parentGroup = getParentGroup(groupId)
+    // 从父分组中移除引�?    const parentGroup = getParentGroup(groupId)
     if (parentGroup) {
       parentGroup.childGroupIds = parentGroup.childGroupIds.filter(id => id !== groupId)
     }
 
-    // 从 groups 数组中移除
-    currentWorkflow.value.groups = (currentWorkflow.value.groups || []).filter(g => g.id !== groupId)
+    // �?groups 数组中移�?    currentWorkflow.value.groups = (currentWorkflow.value.groups || []).filter(g => g.id !== groupId)
   }
 
   function addNodesToGroup(groupId: string, nodeIds: string[]): void {
@@ -1281,13 +1341,11 @@ function createGroupActions(
     undoRedo.pushUndo('加入分组')
 
     for (const nodeId of nodeIds) {
-      // 从旧分组中移除（一对一关系）
-      const oldGroup = getGroupOfNode(nodeId)
+      // 从旧分组中移除（一对一关系�?      const oldGroup = getGroupOfNode(nodeId)
       if (oldGroup && oldGroup.id !== groupId) {
         oldGroup.childNodeIds = oldGroup.childNodeIds.filter(id => id !== nodeId)
       }
-      // 加入新分组（避免重复）
-      if (!group.childNodeIds.includes(nodeId)) {
+      // 加入新分组（避免重复�?      if (!group.childNodeIds.includes(nodeId)) {
         group.childNodeIds.push(nodeId)
       }
     }
@@ -1304,7 +1362,7 @@ function createGroupActions(
   function renameGroup(groupId: string, name: string): void {
     const group = getGroupById(groupId)
     if (!group) return
-    undoRedo.pushUndo('重命名分组')
+    undoRedo.pushUndo('重命名分�?)
     group.name = name
   }
 
@@ -1335,7 +1393,7 @@ function createGroupActions(
     group.color = color
   }
 
-  // ── 状态切换 ──
+  // ── 状态切�?──
 
   function toggleGroupLock(groupId: string): void {
     const group = getGroupById(groupId)
@@ -1385,14 +1443,13 @@ function createGroupActions(
 
     const workflow = currentWorkflow.value
 
-    // 获取直接子节点和子分组
-    const childNodes = group.childNodeIds
+    // 获取直接子节点和子分�?    const childNodes = group.childNodeIds
       .map(id => workflow.nodes.find(n => n.id === id))
       .filter((n): n is NonNullable<typeof n> => !!n)
 
     if (childNodes.length === 0) return
 
-    // 计算当前分组的 bounding box 作为可用区域
+    // 计算当前分组�?bounding box 作为可用区域
     const childGroupBoxes = group.childGroupIds
       .map(gid => getGroupById(gid))
       .filter(Boolean)
@@ -1444,8 +1501,7 @@ function createGroupActions(
       ...(childGroupBoxes.length > 0 ? childGroupBoxes.map(b => b.y) : [Infinity])
     )
 
-    // 按网格排列
-    allItems.forEach((item, index) => {
+    // 按网格排�?    allItems.forEach((item, index) => {
       const col = index % columns
       const row = Math.floor(index / columns)
       const cellWidth = (availableWidth + GRID_GAP) / columns
@@ -1457,8 +1513,7 @@ function createGroupActions(
       if (node) {
         node.position = { x, y }
       } else {
-        // 子分组：移动所有子孙节点
-        const descendantIds = getDescendantNodeIds(item.id)
+        // 子分组：移动所有子孙节�?        const descendantIds = getDescendantNodeIds(item.id)
         const dx = x - (childGroupBoxes.find(b => b.id === item.id)?.x ?? 0)
         const dy = y - (childGroupBoxes.find(b => b.id === item.id)?.y ?? 0)
         for (const did of descendantIds) {
@@ -1583,8 +1638,7 @@ export function createWorkflowStore(tabId: string) {
     const executionLog = ref<ExecutionLog | null>(null)
     const executionContext = ref<Record<string, any>>({})
 
-    // 通用前端 UI interaction 状态（通过 ws-bridge 事件从 interaction.ts 注入）
-    const pendingInteraction = ref<{
+    // 通用前端 UI interaction 状态（通过 ws-bridge 事件�?interaction.ts 注入�?    const pendingInteraction = ref<{
       interactionType: string
       executionId: string
       workflowId: string
@@ -1726,7 +1780,7 @@ export function createWorkflowStore(tabId: string) {
 
 // ====== Provide / Inject ======
 
-// HMR 时 Symbol 会重新创建导致 inject 失败，用全局注册表复用同一个 key
+// HMR �?Symbol 会重新创建导�?inject 失败，用全局注册表复用同一�?key
 export const WORKFLOW_STORE_KEY: symbol = (globalThis as any).__WORKFLOW_STORE_KEY__
   ?? ((globalThis as any).__WORKFLOW_STORE_KEY__ = Symbol('workflowStore'))
 
