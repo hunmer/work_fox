@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { usePluginStore } from '@/stores/plugin'
-import { Puzzle, User, Tag, Layers, Wrench } from 'lucide-vue-next'
+import { Puzzle, User, Tag, Layers, Wrench, Search } from 'lucide-vue-next'
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
   HoverCard,
   HoverCardContent,
@@ -27,7 +29,40 @@ const emit = defineEmits<{
 }>()
 
 const pluginStore = usePluginStore()
+const searchQuery = ref('')
+const typeFilter = ref<string>('all')
 const workflowPlugins = ref<Array<{ id: string; name: string; description: string; nodeCount: number; enabled: boolean; version?: string; author?: string; tags?: string[]; type?: string }>>([])
+
+const activeTag = ref<string | null>(null)
+
+const typeOptions = computed(() => {
+  const types = new Set(workflowPlugins.value.map(p => p.type).filter(Boolean))
+  return [
+    { label: '全部', value: 'all' },
+    ...Array.from(types).map(t => ({
+      label: t === 'server' ? '服务端' : t === 'client' ? '客户端' : t!,
+      value: t!,
+    })),
+  ]
+})
+
+const allTags = computed(() => {
+  const tagCount = new Map<string, number>()
+  workflowPlugins.value.forEach(p => p.tags?.forEach(t => tagCount.set(t, (tagCount.get(t) || 0) + 1)))
+  return Array.from(tagCount.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([tag]) => tag)
+})
+
+const filteredPlugins = computed(() => {
+  const q = searchQuery.value.toLowerCase().trim()
+  return workflowPlugins.value.filter(p => {
+    if (typeFilter.value !== 'all' && p.type !== typeFilter.value) return false
+    if (activeTag.value && !p.tags?.includes(activeTag.value)) return false
+    if (q && !p.name.toLowerCase().includes(q) && !p.description?.toLowerCase().includes(q) && !p.tags?.some(t => t.toLowerCase().includes(q))) return false
+    return true
+  })
+})
 
 onMounted(async () => {
   const list = await pluginStore.listWorkflowPlugins()
@@ -56,13 +91,42 @@ function togglePlugin(pluginId: string) {
 
 <template>
   <Dialog :open="open" @update:open="emit('update:open', $event)">
-    <DialogContent class="sm:max-w-[480px]">
+    <DialogContent class="sm:max-w-[640px]">
       <DialogHeader>
         <DialogTitle>工作流插件</DialogTitle>
       </DialogHeader>
-      <ScrollArea class="max-h-[420px]">
-        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 p-2">
-          <HoverCard v-for="plugin in workflowPlugins" :key="plugin.id" :open-delay="400" :close-delay="150">
+      <div class="flex items-center gap-2 px-1">
+        <div class="relative flex-1">
+          <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input v-model="searchQuery" placeholder="搜索插件..." class="pl-8 h-8" />
+        </div>
+        <div class="flex gap-1">
+          <Button
+            v-for="opt in typeOptions"
+            :key="opt.value"
+            :variant="typeFilter === opt.value ? 'default' : 'outline'"
+            size="sm"
+            class="h-8 text-xs"
+            @click="typeFilter = opt.value"
+          >
+            {{ opt.label }}
+          </Button>
+        </div>
+      </div>
+      <div v-if="allTags.length" class="flex flex-wrap gap-1 px-1">
+        <Badge
+          v-for="tag in allTags"
+          :key="tag"
+          :variant="activeTag === tag ? 'default' : 'outline'"
+          class="cursor-pointer text-[11px] px-2 py-0.5 h-5 font-normal transition-colors"
+          @click="activeTag = activeTag === tag ? null : tag"
+        >
+          {{ tag }}
+        </Badge>
+      </div>
+      <ScrollArea class="max-h-[400px]">
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-2">
+          <HoverCard v-for="plugin in filteredPlugins" :key="plugin.id" :open-delay="400" :close-delay="150">
             <HoverCardTrigger as-child>
               <button
                 class="flex flex-col items-center gap-2 rounded-lg border p-4 cursor-pointer transition-all hover:bg-muted/50 hover:border-primary/30"
@@ -121,10 +185,10 @@ function togglePlugin(pluginId: string) {
             </HoverCardContent>
           </HoverCard>
           <div
-            v-if="workflowPlugins.length === 0"
-            class="col-span-3 text-center text-sm text-muted-foreground py-8"
+            v-if="filteredPlugins.length === 0"
+            class="col-span-2 sm:col-span-3 lg:col-span-4 text-center text-sm text-muted-foreground py-8"
           >
-            没有可用的工作流插件
+            {{ searchQuery ? '没有匹配的插件' : '没有可用的工作流插件' }}
           </div>
         </div>
       </ScrollArea>
