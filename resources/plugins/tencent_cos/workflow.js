@@ -1,4 +1,4 @@
-const { createClient, getBucketParams } = require('./shared')
+const { createClient, getBucketParams, getPublicUrl } = require('./shared')
 
 const CONFIG_PREFIX = '{{ __config__["workfox.tencent-cos"]'
 
@@ -32,22 +32,24 @@ module.exports = {
           { key: 'Key', type: 'string' },
           { key: 'ETag', type: 'string' },
           { key: 'Location', type: 'string' },
+          { key: 'url', type: 'string' },
         ] },
       ],
       handler: async (ctx, args) => {
         const cos = createClient(args)
         const base = getBucketParams(args)
         ctx.logger.info(`上传文件: ${args.filePath} -> ${args.key}`)
-        const result = await cos.putObject({
+        const result = await cos.sliceUploadFile({
           ...base,
           Key: args.key,
           FilePath: args.filePath,
         })
-        ctx.logger.info(`上传成功: ${result.Location}`)
+        const url = getPublicUrl(args, args.key)
+        ctx.logger.info(`上传成功: ${url}`)
         return {
           success: true,
           message: `文件已上传: ${args.key}`,
-          data: { Key: result.Key || args.key, ETag: result.ETag, Location: result.Location },
+          data: { Key: result.Key || args.key, ETag: result.ETag, Location: result.Location, url },
         }
       },
     },

@@ -130,10 +130,12 @@ module.exports = {
     switch (name) {
       case 'cos_upload': {
         if (!args.key) return { success: false, message: '缺少 key' }
-        const params = { ...base, Key: args.key }
         if (args.filePath) {
-          params.FilePath = args.filePath
-        } else if (args.content) {
+          const result = await cos.sliceUploadFile({ ...base, Key: args.key, FilePath: args.filePath })
+          return { success: true, message: `上传成功: ${args.key}`, data: { Key: args.key, ETag: result.ETag, Location: result.Location } }
+        }
+        const params = { ...base, Key: args.key }
+        if (args.content) {
           params.Body = args.content
         } else if (args.base64Data) {
           const buf = Buffer.from(args.base64Data, 'base64')
@@ -144,11 +146,7 @@ module.exports = {
         }
         if (args.contentType) params.ContentType = args.contentType
         const result = await cos.putObject(params)
-        return {
-          success: true,
-          message: `上传成功: ${args.key}`,
-          data: { Key: args.key, ETag: result.ETag, Location: result.Location },
-        }
+        return { success: true, message: `上传成功: ${args.key}`, data: { Key: args.key, ETag: result.ETag, Location: result.Location } }
       }
 
       case 'cos_download': {

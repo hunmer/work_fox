@@ -20,4 +20,15 @@ function getBucketParams(args) {
   return { Bucket: args.bucket, Region: args.region }
 }
 
-module.exports = { createClient, getBucketParams }
+/**
+ * 拼接公开读文件的直链
+ * 格式: https://<bucket>.cos.<region>.myqcloud.com/<key>
+ */
+function getPublicUrl(args, key) {
+  const bucket = encodeURIComponent(args.bucket)
+  const region = encodeURIComponent(args.region)
+  const encodedKey = key.split('/').map(s => encodeURIComponent(s)).join('/')
+  return `https://${bucket}.cos.${region}.myqcloud.com/${encodedKey}`
+}
+
+module.exports = { createClient, getBucketParams, getPublicUrl }
