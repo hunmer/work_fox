@@ -92,6 +92,7 @@ const pluginsDialogOpen = ref(false)
 const settingsDialogOpen = ref(false)
 const pluginPickerOpen = ref(false)
 const groupPanelVisible = ref(false)
+const groupPanelX = computed(() => (typeof window !== 'undefined' ? window.innerWidth - 400 : 520))
 const FLOW_ID = `workflow-editor-flow-${props.tab.id}`
 
 const {
@@ -630,7 +631,7 @@ function onConnect(params: any) {
     <FloatingPanel
       v-model:visible="groupPanelVisible"
       title="分组管理"
-      :x="window.innerWidth - 400"
+      :x="groupPanelX"
       :y="80"
       :width="320"
       :height="340"
