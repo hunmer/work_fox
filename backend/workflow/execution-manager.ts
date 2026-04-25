@@ -79,6 +79,16 @@ interface ExecutionSession {
   breakpointBypassKeys: Set<string>
 }
 
+interface JsonPreset {
+  id: string
+  name: string
+  data: Record<string, any>
+  inputs: Record<string, any>
+}
+
+const JSON_PRESETS_KEY = '__jsonPresets'
+const SELECTED_JSON_PRESET_KEY = '__selectedJsonPresetId'
+
 interface FinishedExecutionRecovery {
   ownerClientId: string
   workflowId: string
@@ -459,7 +469,7 @@ export class BackendWorkflowExecutionManager {
       if (session.stopRequested || session.pauseRequested) return 'interrupted'
     }
 
-    const resolvedData = this.resolveContextVariables(session, node.data)
+    const resolvedData = this.resolveContextVariables(session, this.applySelectedJsonPreset(node.data))
     if (!session.context.__inputs__) session.context.__inputs__ = {}
     session.context.__inputs__[node.id] = this.buildOutputObject(resolvedData.inputFields) ?? {}
     const step: ExecutionStep = {
@@ -1138,6 +1148,49 @@ if (typeof main === 'function') return main({ params, context })`)
 
   private resolveContextVariables(session: ExecutionSession, data: Record<string, any>): Record<string, any> {
     return this.resolveValue(session, data)
+  }
+
+  private applySelectedJsonPreset(data: Record<string, any>): Record<string, any> {
+    const selectedId = typeof data?.[SELECTED_JSON_PRESET_KEY] === 'string'
+      ? data[SELECTED_JSON_PRESET_KEY]
+      : ''
+    if (!selectedId) return data
+
+    const presets = Array.isArray(data?.[JSON_PRESETS_KEY]) ? data[JSON_PRESETS_KEY] as JsonPreset[] : []
+    const preset = presets.find((item) => item?.id === selectedId)
+    if (!preset || !this.isPlainObject(preset.data) || !this.isPlainObject(preset.inputs)) return data
+
+    return {
+      ...data,
+      ...preset.data,
+      inputFields: this.objectToOutputFields(preset.inputs),
+    }
+  }
+
+  private objectToOutputFields(value: Record<string, any>): OutputField[] {
+    return Object.entries(value).map(([key, fieldValue]) => {
+      const type = this.inferOutputFieldType(fieldValue)
+      const field: OutputField = { key, type }
+      if (type === 'object' && this.isPlainObject(fieldValue)) {
+        field.children = this.objectToOutputFields(fieldValue)
+      } else {
+        const fieldWithValue = field as OutputField & { value: any }
+        fieldWithValue.value = fieldValue === undefined ? '' : fieldValue
+      }
+      return field
+    })
+  }
+
+  private inferOutputFieldType(value: unknown): OutputField['type'] {
+    if (typeof value === 'string') return 'string'
+    if (typeof value === 'number') return 'number'
+    if (typeof value === 'boolean') return 'boolean'
+    if (this.isPlainObject(value)) return 'object'
+    return 'any'
+  }
+
+  private isPlainObject(value: unknown): value is Record<string, any> {
+    return !!value && typeof value === 'object' && !Array.isArray(value)
   }
 
   private buildOutputObject(outputs: OutputField[] | undefined): Record<string, any> | null {
