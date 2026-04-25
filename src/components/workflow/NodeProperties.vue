@@ -77,7 +77,7 @@ const textModeKeys = ref<Set<string>>(new Set())
 
 /** 判断字段是否为纯文本类型（无需切换） */
 function isTextType(type: string): boolean {
-  return type === 'text' || type === 'textarea'
+  return type === 'text'
 }
 
 function toggleTextMode(key: string) {
@@ -677,6 +677,33 @@ function confirmImport() {
                   @update:model-value="setFieldValue(prop.key, $event)"
                 />
                 <span class="text-xs text-muted-foreground">{{ prop.readonly ? '(只读)' : '' }}</span>
+              </div>
+
+              <Textarea
+                v-else-if="prop.type === 'textarea'"
+                :model-value="getFieldValue(prop.key)"
+                :rows="prop.rows || 3"
+                :readonly="prop.readonly"
+                class="text-xs min-h-[60px]"
+                :placeholder="prop.label"
+                @update:model-value="setFieldValue(prop.key, $event)"
+              />
+
+              <div
+                v-else-if="prop.type === 'range'"
+                class="space-y-0.5"
+              >
+                <input
+                  type="range"
+                  :value="getFieldValue(prop.key) ?? prop.default ?? 0"
+                  :min="prop.min ?? 0"
+                  :max="prop.max ?? 1"
+                  :step="prop.step ?? 1"
+                  class="w-full h-2 accent-primary"
+                  :disabled="prop.readonly"
+                  @input="setFieldValue(prop.key, Number(($event.target as HTMLInputElement).value))"
+                />
+                <div class="text-[10px] text-muted-foreground text-right">{{ getFieldValue(prop.key) ?? prop.default ?? 0 }}</div>
               </div>
 
               <!-- array 类型：动态表单列表 -->

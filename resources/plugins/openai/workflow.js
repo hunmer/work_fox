@@ -150,8 +150,8 @@ module.exports = {
       description: '使用 GPT 模型进行对话，支持多轮对话和 JSON 输出',
       properties: [
         { key: 'apiKey', label: 'API Key', type: 'text', required: true, tooltip: 'OpenAI API Key', default: CONFIG_APIKEY },
-        { key: 'messages', label: '消息列表', type: 'textarea', required: true, tooltip: 'JSON 格式消息数组，如 [{"role":"user","content":"你好"}]' },
-        { key: 'system', label: '系统提示', type: 'textarea', tooltip: '系统提示词（会作为第一条 system 消息插入）' },
+        { key: 'messages', label: '消息列表', type: 'object', required: true, tooltip: '消息数组，如 [{"role":"user","content":"你好"}]' },
+        { key: 'system', label: '系统提示', type: 'textarea', rows: 3, tooltip: '系统提示词（会作为第一条 system 消息插入）' },
         { key: 'model', label: '模型', type: 'select', default: 'gpt-4o', options: [
           { label: 'gpt-4o (默认)', value: 'gpt-4o' },
           { label: 'gpt-4o-mini', value: 'gpt-4o-mini' },
@@ -161,7 +161,7 @@ module.exports = {
           { label: 'o3', value: 'o3' },
           { label: 'o4-mini', value: 'o4-mini' },
         ] },
-        { key: 'temperature', label: '温度', type: 'number', default: 1, tooltip: '0-2，越高越随机' },
+        { key: 'temperature', label: '温度', type: 'range', default: 1, min: 0, max: 2, step: 0.1, tooltip: '0-2，越高越随机' },
         { key: 'max_tokens', label: '最大 Token', type: 'number', tooltip: '最大输出 token 数' },
         { key: 'response_format', label: '输出格式', type: 'select', default: 'text', options: [
           { label: '文本', value: 'text' },
@@ -182,7 +182,11 @@ module.exports = {
       ],
       handler: async (ctx, args) => {
         const client = createClient(args)
-        let messages = Array.isArray(args.messages) ? args.messages : JSON.parse(args.messages)
+        let messages = args.messages
+        if (typeof messages === 'string') {
+          try { messages = JSON.parse(messages) } catch { messages = [{ role: 'user', content: messages }] }
+        }
+        if (!Array.isArray(messages)) messages = [messages]
         if (args.system) {
           messages = [{ role: 'system', content: args.system }, ...messages]
         }
