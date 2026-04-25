@@ -1053,6 +1053,10 @@ function createDebugActions(
 const GRID_GAP = 30
 const ARRANGE_PADDING = 20
 const ARRANGE_HEADER_HEIGHT = 32
+const GROUP_PADDING = 20
+const GROUP_HEADER_HEIGHT = 32
+const DEFAULT_NODE_WIDTH = 220
+const DEFAULT_NODE_HEIGHT = 120
 
 function createGroupActions(
   currentWorkflow: Ref<Workflow | null>,
@@ -1065,6 +1069,40 @@ function createGroupActions(
       currentWorkflow.value.groups = []
     }
     return currentWorkflow.value.groups
+  }
+
+  function getNodeSize(node: WorkflowNode): { width: number; height: number } {
+    return {
+      width: typeof node.data?.width === 'number' ? node.data.width : DEFAULT_NODE_WIDTH,
+      height: typeof node.data?.height === 'number' ? node.data.height : DEFAULT_NODE_HEIGHT,
+    }
+  }
+
+  function computeNodeBounds(nodeIds: string[]): { x: number; y: number; width: number; height: number } | null {
+    const workflow = currentWorkflow.value
+    if (!workflow) return null
+    const nodes = nodeIds
+      .map(id => workflow.nodes.find(n => n.id === id))
+      .filter((node): node is WorkflowNode => !!node)
+    if (nodes.length === 0) return null
+
+    const minX = Math.min(...nodes.map(node => node.position.x))
+    const minY = Math.min(...nodes.map(node => node.position.y))
+    const maxX = Math.max(...nodes.map(node => {
+      const size = getNodeSize(node)
+      return node.position.x + size.width
+    }))
+    const maxY = Math.max(...nodes.map(node => {
+      const size = getNodeSize(node)
+      return node.position.y + size.height
+    }))
+
+    return {
+      x: minX - GROUP_PADDING,
+      y: minY - GROUP_HEADER_HEIGHT - GROUP_PADDING,
+      width: Math.max(100, maxX - minX + GROUP_PADDING * 2),
+      height: Math.max(60, maxY - minY + GROUP_HEADER_HEIGHT + GROUP_PADDING * 2),
+    }
   }
 
   // ── 查询方法 ──
@@ -1130,6 +1168,11 @@ function createGroupActions(
         // 空分组不自动删除，保留供后续添加
       }
       newGroup.childNodeIds.push(nodeId)
+    }
+
+    const bounds = computeNodeBounds(newGroup.childNodeIds)
+    if (bounds) {
+      Object.assign(newGroup, bounds)
     }
 
     groups.push(newGroup)
@@ -1220,17 +1263,25 @@ function createGroupActions(
     group.name = name
   }
 
-  function updateGroupSize(groupId: string, size: { width?: number; height?: number }): void {
+  function updateGroupBounds(groupId: string, bounds: { x?: number; y?: number; width?: number; height?: number }): void {
     const group = getGroupById(groupId)
     if (!group) return
 
-    if (typeof size.width === 'number' && Number.isFinite(size.width)) {
-      group.width = size.width
+    if (typeof bounds.x === 'number' && Number.isFinite(bounds.x)) {
+      group.x = bounds.x
     }
-    if (typeof size.height === 'number' && Number.isFinite(size.height)) {
-      group.height = size.height
+    if (typeof bounds.y === 'number' && Number.isFinite(bounds.y)) {
+      group.y = bounds.y
+    }
+    if (typeof bounds.width === 'number' && Number.isFinite(bounds.width)) {
+      group.width = bounds.width
+    }
+    if (typeof bounds.height === 'number' && Number.isFinite(bounds.height)) {
+      group.height = bounds.height
     }
   }
+
+  const updateGroupSize = updateGroupBounds
 
   // ── 状态切换 ──
 
@@ -1392,6 +1443,7 @@ function createGroupActions(
     addNodesToGroup,
     removeNodesFromGroup,
     renameGroup,
+    updateGroupBounds,
     updateGroupSize,
     toggleGroupLock,
     toggleGroupDisabled,

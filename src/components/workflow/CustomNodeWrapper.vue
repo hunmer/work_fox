@@ -3,38 +3,17 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import type { NodeProps } from '@vue-flow/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
-import { X, CircleSlash, SkipForward, FileText, Info, Copy, CircleCheck, CircleX, ChevronRight, ChevronDown, Play, Loader2, Group, Trash2 } from 'lucide-vue-next'
+import { X, CircleSlash, SkipForward, FileText, CircleCheck, CircleX, ChevronRight, ChevronDown, Play, Loader2 } from 'lucide-vue-next'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
 import { useWorkflowStore } from '@/stores/workflow'
 import { resolveInteraction, rejectInteraction } from '@/lib/backend-api/interaction'
 import type { NodeRunState } from '@/lib/workflow/types'
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from '@/components/ui/context-menu'
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import JsonEditor from '@/components/ui/json-editor/JsonEditor.vue'
 import {
   Tooltip,
   TooltipContent,
@@ -160,32 +139,7 @@ function setNodeState(state: NodeRunState) {
   store.updateNodeState(String(props.id), state)
 }
 
-// ── 分组相关 ──
-const showGroupPicker = ref(false)
-
-const availableGroups = computed(() => {
-  return store.currentWorkflow?.groups || []
-})
-
-function handleMergeToGroup() {
-  const ids = store.selectedNodeIds.filter(id => store.canDeleteNode(id))
-  if (ids.length >= 2) {
-    store.createGroup(ids)
-  }
-}
-
-function handleBatchDelete() {
-  const ids = store.selectedNodeIds.filter(id => store.canDeleteNode(id))
-  store.pushUndo('批量删除节点')
-  for (const id of ids) {
-    store.removeNode(id)
-  }
-}
-
-function handleAddToGroup(groupId: string) {
-  store.addNodesToGroup(groupId, [String(props.id)])
-  showGroupPicker.value = false
-}
+// ── 节点内部刷新 ──
 
 function refreshNodeInternals(reason: string) {
   nextTick(() => {
@@ -330,40 +284,8 @@ onMounted(() => {
   refreshNodeInternals('mounted')
 })
 
-const showNodeInfo = ref(false)
 const inputExpanded = ref(true)
 const outputExpanded = ref(true)
-const nodeInfoData = computed(() => {
-  const node = store.currentWorkflow?.nodes.find((n) => n.id === props.id)
-  const step = store.executionLog?.steps.find((s) => s.nodeId === props.id)
-  return {
-    id: props.id,
-    type: props.type,
-    label: props.data?.label || definition.value?.label || props.type,
-    nodeState: node?.nodeState || 'normal',
-    definition: {
-      type: definition.value?.type,
-      icon: definition.value?.icon,
-      category: definition.value?.category,
-    },
-    data: props.data,
-    execution: step
-      ? {
-          status: step.status,
-          startedAt: step.startedAt,
-          finishedAt: step.finishedAt,
-          input: step.input,
-          output: step.output,
-          error: step.error,
-          logs: step.logs,
-        }
-      : null,
-  }
-})
-
-async function copyNodeInfo() {
-  await navigator.clipboard.writeText(JSON.stringify(nodeInfoData.value, null, 2))
-}
 
 /** 节点是否有执行结果可展示 */
 const hasExecutionResult = computed(() => {
@@ -413,12 +335,10 @@ async function handleTestNode() {
     :min-height="nodeMinHeight"
   />
 
-  <ContextMenu>
-    <ContextMenuTrigger as-child>
-      <div
-        class="group/node border-2 rounded-lg shadow-sm w-full h-full cursor-pointer transition-colors relative flex flex-col"
-        :class="[statusColor, stateBackground, props.selected ? 'ring-2 ring-primary' : '', { 'loop-body-node': isLoopBodyContainer }]"
-      >
+  <div
+    class="group/node border-2 rounded-lg shadow-sm w-full h-full cursor-pointer transition-colors relative flex flex-col"
+    :class="[statusColor, stateBackground, props.selected ? 'ring-2 ring-primary' : '', { 'loop-body-node': isLoopBodyContainer }]"
+  >
         <!-- 输入连接点 -->
         <Handle
           v-if="showTargetHandle"
@@ -635,100 +555,8 @@ async function handleTestNode() {
           </div>
         </template>
       </div>
-    </ContextMenuTrigger>
-
-    <ContextMenuContent v-if="!store.isPreview" class="w-48">
-      <!-- 多选菜单 -->
-      <template v-if="store.selectedNodeIds.length >= 2">
-        <ContextMenuItem @click="handleMergeToGroup">
-          <Group class="w-4 h-4 mr-2" />
-          合并成组
-        </ContextMenuItem>
-        <ContextMenuItem class="text-destructive" @click="handleBatchDelete">
-          <Trash2 class="w-4 h-4 mr-2" />
-          批量删除
-        </ContextMenuItem>
-      </template>
-
-      <!-- 单选菜单 -->
-      <template v-else>
-        <ContextMenuItem @click="setNodeState('normal')">
-          <CircleCheck class="w-4 h-4 mr-2 text-green-500" />
-          正常
-        </ContextMenuItem>
-        <ContextMenuItem @click="setNodeState('disabled')">
-          <CircleSlash class="w-4 h-4 mr-2 text-red-500" />
-          禁用（中止执行）
-        </ContextMenuItem>
-        <ContextMenuItem @click="setNodeState('skipped')">
-          <SkipForward class="w-4 h-4 mr-2 text-yellow-500" />
-          跳过（跳过执行）
-        </ContextMenuItem>
-        <template v-if="!isBoundaryNode">
-          <ContextMenuSeparator />
-          <ContextMenuItem @click="showNodeInfo = true">
-            <Info class="w-4 h-4 mr-2" />
-            查看节点信息
-          </ContextMenuItem>
-          <ContextMenuItem v-if="store.canCloneNode(String(props.id))" @click="handleClone">
-            复制节点
-          </ContextMenuItem>
-          <!-- 加入分组 -->
-          <ContextMenuItem v-if="availableGroups.length > 0" @click="showGroupPicker = true">
-            <Group class="w-4 h-4 mr-2" />
-            加入分组
-          </ContextMenuItem>
-          <ContextMenuItem
-            v-if="store.canDeleteNode(String(props.id))"
-            class="text-destructive"
-            @click="handleDelete"
-          >
-            删除节点
-          </ContextMenuItem>
-        </template>
-      </template>
-    </ContextMenuContent>
-  </ContextMenu>
-
-  <Dialog :open="showNodeInfo" @update:open="showNodeInfo = $event">
-    <DialogContent class="max-w-2xl max-h-[80vh] flex flex-col">
-      <DialogHeader>
-        <DialogTitle>节点信息 - {{ nodeInfoData.label }}</DialogTitle>
-      </DialogHeader>
-      <div class="flex-1 overflow-auto">
-        <JsonEditor :model-value="nodeInfoData" :readonly="true" :height="400" />
-      </div>
-      <DialogFooter>
-        <Button variant="outline" size="sm" @click="copyNodeInfo">
-          <Copy class="w-4 h-4 mr-1" />
-          复制 JSON
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
-
-  <!-- 加入分组选择弹窗 -->
-  <Dialog :open="showGroupPicker" @update:open="showGroupPicker = $event">
-    <DialogContent class="max-w-sm">
-      <DialogHeader>
-        <DialogTitle>加入分组</DialogTitle>
-      </DialogHeader>
-      <div class="space-y-1 max-h-60 overflow-auto">
-        <button
-          v-for="group in availableGroups"
-          :key="group.id"
-          class="w-full text-left px-3 py-2 rounded-md hover:bg-accent text-sm transition-colors"
-          @click="handleAddToGroup(group.id)"
-        >
-          {{ group.name }}
-          <span class="text-muted-foreground ml-1">({{ group.childNodeIds.length }})</span>
-        </button>
-        <div v-if="availableGroups.length === 0" class="text-sm text-muted-foreground py-4 text-center">
-          暂无分组
-        </div>
-      </div>
-    </DialogContent>
-  </Dialog>
+    </template>
+  </div>
 </template>
 
 <style scoped>

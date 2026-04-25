@@ -28,6 +28,8 @@ const DEFAULT_NODE_SIZE = {
   height: 120,
 }
 
+type Bounds = { x: number; y: number; width: number; height: number }
+
 const resizingNodeIds = new Set<string>()
 
 export function useFlowCanvas(store: WorkflowStore, flowId: string) {
@@ -106,8 +108,21 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     }
   }
 
-  /** 计算分组的 bounding box (基于子节点位置) */
-  function computeGroupBoundingBox(group: WorkflowGroup): { x: number; y: number; width: number; height: number } {
+  function intersects(a: Bounds, b: Bounds): boolean {
+    return a.x < b.x + b.width
+      && a.x + a.width > b.x
+      && a.y < b.y + b.height
+      && a.y + a.height > b.y
+  }
+
+  function isSameBounds(a: Bounds, b: Bounds): boolean {
+    return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+  }
+
+  function computeGroupContentBounds(
+    group: WorkflowGroup,
+    overrideNode?: { id: string; position: { x: number; y: number } },
+  ): Bounds {
     const workflow = store.currentWorkflow
     if (!workflow) return { x: 0, y: 0, width: 100, height: 60 }
 
@@ -127,9 +142,10 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     const allBoxes = [
       ...childNodes.map(n => {
         const size = getRenderedNodeSize(n.id, n.data)
+        const position = overrideNode?.id === n.id ? overrideNode.position : n.position
         return {
-          x: n.position.x,
-          y: n.position.y,
+          x: position.x,
+          y: position.y,
           width: size.width,
           height: size.height,
         }
@@ -148,9 +164,41 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     return {
       x: minX - GROUP_PADDING,
       y: minY - GROUP_HEADER_HEIGHT - GROUP_PADDING,
-      width: Math.max(autoWidth, group.width ?? 0),
-      height: Math.max(autoHeight, group.height ?? 0),
+      width: autoWidth,
+      height: autoHeight,
     }
+  }
+
+  /** 计算分组边界：已有边界只向外扩张，不随子节点向内移动收缩 */
+  function computeGroupBoundingBox(group: WorkflowGroup): Bounds {
+    const contentBounds = computeGroupContentBounds(group)
+    const currentX = group.x ?? contentBounds.x
+    const currentY = group.y ?? contentBounds.y
+    const currentRight = currentX + (group.width ?? contentBounds.width)
+    const currentBottom = currentY + (group.height ?? contentBounds.height)
+    const contentRight = contentBounds.x + contentBounds.width
+    const contentBottom = contentBounds.y + contentBounds.height
+    const nextX = Math.min(currentX, contentBounds.x)
+    const nextY = Math.min(currentY, contentBounds.y)
+
+    return {
+      x: nextX,
+      y: nextY,
+      width: Math.max(currentRight, contentRight) - nextX,
+      height: Math.max(currentBottom, contentBottom) - nextY,
+    }
+  }
+
+  function expandGroupToContent(groupId: string, movedNode?: { id: string; position: { x: number; y: number } }): Bounds | null {
+    const group = store.currentWorkflow?.groups?.find(g => g.id === groupId)
+    if (!group) return null
+    const current = computeGroupBoundingBox(group)
+    const content = computeGroupContentBounds(group, movedNode)
+    const nextX = Math.min(current.x, content.x)
+    const nextY = Math.min(current.y, content.y)
+    const nextRight = Math.max(current.x + current.width, content.x + content.width)
+    const nextBottom = Math.max(current.y + current.height, content.y + content.height)
+    return { x: nextX, y: nextY, width: nextRight - nextX, height: nextBottom - nextY }
   }
 
   /** 查找节点所属的分组 ID */
@@ -162,21 +210,33 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     return undefined
   }
 
-  /** 同步分组 bounding box (由内向外) */
-  function syncGroupBoundingBox(groupId: string): void {
-    const workflow = store.currentWorkflow
-    if (!workflow) return
-    const group = workflow.groups?.find(g => g.id === groupId)
-    if (!group) return
+  function isNodeInGroup(group: WorkflowGroup, nodeId: string): boolean {
+    return group.childNodeIds.includes(nodeId)
+      || group.childGroupIds.some((childGroupId) => {
+        const childGroup = store.currentWorkflow?.groups?.find(g => g.id === childGroupId)
+        return childGroup ? isNodeInGroup(childGroup, nodeId) : false
+      })
+  }
 
-    // 递归：先同步子分组
-    for (const childGroupId of group.childGroupIds) {
-      syncGroupBoundingBox(childGroupId)
+  function getNodeBounds(nodeId: string, position: { x: number; y: number }): Bounds | null {
+    const node = store.currentWorkflow?.nodes.find(n => n.id === nodeId)
+    if (!node) return null
+    const size = getRenderedNodeSize(node.id, node.data)
+    return { x: position.x, y: position.y, width: size.width, height: size.height }
+  }
+
+  function findGroupExternalCollision(groupId: string, bounds: Bounds): string | null {
+    const workflow = store.currentWorkflow
+    const group = workflow?.groups?.find(g => g.id === groupId)
+    if (!workflow || !group) return null
+
+    for (const node of workflow.nodes) {
+      if (isHiddenWorkflowNode(node) || isNodeInGroup(group, node.id)) continue
+      const nodeBounds = getNodeBounds(node.id, node.position)
+      if (nodeBounds && intersects(bounds, nodeBounds)) return node.id
     }
 
-    // 更新 VueFlow 中对应 group 节点
-    const bb = computeGroupBoundingBox(group)
-    flowStore.findNode(groupId)
+    return null
   }
 
   function updateNodeSize(nodeId: string, dimensions: { width?: number; height?: number }, resizing?: boolean): void {
@@ -217,18 +277,41 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
           if (parentId) syncScopeBoundaryLayout(parentId)
         }
       } else if (change.type === 'position' && change.position) {
+        const currentNode = store.currentWorkflow?.nodes.find((node) => node.id === change.id)
+        const previousPosition = currentNode ? { ...currentNode.position } : null
+        const groupId = findGroupOfNode(change.id)
+        const group = groupId ? store.currentWorkflow?.groups?.find(g => g.id === groupId) : null
+        const currentGroupBounds = group ? computeGroupBoundingBox(group) : null
+        const nextGroupBounds = groupId
+          ? expandGroupToContent(groupId, { id: change.id, position: change.position })
+          : null
+
+        if (
+          groupId
+          && currentGroupBounds
+          && nextGroupBounds
+          && !isSameBounds(currentGroupBounds, nextGroupBounds)
+          && findGroupExternalCollision(groupId, nextGroupBounds)
+        ) {
+          if (previousPosition) {
+            flowStore.updateNode(change.id, { position: previousPosition })
+          }
+          continue
+        }
+
         store.updateNodePosition(change.id, change.position)
+        if (groupId && nextGroupBounds) {
+          store.updateGroupBounds(groupId, nextGroupBounds)
+        }
         const movedNode = store.currentWorkflow?.nodes.find((node) => node.id === change.id)
         const parentId = movedNode ? getCompositeParentId(movedNode) : null
         if (parentId) syncScopeBoundaryLayout(parentId)
-        // 同步分组 bounding box
-        const groupId = findGroupOfNode(change.id)
-        if (groupId) syncGroupBoundingBox(groupId)
       } else if (change.type === 'dimensions') {
         if (change.dimensions) {
           const group = store.currentWorkflow?.groups?.find(g => g.id === change.id)
           if (group) {
-            store.updateGroupSize(change.id, change.dimensions)
+            const currentBounds = computeGroupBoundingBox(group)
+            store.updateGroupBounds(change.id, { ...currentBounds, ...change.dimensions })
           } else {
             updateNodeSize(change.id, change.dimensions, change.resizing)
           }

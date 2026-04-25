@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/empty'
 import { Spinner } from '@/components/ui/spinner'
 import { Button } from '@/components/ui/button'
-import { AlertCircle } from 'lucide-vue-next'
+import { AlertCircle, Copy } from 'lucide-vue-next'
 import {
   Dialog,
   DialogContent,
@@ -33,6 +33,7 @@ import {
   DialogClose,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import JsonEditor from '@/components/ui/json-editor/JsonEditor.vue'
 import { provideWorkflowStore, type WorkflowStore } from '@/stores/workflow'
 import { useTabStore, type Tab } from '@/stores/tab'
 import CustomNodeWrapper from './CustomNodeWrapper.vue'
@@ -66,6 +67,7 @@ import { useConnectionDrop } from '@/composables/workflow/useConnectionDrop'
 import { useEdgeInsert } from '@/composables/workflow/useEdgeInsert'
 import { useFlowCanvas } from '@/composables/workflow/useFlowCanvas'
 import { useWorkflowFileActions } from '@/composables/workflow/useWorkflowFileActions'
+import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { useClipboard } from '@/composables/workflow/useClipboard'
 import { useEditorShortcuts } from '@/composables/workflow/useEditorShortcuts'
 import { useAgentSettingsStore } from '@/stores/agent-settings'
@@ -90,6 +92,10 @@ const listDialogOpen = ref(false)
 const listDialogCreateMode = ref(false)
 const nodeSelectOpen = ref(false)
 const paneContextMenuPosition = ref<{ x: number; y: number } | null>(null)
+const nodeInfoDialogOpen = ref(false)
+const nodeInfoDialogNodeId = ref<string | null>(null)
+const groupPickerDialogOpen = ref(false)
+const groupPickerDialogNodeId = ref<string | null>(null)
 const pluginsDialogOpen = ref(false)
 const settingsDialogOpen = ref(false)
 const pluginPickerOpen = ref(false)
@@ -277,6 +283,8 @@ const canvasContext: WorkflowCanvasContext = {
   onEdgeInsertNode,
   fitView,
   openNodeSelectAtPosition,
+  openNodeInfoDialog,
+  openGroupPickerDialog,
 }
 
 const nodeSidebarContext: NodeSidebarContext = {
@@ -349,6 +357,43 @@ function onNodeSelectFromPane(type: string) {
   if (!paneContextMenuPosition.value || !store.currentWorkflow) return
   store.addNode(type, paneContextMenuPosition.value)
   paneContextMenuPosition.value = null
+}
+
+function openNodeInfoDialog(nodeId: string) {
+  nodeInfoDialogNodeId.value = nodeId
+  nodeInfoDialogOpen.value = true
+}
+
+function openGroupPickerDialog(nodeId: string) {
+  groupPickerDialogNodeId.value = nodeId
+  groupPickerDialogOpen.value = true
+}
+
+function handleAddToGroup(groupId: string) {
+  if (!groupPickerDialogNodeId.value) return
+  store.addNodesToGroup(groupId, [groupPickerDialogNodeId.value])
+  groupPickerDialogOpen.value = false
+}
+
+async function copyNodeInfo() {
+  if (!nodeInfoDialogNodeId.value) return
+  const nodeId = nodeInfoDialogNodeId.value
+  const node = store.currentWorkflow?.nodes.find((n) => n.id === nodeId)
+  if (!node) return
+  const step = store.executionLog?.steps.find((s) => s.nodeId === nodeId)
+  const definition = getNodeDefinition(node.type)
+  const data = {
+    id: nodeId,
+    type: node.type,
+    label: node.label || definition?.label || node.type,
+    nodeState: node.nodeState || 'normal',
+    definition: { type: definition?.type, icon: definition?.icon, category: definition?.category },
+    data: node.data,
+    execution: step
+      ? { status: step.status, startedAt: step.startedAt, finishedAt: step.finishedAt, input: step.input, output: step.output, error: step.error, logs: step.logs }
+      : null,
+  }
+  await navigator.clipboard.writeText(JSON.stringify(data, null, 2))
 }
 
 function onNodeClick({ node, event }: any) {
@@ -694,6 +739,68 @@ function onConnect(params: any) {
       @update:open="pluginPickerOpen = $event"
       @update:enabled-plugins="handlePluginUpdate($event)"
     />
+
+    <!-- 节点信息对话框（从右键菜单触发） -->
+    <Dialog :open="nodeInfoDialogOpen" @update:open="nodeInfoDialogOpen = $event">
+      <DialogContent class="max-w-2xl max-h-[80vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>节点信息</DialogTitle>
+        </DialogHeader>
+        <div class="flex-1 overflow-auto">
+          <JsonEditor
+            v-if="nodeInfoDialogNodeId"
+            :model-value="(() => {
+              const node = store.currentWorkflow?.nodes.find(n => n.id === nodeInfoDialogNodeId)
+              if (!node) return {}
+              const def = getNodeDefinition(node.type)
+              const step = store.executionLog?.steps.find(s => s.nodeId === nodeInfoDialogNodeId)
+              return {
+                id: node.id,
+                type: node.type,
+                label: node.label || def?.label || node.type,
+                nodeState: node.nodeState || 'normal',
+                definition: { type: def?.type, icon: def?.icon, category: def?.category },
+                data: node.data,
+                execution: step
+                  ? { status: step.status, startedAt: step.startedAt, finishedAt: step.finishedAt, input: step.input, output: step.output, error: step.error, logs: step.logs }
+                  : null,
+              }
+            })()"
+            :readonly="true"
+            :height="400"
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" @click="copyNodeInfo">
+            <Copy class="w-4 h-4 mr-1" />
+            复制 JSON
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- 加入分组对话框（从右键菜单触发） -->
+    <Dialog :open="groupPickerDialogOpen" @update:open="groupPickerDialogOpen = $event">
+      <DialogContent class="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>加入分组</DialogTitle>
+        </DialogHeader>
+        <div class="space-y-1 max-h-60 overflow-auto">
+          <button
+            v-for="group in store.currentWorkflow?.groups || []"
+            :key="group.id"
+            class="w-full text-left px-3 py-2 rounded-md hover:bg-accent text-sm transition-colors"
+            @click="handleAddToGroup(group.id)"
+          >
+            {{ group.name }}
+            <span class="text-muted-foreground ml-1">({{ group.childNodeIds.length }})</span>
+          </button>
+          <div v-if="!(store.currentWorkflow?.groups || []).length" class="text-sm text-muted-foreground py-4 text-center">
+            暂无分组
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
 
     <!-- 分组管理面板 -->
     <FloatingPanel
