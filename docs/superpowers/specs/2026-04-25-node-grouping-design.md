@@ -27,6 +27,11 @@
 
 在 `Workflow` 类型上新增 `groups: WorkflowGroup[]` 字段。同时注册一个 `group` 节点类型到 VueFlow，分组以虚拟节点形式渲染在画布上。复用 VueFlow 坐标系统、NodeResizer 组件，避免手动同步 pan/zoom。
 
+**关键架构决策：分组节点不使用 VueFlow 的 `parentNode` 机制。** 分组节点作为独立的 VueFlow 节点渲染，与子节点之间通过数据模型中的 `childNodeIds` 关联，position/size 完全由 bounding box 计算驱动。原因：
+- 避免子节点坐标变为相对偏移（现有节点坐标均为绝对坐标）
+- 允许子节点自由移动出分组边界（VueFlow `extent: 'parent'` 会约束）
+- 不干扰现有 composite 节点的 parentNode 逻辑
+
 ## 1. 数据模型
 
 ### 新增类型 `WorkflowGroup`
@@ -59,6 +64,67 @@ export interface Workflow {
 - `savedNodeStates` 只在 `disabled = true` 时有值
 - `groups` 可选，旧工作流完全向后兼容
 - 分组没有 `position` 字段——position 和 size 由子节点 bounding box 实时计算
+
+## 1.1 VueFlow 节点映射
+
+分组数据（`WorkflowGroup`）不是 `WorkflowNode`，需要单独映射到 VueFlow 节点。在 `useFlowCanvas.ts` 的 `nodes` computed 中追加：
+
+```typescript
+const groupNodes = (store.currentWorkflow?.groups || []).map(group => ({
+  id: group.id,
+  type: 'group',
+  position: computeGroupBoundingBox(group),
+  style: { zIndex: -1 },
+  data: { ...group }
+}))
+return [...normalNodes, ...groupNodes]
+```
+
+## 1.2 Undo/Redo 扩展
+
+`createUndoRedoManager` 中的 `captureSnapshot` / `applySnapshot` 需扩展为 `{ nodes, edges, groups }`：
+
+```typescript
+function captureSnapshot(): string {
+  if (!currentWorkflow.value) return ''
+  return JSON.stringify({
+    nodes: currentWorkflow.value.nodes,
+    edges: currentWorkflow.value.edges,
+    groups: currentWorkflow.value.groups || []
+  })
+}
+```
+
+## 1.3 节点删除时分组清理
+
+当节点被删除时（`removeNode`、批量删除、AI 工具删除），自动从其所属分组的 `childNodeIds` 中移除。如果分组因此变空，自动删除空分组（除非用户通过管理面板操作，则保留空分组供后续添加）。
+
+## 1.4 分组与复合节点的交互
+
+- 复合节点（如 loop）加入分组时，只有用户显式选中的节点被加入分组
+- `loop_body` 等 composite-generated 子节点不自动跟随加入分组
+- 分组 bounding box 仅计算直接子节点的位置
+
+## 1.5 复制/粘贴行为
+
+- 复制分组内部分节点并粘贴 → 新节点不属于任何分组
+- 复制整个分组的所有节点并粘贴 → 新节点不自动组成新分组
+- 当前不支持"复制分组"操作
+
+## 1.6 工作流导入/导出
+
+- 导入时 `groups` 缺失视为无分组
+- 导出时 `groups` 随工作流 JSON 一起导出
+- 旧版本应用打开带 groups 的工作流时，groups 字段被忽略（不破坏兼容性）
+
+## 1.7 分组禁用语义
+
+分组禁用将子节点设为 `disabled`（中止执行语义），与单独禁用节点效果相同。用户明确知道禁用分组会导致工作流在遇到这些节点时中止。`savedNodeStates` 记录每个节点禁用前的状态以便恢复。
+
+## 1.8 空分组处理
+
+- 空分组（所有子节点被移走或删除后）不自动删除
+- 空分组显示一个最小占位区域，用户可继续向其添加节点
 
 ## 2. 分组节点组件
 
@@ -122,7 +188,7 @@ export interface Workflow {
 **单选时**：保持现有菜单，新增一项
 - 加入分组（弹出已有分组列表供选择）
 
-实现方式：通过 `store.selectedNodeIds.length >= 2` 切换菜单内容。
+实现方式：在每个节点的 ContextMenu 中通过 `store.selectedNodeIds.length >= 2` 动态切换菜单内容。当多选时，右键菜单显示多选专用项（合并成组、批量删除）；单选时显示原菜单 + 加入分组选项。
 
 ## 4. WorkflowStore 新增方法
 
@@ -260,5 +326,7 @@ VueFlow group 节点
 | `src/components/workflow/WorkflowCanvas.vue` | 修改 | 注册 group 自定义节点 |
 | `src/stores/workflow.ts` | 修改 | 新增分组管理方法 |
 | `src/composables/workflow/useFlowCanvas.ts` | 修改 | 节点位置变化时同步分组 bounding box |
-| `src/lib/workflow/nodeRegistry.ts` | 修改 | 注册 group 节点类型定义 |
+| `src/lib/workflow/nodeRegistry.ts` | 修改 | 注册 group 节点类型定义（`manualCreate: false`，不出现在节点选择 UI 中） |
 | `backend/workflow/execution-manager.ts` | 修改 | 执行时过滤 group 节点 |
+| `backend/chat/chat-workflow-tool-executor.ts` | 修改 | AI 删除节点时同步清理分组引用 |
+| `src/composables/workflow/useClipboard.ts` | 修改 | 粘贴时不自动分组（保持现有行为） |
