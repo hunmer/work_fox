@@ -3,6 +3,4 @@ out/
 dist-app/
 .tmp-userdata-exec/
 dist-web/
-public/workfox-backend-endpoint.json
 backend/data/
-public/workfox-backend-endpoint.json

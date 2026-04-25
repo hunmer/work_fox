@@ -12,7 +12,7 @@ const BACKEND_ENDPOINT_STORAGE_KEY = 'workfox.backendEndpoint'
 
 function defaultEndpoint() {
   return {
-    url: `ws://${location.hostname}:3001/ws`,
+    url: `ws://${location.hostname}:9123/ws`,
     token: '',
   }
 }
@@ -28,25 +28,6 @@ function loadSavedEndpoint() {
 }
 
 async function resolveEndpoint() {
-  try {
-    const response = await fetch(`/workfox-backend-endpoint.json?t=${Date.now()}`, {
-      cache: 'no-store',
-    })
-    if (response.ok) {
-      const endpoint = await response.json() as { url: string; token?: string }
-      if (endpoint.url) {
-        const normalized = {
-          url: endpoint.url,
-          token: endpoint.token ?? '',
-        }
-        localStorage.setItem(BACKEND_ENDPOINT_STORAGE_KEY, JSON.stringify(normalized))
-        return normalized
-      }
-    }
-  } catch {
-    // ignore fetch failure and fallback to local settings
-  }
-
   return loadSavedEndpoint()
 }
 

@@ -76,12 +76,11 @@ export default defineConfig({
         '**/agent-settings.json',
         '**/ai-providers.json',
         '**/workflow-folders.json',
-        '**/workfox-backend-endpoint.json',
       ],
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:9123',
         changeOrigin: true,
       },
     },

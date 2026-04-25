@@ -26,7 +26,7 @@ export function loadBackendConfig(): BackendConfig {
 
   return {
     host: process.env.WORKFOX_BACKEND_HOST || '127.0.0.1',
-    port: readNumber('WORKFOX_BACKEND_PORT', 0),
+    port: readNumber('WORKFOX_BACKEND_PORT', 9123),
     userDataDir: process.env.WORKFOX_USER_DATA_DIR || defaultUserDataDir,
     pluginDir: process.env.WORKFOX_PLUGIN_DIR || resolve(process.env.WORKFOX_USER_DATA_DIR || defaultUserDataDir, 'plugins'),
     logLevel: (process.env.WORKFOX_LOG_LEVEL as BackendConfig['logLevel']) || (process.env.WORKFOX_DEV ? 'debug' : 'info'),
