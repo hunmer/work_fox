@@ -554,8 +554,6 @@ async function handleTestNode() {
             />
           </div>
         </template>
-      </div>
-    </template>
   </div>
 </template>
 

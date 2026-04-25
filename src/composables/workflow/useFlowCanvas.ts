@@ -239,6 +239,41 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     return null
   }
 
+  function moveGroup(group: WorkflowGroup, position: { x: number; y: number }): void {
+    const currentBounds = computeGroupBoundingBox(group)
+    const dx = position.x - currentBounds.x
+    const dy = position.y - currentBounds.y
+    if (dx === 0 && dy === 0) return
+
+    store.updateGroupBounds(group.id, {
+      x: position.x,
+      y: position.y,
+      width: currentBounds.width,
+      height: currentBounds.height,
+    })
+
+    for (const nodeId of store.getDescendantNodeIds(group.id)) {
+      const node = store.currentWorkflow?.nodes.find(n => n.id === nodeId)
+      if (!node) continue
+      store.updateNodePosition(node.id, {
+        x: node.position.x + dx,
+        y: node.position.y + dy,
+      })
+    }
+
+    for (const childGroupId of store.getDescendantGroupIds(group.id)) {
+      const childGroup = store.currentWorkflow?.groups?.find(g => g.id === childGroupId)
+      if (!childGroup) continue
+      const childBounds = computeGroupBoundingBox(childGroup)
+      store.updateGroupBounds(childGroup.id, {
+        x: childBounds.x + dx,
+        y: childBounds.y + dy,
+        width: childBounds.width,
+        height: childBounds.height,
+      })
+    }
+  }
+
   function updateNodeSize(nodeId: string, dimensions: { width?: number; height?: number }, resizing?: boolean): void {
     const node = store.currentWorkflow?.nodes.find((n) => n.id === nodeId)
     if (!node) return
@@ -267,6 +302,11 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
   onNodesChange((changes) => {
     if (store.isPreview) return
     let nextSelectedNodeIds: string[] | null = null
+    const resizingGroupIds = new Set(
+      changes
+        .filter(change => change.type === 'dimensions' && store.currentWorkflow?.groups?.some(g => g.id === change.id))
+        .map(change => change.id),
+    )
 
     for (const change of changes) {
       if (change.type === 'remove') {
@@ -277,6 +317,16 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
           if (parentId) syncScopeBoundaryLayout(parentId)
         }
       } else if (change.type === 'position' && change.position) {
+        const changedGroup = store.currentWorkflow?.groups?.find(g => g.id === change.id)
+        if (changedGroup) {
+          if (resizingGroupIds.has(changedGroup.id)) {
+            store.updateGroupBounds(changedGroup.id, change.position)
+          } else {
+            moveGroup(changedGroup, change.position)
+          }
+          continue
+        }
+
         const currentNode = store.currentWorkflow?.nodes.find((node) => node.id === change.id)
         const previousPosition = currentNode ? { ...currentNode.position } : null
         const groupId = findGroupOfNode(change.id)
@@ -420,7 +470,8 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
         type: 'group',
         position: { x: bb.x, y: bb.y },
         selected: false,
-        draggable: false,
+        draggable: !group.locked,
+        dragHandle: '.group-node__header',
         width: bb.width,
         height: bb.height,
         style: {

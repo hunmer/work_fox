@@ -81,6 +81,7 @@ const headerLabel = computed(() => {
               @keydown.enter="commitEdit"
               @keydown.escape="cancelEdit"
               @blur="commitEdit"
+              @pointerdown.stop
               @click.stop
             />
           </template>
@@ -159,7 +160,7 @@ const headerLabel = computed(() => {
   border-radius: 6px 6px 0 0;
   background: color-mix(in srgb, var(--vf-node-bg, #fff) 70%, transparent);
   backdrop-filter: blur(4px);
-  cursor: default;
+  cursor: move;
   user-select: none;
   font-size: 12px;
   color: var(--vf-node-text, #334155);
@@ -173,6 +174,10 @@ const headerLabel = computed(() => {
 .group-node--locked {
   border-style: solid;
   border-color: var(--vf-node-border, #94a3b8);
+}
+
+.group-node--locked .group-node__header {
+  cursor: default;
 }
 
 .group-node--disabled {
