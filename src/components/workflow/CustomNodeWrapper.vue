@@ -7,9 +7,10 @@ import { X, CircleSlash, SkipForward, FileText, CircleCheck, CircleX, ChevronRig
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
 import JsonEditor from '@/components/ui/json-editor/JsonEditor.vue'
+import NodePropertyForm from './NodePropertyForm.vue'
 import { useWorkflowStore } from '@/stores/workflow'
 import { resolveInteraction, rejectInteraction } from '@/lib/backend-api/interaction'
-import type { NodeBreakpoint, NodeRunState } from '@/lib/workflow/types'
+import type { NodeBreakpoint, NodeRunState, WorkflowNode } from '@/lib/workflow/types'
 import {
   Popover,
   PopoverContent,
@@ -34,6 +35,7 @@ const store = useWorkflowStore()
 const { updateNodeInternals } = useVueFlow()
 
 const nodeRootRef = ref<HTMLElement | null>(null)
+const measuredNodeSize = ref({ width: 0, height: 0 })
 const controlBarRect = ref({ left: 0, top: 0, width: 180 })
 const isEditing = ref(false)
 const editLabel = ref('')
@@ -43,6 +45,13 @@ const definition = computed(() => getNodeDefinition(props.data?.nodeType || prop
 const IconComponent = computed(() => resolveLucideIcon(definition.value?.icon || 'Circle'))
 const nodeMinWidth = computed(() => definition.value?.customViewMinSize?.width || 140)
 const nodeMinHeight = computed(() => definition.value?.customViewMinSize?.height || 60)
+const currentWorkflowNode = computed<WorkflowNode | null>(() => {
+  return store.currentWorkflow?.nodes.find((n) => n.id === props.id) ?? null
+})
+const renderedNodeSize = computed(() => ({
+  width: measuredNodeSize.value.width || (typeof props.data?.width === 'number' ? props.data.width : 0),
+  height: measuredNodeSize.value.height || (typeof props.data?.height === 'number' ? props.data.height : 0),
+}))
 
 /** 是否显示输入/输出连接*/
 const showTargetHandle = computed(() => definition.value?.handles?.target !== false)
@@ -330,6 +339,12 @@ const customViewProps = computed(() => {
 /** 是否有自定义视图 */
 const hasCustomView = computed(() => !!CustomViewComponent.value)
 const isLoopBodyContainer = computed(() => definition.value?.type === LOOP_BODY_NODE_TYPE)
+const showInlinePropertyForm = computed(() => {
+  return !hasCustomView.value
+    && renderedNodeSize.value.width > 200
+    && renderedNodeSize.value.height > 200
+    && !!currentWorkflowNode.value
+})
 
 /** 动态输出连接点（switch 节点*/
 const dynamicHandles = computed(() => {
@@ -351,9 +366,22 @@ function getHandleTop(index: number, total: number): string {
   return `${((index + 1) / (total + 1)) * 100}%`
 }
 
+let nodeResizeObserver: ResizeObserver | null = null
+
 onMounted(() => {
   refreshNodeInternals('mounted')
   updateControlBarRect()
+  if (nodeRootRef.value) {
+    const rect = nodeRootRef.value.getBoundingClientRect()
+    measuredNodeSize.value = { width: rect.width, height: rect.height }
+    nodeResizeObserver = new ResizeObserver(([entry]) => {
+      measuredNodeSize.value = {
+        width: entry.contentRect.width,
+        height: entry.contentRect.height,
+      }
+    })
+    nodeResizeObserver.observe(nodeRootRef.value)
+  }
   window.addEventListener('scroll', updateControlBarRect, true)
   window.addEventListener('resize', updateControlBarRect)
 })
@@ -364,6 +392,8 @@ watch(isPausedAtThisNode, (paused) => {
 })
 
 onUnmounted(() => {
+  nodeResizeObserver?.disconnect()
+  nodeResizeObserver = null
   window.removeEventListener('scroll', updateControlBarRect, true)
   window.removeEventListener('resize', updateControlBarRect)
 })
@@ -566,6 +596,20 @@ async function handleStopAtBreakpoint() {
           <component
             :is="CustomViewComponent"
             v-bind="customViewProps"
+          />
+        </div>
+
+        <div
+          v-else-if="showInlinePropertyForm"
+          class="nodrag nopan flex-1 min-h-0 overflow-y-auto px-3 py-2 border-t border-border/50 inline-property-form"
+          @click.stop
+          @mousedown.stop
+          @pointerdown.stop
+        >
+          <NodePropertyForm
+            :node="currentWorkflowNode"
+            :node-id="String(props.id)"
+            compact
           />
         </div>
 
