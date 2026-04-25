@@ -47,8 +47,9 @@ class DesktopNative {
   }
 
   beep(): void {
+    // Electron does not expose process.beep(); use shell.beep() instead
     if (process.type === 'browser') {
-      process.beep()
+      shell.beep()
     }
   }
 

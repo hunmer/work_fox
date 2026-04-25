@@ -88,6 +88,7 @@ export class WSBridge {
       ws.addEventListener('close', () => {
         this.ws = null
         this.rejectAllPending(new Error('WebSocket closed'))
+        this.emit('ws:disconnected', null)
         this.scheduleReconnect()
       })
     })

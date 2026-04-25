@@ -25,8 +25,16 @@ export class ClientNodeCache {
     this.registrations.delete(clientId)
   }
 
+  getNodes(clientId: string): NodeTypeDefinition[] {
+    return this.registrations.get(clientId)?.nodes ?? []
+  }
+
   getAllNodes(): NodeTypeDefinition[] {
     return Array.from(this.registrations.values()).flatMap((entry) => entry.nodes)
+  }
+
+  hasClientNode(clientId: string, nodeType: string): boolean {
+    return this.getNodes(clientId).some((node) => node.type === nodeType)
   }
 
   getAllTools(): AgentToolDefinition[] {

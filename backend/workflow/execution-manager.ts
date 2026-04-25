@@ -612,7 +612,7 @@ export class BackendWorkflowExecutionManager {
         if (this.deps.pluginRegistry.requiresMainProcessBridge(node.type)) {
           return this.executeMainProcessNode(session, node, resolvedData, appendNodeLog)
         }
-        if (this.deps.clientNodeCache.getAllNodes().some((n) => n.type === node.type)) {
+        if (this.deps.clientNodeCache.hasClientNode(session.ownerClientId, node.type)) {
           return this.executeMainProcessNode(session, node, resolvedData, appendNodeLog)
         }
         if (this.deps.pluginRegistry.canExecuteNode(node.type)) {

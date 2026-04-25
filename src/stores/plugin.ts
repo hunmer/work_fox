@@ -14,11 +14,14 @@ export const usePluginStore = defineStore('plugin', () => {
   const isLoading = ref(false)
   const activeViewPluginId = ref<string | null>(null)
   const viewContents = ref<Record<string, string>>({})
+  let syncClientCapabilitiesTimer: ReturnType<typeof setTimeout> | null = null
+  let wsListenersRegistered = false
 
   const enabledPlugins = computed(() => plugins.value.filter((p) => p.enabled))
   const disabledPlugins = computed(() => plugins.value.filter((p) => !p.enabled))
 
   async function init(): Promise<void> {
+    ensureWsCapabilitySync()
     isLoading.value = true
     try {
       const api = pluginApi()
@@ -93,6 +96,26 @@ export const usePluginStore = defineStore('plugin', () => {
     }))
     await wsBridge.invoke('chat:register-client-nodes', { nodes: nodeGroups.flat() as any[] })
     await wsBridge.invoke('chat:register-client-agent-tools', { tools: toolGroups.flat() as any[] })
+  }
+
+  function ensureWsCapabilitySync(): void {
+    if (wsListenersRegistered) return
+    wsListenersRegistered = true
+
+    const scheduleSync = () => {
+      if (syncClientCapabilitiesTimer) {
+        clearTimeout(syncClientCapabilitiesTimer)
+      }
+      syncClientCapabilitiesTimer = setTimeout(() => {
+        syncClientCapabilitiesTimer = null
+        void registerClientCapabilities().catch((error) => {
+          console.warn('[plugin] failed to register client capabilities:', error)
+        })
+      }, 0)
+    }
+
+    wsBridge.on('ws:connected', scheduleSync)
+    wsBridge.on('ws:reconnected', scheduleSync)
   }
 
   async function enablePlugin(pluginId: string): Promise<void> {
