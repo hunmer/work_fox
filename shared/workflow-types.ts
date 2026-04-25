@@ -195,6 +195,7 @@ export interface NodeTypeDefinition {
   customView?: unknown
   customViewMinSize?: { width?: number; height?: number }
   manualCreate?: boolean
+  debuggable?: boolean
   compound?: CompoundNodeDefinition
 }
 

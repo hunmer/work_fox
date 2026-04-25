@@ -2,6 +2,7 @@ import type { NodeTypeDefinition } from '../types'
 import GalleryViewer from '@/components/gallery/GalleryViewer.vue'
 import MusicPlayer from '@/components/gallery/MusicPlayer.vue'
 import TableViewComponent from '@/components/workflow/TableViewComponent.vue'
+import StickyNoteView from '@/components/workflow/StickyNoteView.vue'
 
 export const displayNodes: NodeTypeDefinition[] = [
   {
@@ -132,5 +133,32 @@ export const displayNodes: NodeTypeDefinition[] = [
       { key: 'selectedRows', type: 'any' },
       { key: 'selectedCount', type: 'number' },
     ],
+  },
+  {
+    type: 'sticky_note',
+    label: '便签',
+    category: '展示',
+    icon: 'StickyNote',
+    description: '画布注释节点，不影响工作流执行',
+    customView: StickyNoteView,
+    customViewMinSize: { width: 180, height: 120 },
+    properties: [
+      { key: 'content', label: '内容', type: 'textarea', tooltip: '便签文本内容' },
+      {
+        key: 'color',
+        label: '颜色',
+        type: 'select',
+        default: 'yellow',
+        options: [
+          { label: '黄色', value: 'yellow' },
+          { label: '蓝色', value: 'blue' },
+          { label: '绿色', value: 'green' },
+          { label: '粉色', value: 'pink' },
+          { label: '紫色', value: 'purple' },
+        ],
+      },
+    ],
+    handles: { source: false, target: false },
+    debuggable: false,
   },
 ]

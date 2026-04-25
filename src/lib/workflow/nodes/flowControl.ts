@@ -276,6 +276,7 @@ export const flowControlNodes: NodeTypeDefinition[] = [
     },
     customView: LoopBodyContainer,
     customViewMinSize: { width: 520, height: 260 },
+    debuggable: false,
     manualCreate: false,
   },
 ]

@@ -57,7 +57,7 @@ const IconComponent = computed(() => {
 
 const isDebugging = computed(() => store.debugNodeStatus === 'running')
 const isLoopBodyNode = computed(() => store.selectedNode?.type === LOOP_BODY_NODE_TYPE)
-const canDebugSelectedNode = computed(() => store.selectedNode?.type !== LOOP_BODY_NODE_TYPE)
+const canDebugSelectedNode = computed(() => definition.value?.debuggable !== false)
 const outputExpanded = ref(true)
 const inputsExpanded = ref(true)
 const outputsExpanded = ref(true)

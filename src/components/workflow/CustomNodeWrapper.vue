@@ -319,6 +319,11 @@ const customViewProps = computed(() => {
       workflowName: props.data?.workflowName,
     }
   }
+  if (definition.value?.type === 'sticky_note') {
+    return {
+      nodeId: props.id,
+    }
+  }
   return props.data || {}
 })
 
@@ -519,42 +524,34 @@ async function handleStopAtBreakpoint() {
             v-if="IconComponent"
             class="w-4 h-4 text-muted-foreground shrink-0"
           />
-          <span class="text-xs text-muted-foreground truncate">{{ definition?.label || type }}</span>
-        </div>
-
-        <div v-if="!isLoopBodyContainer" class="px-3 py-1.5">
           <input
             v-if="isEditing"
             ref="inputRef"
             v-model="editLabel"
-            class="w-full text-xs bg-transparent outline-none border-b border-primary"
+            class="flex-1 text-xs bg-transparent outline-none border-b border-primary min-w-0"
             @blur="finishEdit"
             @keyup.enter="finishEdit"
             @click.stop
           >
           <div
             v-else
-            class="flex items-center gap-1"
+            class="text-xs truncate hover:bg-muted/50 rounded px-1 py-0.5 min-w-0 flex-1"
+            :class="{ 'opacity-50 line-through': currentNodeState === 'disabled' }"
+            @dblclick.stop="!store.isPreview && startEdit()"
           >
-            <div
-              class="text-xs truncate hover:bg-muted/50 rounded px-1 py-0.5 min-w-0 flex-1"
-              :class="{ 'opacity-50 line-through': currentNodeState === 'disabled' }"
-              @dblclick.stop="!store.isPreview && startEdit()"
-            >
-              {{ displayLabel }}
-            </div>
-            <button
-              v-if="isFirstConnectedNode && !isBoundaryNode && !store.isPreview"
-              class="nodrag nopan shrink-0 inline-flex items-center gap-1 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="store.executionStatus === 'running' || store.executionStatus === 'paused'"
-              title="&#23616;&#37096;&#27979;&#35797;"
-              @click.stop="handlePartialTest"
-            >
-              <Loader2 v-if="isPartialTesting" class="w-2.5 h-2.5 animate-spin" />
-              <Play v-else class="w-2.5 h-2.5" />
-              &#23616;&#37096;&#27979;&#35797;
-            </button>
+            {{ displayLabel }}
           </div>
+          <button
+            v-if="isFirstConnectedNode && !isBoundaryNode && !store.isPreview"
+            class="nodrag nopan shrink-0 inline-flex items-center gap-1 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="store.executionStatus === 'running' || store.executionStatus === 'paused'"
+            title="局部测试"
+            @click.stop="handlePartialTest"
+          >
+            <Loader2 v-if="isPartialTesting" class="w-2.5 h-2.5 animate-spin" />
+            <Play v-else class="w-2.5 h-2.5" />
+            局部测试
+          </button>
         </div>
 
         <!-- 自定义视图内容区 -->

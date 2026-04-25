@@ -568,6 +568,7 @@ export class BackendWorkflowExecutionManager {
     switch (node.type) {
       case 'start':
       case LOOP_BODY_NODE_TYPE:
+      case 'sticky_note':
         return null
       case 'end':
         return this.buildOutputObject(resolvedData.outputs)

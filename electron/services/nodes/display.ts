@@ -124,4 +124,31 @@ export const displayNodes: PluginWorkflowNode[] = [
       { key: 'selectedCount', type: 'number' },
     ],
   },
+  {
+    type: 'sticky_note',
+    label: '便签',
+    category: '展示',
+    icon: 'StickyNote',
+    description: '画布注释节点，不影响工作流执行',
+    properties: [
+      { key: 'content', label: '内容', type: 'textarea', tooltip: '便签文本内容' },
+      {
+        key: 'color',
+        label: '颜色',
+        type: 'select',
+        default: 'yellow',
+        options: [
+          { label: '黄色', value: 'yellow' },
+          { label: '蓝色', value: 'blue' },
+          { label: '绿色', value: 'green' },
+          { label: '粉色', value: 'pink' },
+          { label: '紫色', value: 'purple' },
+        ],
+      },
+    ],
+    handles: {
+      target: false,
+      source: false,
+    } as any,
+  },
 ]
