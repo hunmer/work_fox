@@ -1,6 +1,7 @@
 import { computed, watch, nextTick, onUnmounted } from 'vue'
 import { useVueFlow, MarkerType } from '@vue-flow/core'
 import type { WorkflowStore } from '@/stores/workflow'
+import type { WorkflowGroup } from '@/lib/workflow/types'
 import {
   isHiddenWorkflowNode,
   isScopeBoundaryWorkflowNode,
@@ -19,6 +20,9 @@ const MIN_CONTAINER_SIZE = {
   width: 520,
   height: 260,
 }
+
+const GROUP_PADDING = 20
+const GROUP_HEADER_HEIGHT = 32
 
 const resizingNodeIds = new Set<string>()
 
@@ -80,6 +84,73 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     }
   }
 
+  /** 计算分组的 bounding box (基于子节点位置) */
+  function computeGroupBoundingBox(group: WorkflowGroup): { x: number; y: number; width: number; height: number } {
+    const workflow = store.currentWorkflow
+    if (!workflow) return { x: 0, y: 0, width: 100, height: 60 }
+
+    const childNodes = group.childNodeIds
+      .map(id => workflow.nodes.find(n => n.id === id))
+      .filter((n): n is NonNullable<typeof n> => !!n)
+
+    const childGroups = group.childGroupIds
+      .map(id => workflow.groups?.find(g => g.id === id))
+      .filter((g): g is NonNullable<typeof g> => !!g)
+      .map(g => computeGroupBoundingBox(g))
+
+    if (childNodes.length === 0 && childGroups.length === 0) {
+      return { x: 0, y: 0, width: 100, height: 60 }
+    }
+
+    const allBoxes = [
+      ...childNodes.map(n => ({
+        x: n.position.x,
+        y: n.position.y,
+        width: Number(n.data?.width || 220),
+        height: Number(n.data?.height || 120),
+      })),
+      ...childGroups,
+    ]
+
+    const minX = Math.min(...allBoxes.map(b => b.x))
+    const minY = Math.min(...allBoxes.map(b => b.y))
+    const maxX = Math.max(...allBoxes.map(b => b.x + b.width))
+    const maxY = Math.max(...allBoxes.map(b => b.y + b.height))
+
+    return {
+      x: minX - GROUP_PADDING,
+      y: minY - GROUP_HEADER_HEIGHT - GROUP_PADDING,
+      width: Math.max(100, maxX - minX + GROUP_PADDING * 2),
+      height: Math.max(60, maxY - minY + GROUP_HEADER_HEIGHT + GROUP_PADDING * 2),
+    }
+  }
+
+  /** 查找节点所属的分组 ID */
+  function findGroupOfNode(nodeId: string): string | undefined {
+    const groups = store.currentWorkflow?.groups || []
+    for (const group of groups) {
+      if (group.childNodeIds.includes(nodeId)) return group.id
+    }
+    return undefined
+  }
+
+  /** 同步分组 bounding box (由内向外) */
+  function syncGroupBoundingBox(groupId: string): void {
+    const workflow = store.currentWorkflow
+    if (!workflow) return
+    const group = workflow.groups?.find(g => g.id === groupId)
+    if (!group) return
+
+    // 递归：先同步子分组
+    for (const childGroupId of group.childGroupIds) {
+      syncGroupBoundingBox(childGroupId)
+    }
+
+    // 更新 VueFlow 中对应 group 节点
+    const bb = computeGroupBoundingBox(group)
+    flowStore.findNode(groupId)
+  }
+
   function updateNodeSize(nodeId: string, dimensions: { width?: number; height?: number }, resizing?: boolean): void {
     const node = store.currentWorkflow?.nodes.find((n) => n.id === nodeId)
     if (!node) return
@@ -122,6 +193,9 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
         const movedNode = store.currentWorkflow?.nodes.find((node) => node.id === change.id)
         const parentId = movedNode ? getCompositeParentId(movedNode) : null
         if (parentId) syncScopeBoundaryLayout(parentId)
+        // 同步分组 bounding box
+        const groupId = findGroupOfNode(change.id)
+        if (groupId) syncGroupBoundingBox(groupId)
       } else if (change.type === 'dimensions') {
         if (change.dimensions) {
           updateNodeSize(change.id, change.dimensions, change.resizing)
@@ -192,8 +266,8 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     }
   })
 
-  const nodes = computed(() =>
-    (store.currentWorkflow?.nodes || [])
+  const nodes = computed(() => {
+    const normalNodes = (store.currentWorkflow?.nodes || [])
       .filter((n) => !isHiddenWorkflowNode(n))
       .map((n) => {
       const parentId = getCompositeParentId(n)
@@ -220,7 +294,37 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
         data: { ...n.data, label: n.label, nodeType: n.type }
       }
       })
-  )
+
+    // 追加分组虚拟节点
+    const groups = store.currentWorkflow?.groups || []
+    const groupNodes = groups.map(group => {
+      const bb = computeGroupBoundingBox(group)
+      return {
+        id: group.id,
+        type: 'group',
+        position: { x: bb.x, y: bb.y },
+        selected: false,
+        draggable: false,
+        width: bb.width,
+        height: bb.height,
+        style: {
+          width: `${bb.width}px`,
+          height: `${bb.height}px`,
+          zIndex: -1,
+        },
+        data: {
+          name: group.name,
+          childNodeIds: group.childNodeIds,
+          childGroupIds: group.childGroupIds,
+          locked: group.locked,
+          disabled: group.disabled,
+        }
+      }
+    })
+
+    // 分组节点排在前面（z-index 更低），普通节点排在后面
+    return [...groupNodes, ...normalNodes]
+  })
 
   const edges = computed(() =>
     (store.currentWorkflow?.edges || [])

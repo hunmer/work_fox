@@ -3,7 +3,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import type { NodeProps } from '@vue-flow/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
-import { X, CircleSlash, SkipForward, FileText, Info, Copy, CircleCheck, CircleX, ChevronRight, ChevronDown } from 'lucide-vue-next'
+import { X, CircleSlash, SkipForward, FileText, Info, Copy, CircleCheck, CircleX, ChevronRight, ChevronDown, Play, Loader2, Group, Trash2 } from 'lucide-vue-next'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
 import { useWorkflowStore } from '@/stores/workflow'
@@ -158,6 +158,33 @@ function handleClone() {
 
 function setNodeState(state: NodeRunState) {
   store.updateNodeState(String(props.id), state)
+}
+
+// ── 分组相关 ──
+const showGroupPicker = ref(false)
+
+const availableGroups = computed(() => {
+  return store.currentWorkflow?.groups || []
+})
+
+function handleMergeToGroup() {
+  const ids = store.selectedNodeIds.filter(id => store.canDeleteNode(id))
+  if (ids.length >= 2) {
+    store.createGroup(ids)
+  }
+}
+
+function handleBatchDelete() {
+  const ids = store.selectedNodeIds.filter(id => store.canDeleteNode(id))
+  store.pushUndo('批量删除节点')
+  for (const id of ids) {
+    store.removeNode(id)
+  }
+}
+
+function handleAddToGroup(groupId: string) {
+  store.addNodesToGroup(groupId, [String(props.id)])
+  showGroupPicker.value = false
 }
 
 function refreshNodeInternals(reason: string) {
@@ -362,6 +389,20 @@ function formatPlain(data: any): string {
   if (data === undefined || data === null) return '(空)'
   return String(data)
 }
+
+/** 当前节点是否正在调试 */
+const isCurrentNodeDebugging = computed(() => {
+  return store.debugNodeId === props.id && store.debugNodeStatus === 'running'
+})
+
+/** 测试当前节点 */
+async function handleTestNode() {
+  if (isCurrentNodeDebugging.value) {
+    store.cancelDebug()
+    return
+  }
+  await store.debugSingleNode(String(props.id))
+}
 </script>
 
 <template>
@@ -387,6 +428,16 @@ function formatPlain(data: any): string {
           :connectable="props.connectable"
           class="!z-10 !w-3 !h-3 !bg-blue-500 !border-2 !border-blue-300"
         />
+
+        <!-- 悬浮测试按钮（开始/结束节点隐藏，预览模式下隐藏） -->
+        <button
+          v-if="!isBoundaryNode && !store.isPreview"
+          class="absolute -top-2 -left-2 w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-opacity hover:bg-green-600 z-10"
+          @click.stop="handleTestNode"
+        >
+          <Loader2 v-if="isCurrentNodeDebugging" class="w-3 h-3 animate-spin" />
+          <Play v-else class="w-3 h-3" />
+        </button>
 
         <!-- 悬浮删除按钮（开始/结束节点隐藏，预览模式下隐藏） -->
         <button
@@ -587,34 +638,54 @@ function formatPlain(data: any): string {
     </ContextMenuTrigger>
 
     <ContextMenuContent v-if="!store.isPreview" class="w-48">
-      <ContextMenuItem @click="setNodeState('normal')">
-        <CircleSlash class="w-4 h-4 mr-2 text-green-500" />
-        正常
-      </ContextMenuItem>
-      <ContextMenuItem @click="setNodeState('disabled')">
-        <CircleSlash class="w-4 h-4 mr-2 text-red-500" />
-        禁用（中止执行）
-      </ContextMenuItem>
-      <ContextMenuItem @click="setNodeState('skipped')">
-        <SkipForward class="w-4 h-4 mr-2 text-yellow-500" />
-        跳过（跳过执行）
-      </ContextMenuItem>
-      <template v-if="!isBoundaryNode">
-        <ContextMenuSeparator />
-        <ContextMenuItem @click="showNodeInfo = true">
-          <Info class="w-4 h-4 mr-2" />
-          查看节点信息
+      <!-- 多选菜单 -->
+      <template v-if="store.selectedNodeIds.length >= 2">
+        <ContextMenuItem @click="handleMergeToGroup">
+          <Group class="w-4 h-4 mr-2" />
+          合并成组
         </ContextMenuItem>
-        <ContextMenuItem v-if="store.canCloneNode(String(props.id))" @click="handleClone">
-          复制节点
+        <ContextMenuItem class="text-destructive" @click="handleBatchDelete">
+          <Trash2 class="w-4 h-4 mr-2" />
+          批量删除
         </ContextMenuItem>
-        <ContextMenuItem
-          v-if="store.canDeleteNode(String(props.id))"
-          class="text-destructive"
-          @click="handleDelete"
-        >
-          删除节点
+      </template>
+
+      <!-- 单选菜单 -->
+      <template v-else>
+        <ContextMenuItem @click="setNodeState('normal')">
+          <CircleCheck class="w-4 h-4 mr-2 text-green-500" />
+          正常
         </ContextMenuItem>
+        <ContextMenuItem @click="setNodeState('disabled')">
+          <CircleSlash class="w-4 h-4 mr-2 text-red-500" />
+          禁用（中止执行）
+        </ContextMenuItem>
+        <ContextMenuItem @click="setNodeState('skipped')">
+          <SkipForward class="w-4 h-4 mr-2 text-yellow-500" />
+          跳过（跳过执行）
+        </ContextMenuItem>
+        <template v-if="!isBoundaryNode">
+          <ContextMenuSeparator />
+          <ContextMenuItem @click="showNodeInfo = true">
+            <Info class="w-4 h-4 mr-2" />
+            查看节点信息
+          </ContextMenuItem>
+          <ContextMenuItem v-if="store.canCloneNode(String(props.id))" @click="handleClone">
+            复制节点
+          </ContextMenuItem>
+          <!-- 加入分组 -->
+          <ContextMenuItem v-if="availableGroups.length > 0" @click="showGroupPicker = true">
+            <Group class="w-4 h-4 mr-2" />
+            加入分组
+          </ContextMenuItem>
+          <ContextMenuItem
+            v-if="store.canDeleteNode(String(props.id))"
+            class="text-destructive"
+            @click="handleDelete"
+          >
+            删除节点
+          </ContextMenuItem>
+        </template>
       </template>
     </ContextMenuContent>
   </ContextMenu>
@@ -633,6 +704,29 @@ function formatPlain(data: any): string {
           复制 JSON
         </Button>
       </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
+  <!-- 加入分组选择弹窗 -->
+  <Dialog :open="showGroupPicker" @update:open="showGroupPicker = $event">
+    <DialogContent class="max-w-sm">
+      <DialogHeader>
+        <DialogTitle>加入分组</DialogTitle>
+      </DialogHeader>
+      <div class="space-y-1 max-h-60 overflow-auto">
+        <button
+          v-for="group in availableGroups"
+          :key="group.id"
+          class="w-full text-left px-3 py-2 rounded-md hover:bg-accent text-sm transition-colors"
+          @click="handleAddToGroup(group.id)"
+        >
+          {{ group.name }}
+          <span class="text-muted-foreground ml-1">({{ group.childNodeIds.length }})</span>
+        </button>
+        <div v-if="availableGroups.length === 0" class="text-sm text-muted-foreground py-4 text-center">
+          暂无分组
+        </div>
+      </div>
     </DialogContent>
   </Dialog>
 </template>

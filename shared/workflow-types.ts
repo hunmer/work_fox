@@ -76,6 +76,16 @@ export interface WorkflowAgentConfig {
   mcps: AgentResourceItem[]
 }
 
+export interface WorkflowGroup {
+  id: string
+  name: string
+  childNodeIds: string[]                         // 直接子节点 ID（不含嵌套子分组的子节点）
+  childGroupIds: string[]                        // 直接子分组 ID（嵌套）
+  locked: boolean                                // 固定状态
+  disabled: boolean                              // 分组级禁用开关
+  savedNodeStates: Record<string, NodeRunState>  // 禁用前记忆每个节点的状态
+}
+
 export interface Workflow {
   id: string
   name: string
@@ -89,6 +99,7 @@ export interface Workflow {
   agentConfig?: WorkflowAgentConfig
   pluginConfigSchemes?: Record<string, string>
   layoutSnapshot?: Record<string, unknown>  // golden-layout 布局快照
+  groups?: WorkflowGroup[]                   // 所有分组，可选字段保持向后兼容
 }
 
 export interface OutputField {

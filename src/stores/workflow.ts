@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch, inject, provide, type Ref, type App } from 'vue'
-import type { Workflow, WorkflowFolder, WorkflowNode, ExecutionLog, EmbeddedWorkflow } from '@/lib/workflow/types'
+import type { Workflow, WorkflowFolder, WorkflowNode, ExecutionLog, EmbeddedWorkflow, WorkflowGroup } from '@/lib/workflow/types'
 import type { EngineStatus } from '@shared/workflow-types'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { executeRendererWorkflowTool } from '@/lib/agent/workflow-renderer-tools'
@@ -81,7 +81,11 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () =>
 
   function captureSnapshot(): string {
     if (!currentWorkflow.value) return ''
-    return JSON.stringify({ nodes: currentWorkflow.value.nodes, edges: currentWorkflow.value.edges })
+    return JSON.stringify({
+      nodes: currentWorkflow.value.nodes,
+      edges: currentWorkflow.value.edges,
+      groups: currentWorkflow.value.groups || []
+    })
   }
 
   function applySnapshot(snapshot: string): void {
@@ -89,6 +93,7 @@ function createUndoRedoManager(currentWorkflow: Ref<Workflow | null>, api: () =>
     const parsed = JSON.parse(snapshot)
     currentWorkflow.value.nodes = parsed.nodes
     currentWorkflow.value.edges = parsed.edges
+    currentWorkflow.value.groups = parsed.groups || []
   }
 
   function pushUndo(description: string): void {
@@ -355,6 +360,7 @@ function createEditActions(
   executionLog: Ref<ExecutionLog | null>,
   executionContext: Ref<Record<string, any>>,
   undoRedo: ReturnType<typeof createUndoRedoManager>,
+  groupActions: ReturnType<typeof createGroupActions>,
 ) {
   interface AddNodeOptions {
     sourceNodeId?: string | null
@@ -652,6 +658,10 @@ function createEditActions(
         .filter((node) => getCompositeRootId(node) === rootId)
         .map((node) => node.id),
     )
+    // 清理分组引用
+    for (const did of deleteNodeIds) {
+      groupActions.cleanupGroupOnNodeDelete(did)
+    }
     currentWorkflow.value.nodes = currentWorkflow.value.nodes.filter((node) => !deleteNodeIds.has(node.id))
     currentWorkflow.value.edges = currentWorkflow.value.edges.filter(
       (edge) => !deleteNodeIds.has(edge.source) && !deleteNodeIds.has(edge.target) && edge.composite?.rootId !== rootId,
@@ -1038,6 +1048,345 @@ function createDebugActions(
   return { debugNodeStatus, debugNodeResult, debugNodeId, debugSingleNode, cancelDebug }
 }
 
+// ====== 分组管理 ======
+
+const GRID_GAP = 30
+const ARRANGE_PADDING = 20
+const ARRANGE_HEADER_HEIGHT = 32
+
+function createGroupActions(
+  currentWorkflow: Ref<Workflow | null>,
+  undoRedo: ReturnType<typeof createUndoRedoManager>,
+) {
+  // ── 辅助：确保 groups 数组存在 ──
+  function ensureGroups(): WorkflowGroup[] {
+    if (!currentWorkflow.value) return []
+    if (!currentWorkflow.value.groups) {
+      currentWorkflow.value.groups = []
+    }
+    return currentWorkflow.value.groups
+  }
+
+  // ── 查询方法 ──
+
+  function getGroupOfNode(nodeId: string): WorkflowGroup | undefined {
+    return (currentWorkflow.value?.groups || []).find(g => g.childNodeIds.includes(nodeId))
+  }
+
+  function getGroupById(groupId: string): WorkflowGroup | undefined {
+    return (currentWorkflow.value?.groups || []).find(g => g.id === groupId)
+  }
+
+  function getParentGroup(groupId: string): WorkflowGroup | undefined {
+    return (currentWorkflow.value?.groups || []).find(g => g.childGroupIds.includes(groupId))
+  }
+
+  function getDescendantNodeIds(groupId: string): string[] {
+    const groups = currentWorkflow.value?.groups || []
+    const group = groups.find(g => g.id === groupId)
+    if (!group) return []
+    const result = [...group.childNodeIds]
+    for (const childGroupId of group.childGroupIds) {
+      result.push(...getDescendantNodeIds(childGroupId))
+    }
+    return result
+  }
+
+  function getDescendantGroupIds(groupId: string): string[] {
+    const groups = currentWorkflow.value?.groups || []
+    const group = groups.find(g => g.id === groupId)
+    if (!group) return []
+    const result = [...group.childGroupIds]
+    for (const childGroupId of group.childGroupIds) {
+      result.push(...getDescendantGroupIds(childGroupId))
+    }
+    return result
+  }
+
+  // ── CRUD ──
+
+  function createGroup(nodeIds: string[], name?: string): void {
+    if (!currentWorkflow.value) return
+    if (nodeIds.length === 0) return
+    undoRedo.pushUndo('创建分组')
+
+    const groups = ensureGroups()
+    const groupId = 'group_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
+    const newGroup: WorkflowGroup = {
+      id: groupId,
+      name: name || `分组 ${groups.length + 1}`,
+      childNodeIds: [],
+      childGroupIds: [],
+      locked: false,
+      disabled: false,
+      savedNodeStates: {},
+    }
+
+    // 从其他分组中移除这些节点（一对一关系）
+    for (const nodeId of nodeIds) {
+      const oldGroup = getGroupOfNode(nodeId)
+      if (oldGroup) {
+        oldGroup.childNodeIds = oldGroup.childNodeIds.filter(id => id !== nodeId)
+        // 空分组不自动删除，保留供后续添加
+      }
+      newGroup.childNodeIds.push(nodeId)
+    }
+
+    groups.push(newGroup)
+  }
+
+  function ungroup(groupId: string): void {
+    if (!currentWorkflow.value) return
+    const group = getGroupById(groupId)
+    if (!group || group.locked) return
+    undoRedo.pushUndo('解除分组')
+
+    const groups = ensureGroups()
+    const parentGroup = getParentGroup(groupId)
+
+    // 子分组提升到父分组或顶层
+    if (parentGroup) {
+      for (const childGroupId of group.childGroupIds) {
+        if (!parentGroup.childGroupIds.includes(childGroupId)) {
+          parentGroup.childGroupIds.push(childGroupId)
+        }
+      }
+      // 子节点的分组关系不变（它们仍由各自分组管理）
+    }
+
+    // 移除该分组
+    currentWorkflow.value.groups = groups.filter(g => g.id !== groupId)
+  }
+
+  function deleteGroup(groupId: string): void {
+    if (!currentWorkflow.value) return
+    const group = getGroupById(groupId)
+    if (!group) return
+    undoRedo.pushUndo('删除分组')
+
+    // 递归删除子分组
+    for (const childGroupId of [...group.childGroupIds]) {
+      deleteGroup(childGroupId)
+    }
+
+    // 删除子节点
+    const nodesToRemove = new Set(group.childNodeIds)
+    currentWorkflow.value.nodes = currentWorkflow.value.nodes.filter(n => !nodesToRemove.has(n.id))
+    currentWorkflow.value.edges = currentWorkflow.value.edges.filter(
+      e => !nodesToRemove.has(e.source) && !nodesToRemove.has(e.target)
+    )
+
+    // 从父分组中移除引用
+    const parentGroup = getParentGroup(groupId)
+    if (parentGroup) {
+      parentGroup.childGroupIds = parentGroup.childGroupIds.filter(id => id !== groupId)
+    }
+
+    // 从 groups 数组中移除
+    currentWorkflow.value.groups = (currentWorkflow.value.groups || []).filter(g => g.id !== groupId)
+  }
+
+  function addNodesToGroup(groupId: string, nodeIds: string[]): void {
+    if (!currentWorkflow.value) return
+    const group = getGroupById(groupId)
+    if (!group) return
+    undoRedo.pushUndo('加入分组')
+
+    for (const nodeId of nodeIds) {
+      // 从旧分组中移除（一对一关系）
+      const oldGroup = getGroupOfNode(nodeId)
+      if (oldGroup && oldGroup.id !== groupId) {
+        oldGroup.childNodeIds = oldGroup.childNodeIds.filter(id => id !== nodeId)
+      }
+      // 加入新分组（避免重复）
+      if (!group.childNodeIds.includes(nodeId)) {
+        group.childNodeIds.push(nodeId)
+      }
+    }
+  }
+
+  function removeNodesFromGroup(groupId: string, nodeIds: string[]): void {
+    if (!currentWorkflow.value) return
+    const group = getGroupById(groupId)
+    if (!group) return
+    undoRedo.pushUndo('移出分组')
+    group.childNodeIds = group.childNodeIds.filter(id => !nodeIds.includes(id))
+  }
+
+  function renameGroup(groupId: string, name: string): void {
+    const group = getGroupById(groupId)
+    if (!group) return
+    undoRedo.pushUndo('重命名分组')
+    group.name = name
+  }
+
+  // ── 状态切换 ──
+
+  function toggleGroupLock(groupId: string): void {
+    const group = getGroupById(groupId)
+    if (!group) return
+    undoRedo.pushUndo(group.locked ? '解除固定' : '固定分组')
+    group.locked = !group.locked
+  }
+
+  function toggleGroupDisabled(groupId: string): void {
+    if (!currentWorkflow.value) return
+    const group = getGroupById(groupId)
+    if (!group) return
+    undoRedo.pushUndo(group.disabled ? '启用分组' : '禁用分组')
+
+    if (!group.disabled) {
+      // 禁用：记忆状态，设为 disabled
+      group.savedNodeStates = {}
+      const allNodeIds = getDescendantNodeIds(groupId)
+      for (const nodeId of allNodeIds) {
+        const node = currentWorkflow.value.nodes.find(n => n.id === nodeId)
+        if (node) {
+          group.savedNodeStates[nodeId] = node.nodeState || 'normal'
+          node.nodeState = 'disabled'
+        }
+      }
+      group.disabled = true
+    } else {
+      // 恢复：从 savedNodeStates 还原
+      for (const [nodeId, state] of Object.entries(group.savedNodeStates)) {
+        const node = currentWorkflow.value.nodes.find(n => n.id === nodeId)
+        if (node) {
+          node.nodeState = state
+        }
+      }
+      group.savedNodeStates = {}
+      group.disabled = false
+    }
+  }
+
+  // ── 网格排列 ──
+
+  function arrangeGroupNodes(groupId: string): void {
+    if (!currentWorkflow.value) return
+    const group = getGroupById(groupId)
+    if (!group) return
+    undoRedo.pushUndo('整理节点')
+
+    const workflow = currentWorkflow.value
+
+    // 获取直接子节点和子分组
+    const childNodes = group.childNodeIds
+      .map(id => workflow.nodes.find(n => n.id === id))
+      .filter((n): n is NonNullable<typeof n> => !!n)
+
+    if (childNodes.length === 0) return
+
+    // 计算当前分组的 bounding box 作为可用区域
+    const childGroupBoxes = group.childGroupIds
+      .map(gid => getGroupById(gid))
+      .filter(Boolean)
+      .map(g => {
+        const ids = getDescendantNodeIds(g!.id)
+        const nodes = ids.map(id => workflow.nodes.find(n => n.id === id)).filter(Boolean)
+        if (nodes.length === 0) return null
+        return {
+          id: g!.id,
+          x: Math.min(...nodes.map(n => n!.position.x)),
+          y: Math.min(...nodes.map(n => n!.position.y)),
+          width: Math.max(...nodes.map(n => n!.position.x + Number(n!.data?.width || 220))) - Math.min(...nodes.map(n => n!.position.x)),
+          height: Math.max(...nodes.map(n => n!.position.y + Number(n!.data?.height || 120))) - Math.min(...nodes.map(n => n!.position.y)),
+        }
+      })
+      .filter(Boolean) as { id: string; x: number; y: number; width: number; height: number }[]
+
+    // 计算起始位置（分组当前位置）
+    const allItems = [
+      ...childNodes.map(n => ({
+        id: n.id,
+        width: Number(n.data?.width || 220),
+        height: Number(n.data?.height || 120),
+      })),
+      ...childGroupBoxes.map(b => ({ id: b.id, width: b.width, height: b.height })),
+    ]
+
+    if (allItems.length === 0) return
+
+    // 计算可用宽度（基于当前最宽子节点的范围）
+    const avgWidth = allItems.reduce((sum, item) => sum + item.width, 0) / allItems.length
+    const groupLeft = Math.min(
+      ...childNodes.map(n => n.position.x),
+      ...(childGroupBoxes.length > 0 ? childGroupBoxes.map(b => b.x) : [Infinity])
+    )
+    const groupRight = Math.max(
+      ...childNodes.map(n => n.position.x + Number(n.data?.width || 220)),
+      ...(childGroupBoxes.length > 0 ? childGroupBoxes.map(b => b.x + b.width) : [-Infinity])
+    )
+    const availableWidth = Math.max((groupRight - groupLeft) || (avgWidth + GRID_GAP) * 2, avgWidth + GRID_GAP)
+
+    // 确定列数
+    const columns = Math.max(1, Math.floor((availableWidth + GRID_GAP) / (avgWidth + GRID_GAP)))
+
+    // 起始位置
+    const startX = groupLeft
+    const startY = Math.min(
+      ...childNodes.map(n => n.position.y),
+      ...(childGroupBoxes.length > 0 ? childGroupBoxes.map(b => b.y) : [Infinity])
+    )
+
+    // 按网格排列
+    allItems.forEach((item, index) => {
+      const col = index % columns
+      const row = Math.floor(index / columns)
+      const cellWidth = (availableWidth + GRID_GAP) / columns
+      const x = startX + col * cellWidth + (cellWidth - item.width) / 2
+      const y = startY + row * (Math.max(...allItems.map(i => i.height)) + GRID_GAP)
+
+      // 更新节点或子分组位置
+      const node = workflow.nodes.find(n => n.id === item.id)
+      if (node) {
+        node.position = { x, y }
+      } else {
+        // 子分组：移动所有子孙节点
+        const descendantIds = getDescendantNodeIds(item.id)
+        const dx = x - (childGroupBoxes.find(b => b.id === item.id)?.x ?? 0)
+        const dy = y - (childGroupBoxes.find(b => b.id === item.id)?.y ?? 0)
+        for (const did of descendantIds) {
+          const dnode = workflow.nodes.find(n => n.id === did)
+          if (dnode) {
+            dnode.position = { x: dnode.position.x + dx, y: dnode.position.y + dy }
+          }
+        }
+      }
+    })
+  }
+
+  // ── 节点删除时的分组清理 ──
+
+  function cleanupGroupOnNodeDelete(nodeId: string): void {
+    const group = getGroupOfNode(nodeId)
+    if (!group) return
+    group.childNodeIds = group.childNodeIds.filter(id => id !== nodeId)
+    // 清理 savedNodeStates
+    if (group.savedNodeStates[nodeId] !== undefined) {
+      delete group.savedNodeStates[nodeId]
+    }
+  }
+
+  return {
+    getGroupOfNode,
+    getGroupById,
+    getParentGroup,
+    getDescendantNodeIds,
+    getDescendantGroupIds,
+    createGroup,
+    ungroup,
+    deleteGroup,
+    addNodesToGroup,
+    removeNodesFromGroup,
+    renameGroup,
+    toggleGroupLock,
+    toggleGroupDisabled,
+    arrangeGroupNodes,
+    cleanupGroupOnNodeDelete,
+  }
+}
+
 // ====== AI 增量更新 ======
 
 function createAIActions(
@@ -1137,7 +1486,8 @@ export function createWorkflowStore(tabId: string) {
     const versionMgr = createVersionManager(currentWorkflow, api)
     const dirtyTracker = createDirtyTracker()
     const crudActions = createCrudActions(workflows, workflowFolders, currentWorkflow, api, dirtyTracker, versionMgr)
-    const editActions = createEditActions(currentWorkflow, selectedNodeIds, executionStatus, executionLog, executionContext, undoRedo)
+    const groupActions = createGroupActions(currentWorkflow, undoRedo)
+    const editActions = createEditActions(currentWorkflow, selectedNodeIds, executionStatus, executionLog, executionContext, undoRedo, groupActions)
     const execActions = createExecutionActions(
       currentWorkflow,
       executionStatus,
@@ -1248,6 +1598,7 @@ export function createWorkflowStore(tabId: string) {
       pendingInteraction,
       listenForUIInteractions,
       ...aiActions,
+      ...groupActions,
     }
   })
   return useStore()

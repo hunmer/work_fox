@@ -36,12 +36,15 @@ import { provideWorkflowStore, type WorkflowStore } from '@/stores/workflow'
 import { useTabStore, type Tab } from '@/stores/tab'
 import CustomNodeWrapper from './CustomNodeWrapper.vue'
 import CustomEdge from './CustomEdge.vue'
+import GroupNode from './GroupNode.vue'
 import WorkflowCanvas from './WorkflowCanvas.vue'
 import NodeSidebar from './NodeSidebar.vue'
 import RightPanel from './RightPanel.vue'
 import RightProperties from './RightProperties.vue'
 import RightVersion from './RightVersion.vue'
 import RightOperations from './RightOperations.vue'
+import GroupManagePanel from './GroupManagePanel.vue'
+import FloatingPanel from '@/components/utils/FloatingPanel.vue'
 import RightAssistant from './RightAssistant.vue'
 import ExecutionBar from './ExecutionBar.vue'
 import WorkflowListDialog from './WorkflowListDialog.vue'
@@ -52,7 +55,7 @@ import PluginsDialog from '@/components/plugins/PluginsDialog.vue'
 import SettingsDialog from '@/components/settings/SettingsDialog.vue'
 import PluginPickerDialog from './PluginPickerDialog.vue'
 import { WORKFLOW_NODE_DRAG_MIME } from './dragDrop'
-import { Activity } from 'lucide-vue-next'
+import { Activity, Layers } from 'lucide-vue-next'
 
 function toggleWsMonitor() {
   window.dispatchEvent(new CustomEvent('toggle-ws-monitor'))
@@ -88,6 +91,7 @@ const nodeSelectOpen = ref(false)
 const pluginsDialogOpen = ref(false)
 const settingsDialogOpen = ref(false)
 const pluginPickerOpen = ref(false)
+const groupPanelVisible = ref(false)
 const FLOW_ID = `workflow-editor-flow-${props.tab.id}`
 
 const {
@@ -163,7 +167,7 @@ const { handleKeyDown } = useEditorShortcuts(store, {
   zoomTo,
 })
 
-const nodeTypes = { custom: markRaw(CustomNodeWrapper) }
+const nodeTypes = { custom: markRaw(CustomNodeWrapper), group: markRaw(GroupNode) }
 const edgeTypes = { custom: markRaw(CustomEdge) }
 
 // ── Golden Layout 配置 ──────────────────────────────
@@ -558,13 +562,20 @@ function onConnect(params: any) {
         />
       </div>
 
-      <div class="w-[50px] border-l border-border bg-muted/30 flex flex-col items-center pt-2">
+      <div class="w-[50px] border-l border-border bg-muted/30 flex flex-col items-center pt-2 gap-1">
         <button
           class="inline-flex items-center justify-center w-8 h-8 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
           title="WS Monitor"
           @click="toggleWsMonitor"
         >
           <Activity class="w-4 h-4" />
+        </button>
+        <button
+          class="inline-flex items-center justify-center w-8 h-8 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+          title="分组管理"
+          @click="groupPanelVisible = !groupPanelVisible"
+        >
+          <Layers class="w-4 h-4" />
         </button>
       </div>
     </div>
@@ -614,6 +625,18 @@ function onConnect(params: any) {
       @update:open="pluginPickerOpen = $event"
       @update:enabled-plugins="handlePluginUpdate($event)"
     />
+
+    <!-- 分组管理面板 -->
+    <FloatingPanel
+      v-model:visible="groupPanelVisible"
+      title="分组管理"
+      :x="window.innerWidth - 400"
+      :y="80"
+      :width="320"
+      :height="340"
+    >
+      <GroupManagePanel />
+    </FloatingPanel>
 
     <!-- 保存布局预设 Dialog -->
     <Dialog :open="savePresetDialogOpen" @update:open="savePresetDialogOpen = $event">
