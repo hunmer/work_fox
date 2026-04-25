@@ -3,7 +3,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import type { NodeProps } from '@vue-flow/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
-import { X, CircleSlash, SkipForward, FileText, Info, Copy } from 'lucide-vue-next'
+import { X, CircleSlash, SkipForward, FileText, Info, Copy, CircleCheck, CircleX, ChevronRight, ChevronDown } from 'lucide-vue-next'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
 import { useWorkflowStore } from '@/stores/workflow'
@@ -16,6 +16,16 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import {
   Dialog,
   DialogContent,
@@ -294,6 +304,8 @@ onMounted(() => {
 })
 
 const showNodeInfo = ref(false)
+const inputExpanded = ref(true)
+const outputExpanded = ref(true)
 const nodeInfoData = computed(() => {
   const node = store.currentWorkflow?.nodes.find((n) => n.id === props.id)
   const step = store.executionLog?.steps.find((s) => s.nodeId === props.id)
@@ -324,6 +336,31 @@ const nodeInfoData = computed(() => {
 
 async function copyNodeInfo() {
   await navigator.clipboard.writeText(JSON.stringify(nodeInfoData.value, null, 2))
+}
+
+/** 节点是否有执行结果可展示 */
+const hasExecutionResult = computed(() => {
+  return (nodeStatus.value === 'completed' || nodeStatus.value === 'error') && !!executionStep.value
+})
+
+/** 执行耗时 */
+const executionDuration = computed(() => {
+  const step = executionStep.value
+  if (!step?.startedAt || !step?.finishedAt) return ''
+  const ms = step.finishedAt - step.startedAt
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(1)}s`
+})
+
+/** 判断数据是否为 JSON 对象/数组（可用 JsonEditor 渲染） */
+function isJsonObject(data: any): boolean {
+  return data !== null && data !== undefined && typeof data === 'object'
+}
+
+/** 格式化非 JSON 数据用于文本展示 */
+function formatPlain(data: any): string {
+  if (data === undefined || data === null) return '(空)'
+  return String(data)
 }
 </script>
 
@@ -441,6 +478,58 @@ async function copyNodeInfo() {
             :is="CustomViewComponent"
             v-bind="customViewProps"
           />
+        </div>
+
+        <!-- 执行结果指示器（节点完成后显示） -->
+        <div
+          v-if="hasExecutionResult"
+          class="nodrag nopan border-t border-border/50"
+          @click.stop
+        >
+          <Popover>
+            <PopoverTrigger as-child>
+              <button
+                class="w-full flex items-center gap-1.5 px-2 py-1 hover:bg-muted/50 transition-colors rounded-b-md text-[10px]"
+                @click.stop
+              >
+                <CircleCheck v-if="nodeStatus === 'completed'" class="w-3 h-3 text-green-500 shrink-0" />
+                <CircleX v-else class="w-3 h-3 text-red-500 shrink-0" />
+                <span class="text-muted-foreground truncate">执行结果</span>
+                <span v-if="executionDuration" class="text-muted-foreground/60 shrink-0">{{ executionDuration }}</span>
+                <ChevronDown class="w-2.5 h-2.5 ml-auto text-muted-foreground shrink-0" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent side="bottom" :side-offset="4" align="center" class="w-80 p-0">
+              <div class="p-2 space-y-2">
+                <!-- 错误信息 -->
+                <div v-if="executionStep?.error" class="p-2 rounded bg-destructive/10 text-destructive text-xs break-all">
+                  {{ executionStep.error }}
+                </div>
+                <!-- 输入 -->
+                <Collapsible v-model:open="inputExpanded">
+                  <CollapsibleTrigger class="flex items-center gap-1 w-full text-[10px] font-medium text-muted-foreground py-1 hover:bg-muted/50 rounded px-1">
+                    <ChevronRight class="w-3 h-3 transition-transform" :class="inputExpanded ? 'rotate-90' : ''" />
+                    输入
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <JsonEditor v-if="isJsonObject(executionStep?.input)" :model-value="executionStep.input" :readonly="true" :height="120" class="mt-1" />
+                    <pre v-else class="text-[10px] bg-muted/50 rounded p-2 mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-all">{{ formatPlain(executionStep?.input) }}</pre>
+                  </CollapsibleContent>
+                </Collapsible>
+                <!-- 输出 -->
+                <Collapsible v-model:open="outputExpanded">
+                  <CollapsibleTrigger class="flex items-center gap-1 w-full text-[10px] font-medium text-muted-foreground py-1 hover:bg-muted/50 rounded px-1">
+                    <ChevronRight class="w-3 h-3 transition-transform" :class="outputExpanded ? 'rotate-90' : ''" />
+                    输出
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <JsonEditor v-if="isJsonObject(executionStep?.output)" :model-value="executionStep.output" :readonly="true" :height="120" class="mt-1" />
+                    <pre v-else class="text-[10px] bg-muted/50 rounded p-2 mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-all">{{ formatPlain(executionStep?.output) }}</pre>
+                  </CollapsibleContent>
+                </Collapsible>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         <!-- 输出连接点 -->

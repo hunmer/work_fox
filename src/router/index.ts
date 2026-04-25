@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory, START_LOCATION } from 'vue-router'
 
 const REOPEN_EDITOR_KEY = 'workfox_reopen_editor'
+const REOPEN_WORKFLOW_ID_KEY = 'workfox_reopen_workflow_id'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -16,6 +17,7 @@ const router = createRouter({
     {
       path: '/editor',
       component: () => import('@/views/EditorPage.vue'),
+      props: (route) => ({ workflowId: (route.query.workflow_id as string) || undefined }),
     },
     {
       path: '/gallery',
@@ -31,6 +33,12 @@ const router = createRouter({
 router.beforeEach((to, from) => {
   if (to.path === '/editor') {
     localStorage.setItem(REOPEN_EDITOR_KEY, '1')
+    const workflowId = to.query.workflow_id as string | undefined
+    if (workflowId) {
+      localStorage.setItem(REOPEN_WORKFLOW_ID_KEY, workflowId)
+    } else {
+      localStorage.removeItem(REOPEN_WORKFLOW_ID_KEY)
+    }
     return
   }
 
@@ -38,11 +46,17 @@ router.beforeEach((to, from) => {
   const isHome = to.path === '/' || to.path === '/home'
 
   if (isHome && isInitialLoad && localStorage.getItem(REOPEN_EDITOR_KEY) === '1') {
-    return '/editor'
+    const savedWorkflowId = localStorage.getItem(REOPEN_WORKFLOW_ID_KEY)
+    const target = savedWorkflowId
+      ? { path: '/editor', query: { workflow_id: savedWorkflowId } }
+      : '/editor'
+    localStorage.removeItem(REOPEN_WORKFLOW_ID_KEY)
+    return target
   }
 
   if (isHome && !isInitialLoad) {
     localStorage.removeItem(REOPEN_EDITOR_KEY)
+    localStorage.removeItem(REOPEN_WORKFLOW_ID_KEY)
   }
 })
 
