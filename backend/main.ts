@@ -47,6 +47,7 @@ async function main(): Promise<void> {
     workflowStore,
     executionLogStore,
     pluginRegistry: plugins,
+    clientNodeCache,
     interactionManager,
     emit: (channel, payload) => backend.connections.emit(channel, payload),
     logger,

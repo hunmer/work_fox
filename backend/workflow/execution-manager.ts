@@ -39,6 +39,7 @@ import { isLocalBridgeWorkflowNode } from '../../shared/workflow-local-bridge'
 import type { BackendWorkflowStore } from '../storage/workflow-store'
 import type { BackendExecutionLogStore } from '../storage/execution-log-store'
 import type { BackendPluginRegistry } from '../plugins/plugin-registry'
+import type { ClientNodeCache } from '../chat/client-node-cache'
 import type { Logger } from '../app/logger'
 import type { BackendInteractionManager } from './interaction-manager'
 
@@ -46,6 +47,7 @@ interface ExecutionManagerDeps {
   workflowStore: BackendWorkflowStore
   executionLogStore: BackendExecutionLogStore
   pluginRegistry: BackendPluginRegistry
+  clientNodeCache: ClientNodeCache
   interactionManager: BackendInteractionManager
   emit<Channel extends ExecutionEventChannel>(channel: Channel, payload: ExecutionEventMap[Channel]): void
   logger: Logger
@@ -608,6 +610,9 @@ export class BackendWorkflowExecutionManager {
           return this.executeMainProcessNode(session, node, resolvedData, appendNodeLog)
         }
         if (this.deps.pluginRegistry.requiresMainProcessBridge(node.type)) {
+          return this.executeMainProcessNode(session, node, resolvedData, appendNodeLog)
+        }
+        if (this.deps.clientNodeCache.getAllNodes().some((n) => n.type === node.type)) {
           return this.executeMainProcessNode(session, node, resolvedData, appendNodeLog)
         }
         if (this.deps.pluginRegistry.canExecuteNode(node.type)) {

@@ -57,7 +57,38 @@ export function createPluginDomainApi() {
       if (local?.nodes?.length) return local
       return pluginBackendApi.getWorkflowNodes(pluginId)
     },
-    listWorkflowPlugins: pluginBackendApi.listWorkflowPlugins,
+    listWorkflowPlugins: async () => {
+      const [serverList, clientList] = await Promise.all([
+        pluginBackendApi.listWorkflowPlugins(),
+        (async () => {
+          try {
+            const locals = await localPluginApi.listLocal()
+            const withNodes = await Promise.all(
+              (locals as any[]).map(async (p: any) => {
+                if (!p.hasWorkflow) return null
+                try {
+                  const result = await localPluginApi.getWorkflowNodes(p.id)
+                  const nodes = result?.nodes ?? []
+                  if (!nodes.length) return null
+                  return { ...p, nodeCount: nodes.length }
+                } catch {
+                  return null
+                }
+              }),
+            )
+            return withNodes.filter(Boolean)
+          } catch {
+            return []
+          }
+        })(),
+      ])
+      const merged = new Map<string, any>()
+      for (const p of serverList as any[]) merged.set(p.id, p)
+      for (const p of clientList as any[]) {
+        if (!merged.has(p.id)) merged.set(p.id, p)
+      }
+      return Array.from(merged.values())
+    },
     getAgentTools: async (pluginIds: string[]) => {
       const local = await localPluginApi.getAgentTools(pluginIds)
       if (Array.isArray(local) && local.length > 0) return local
