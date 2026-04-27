@@ -5,6 +5,7 @@ import type { WorkflowGroup, WorkflowNode } from '@/lib/workflow/types'
 import { normalizeEmbeddedWorkflow } from '@shared/embedded-workflow'
 import {
   isHiddenWorkflowNode,
+  isHiddenWorkflowEdge,
   isScopeBoundaryWorkflowNode,
   getCompositeParentId,
   LOOP_BODY_ROLE,
@@ -89,7 +90,6 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
 
       const normalized = normalizeEmbeddedWorkflow(embedded, () => crypto.randomUUID())
       const migratedNodes = normalized.nodes
-        .filter((node) => node.type !== 'start' && node.type !== 'end')
         .map((node): WorkflowNode => ({
           ...JSON.parse(JSON.stringify(node)),
           position: {
@@ -98,9 +98,9 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
           },
           composite: {
             ...(node.composite ? JSON.parse(JSON.stringify(node.composite)) : {}),
-            rootId: bodyNode.composite?.rootId || bodyNode.id,
+            rootId: bodyNode.id,
             parentId: bodyNode.id,
-            generated: false,
+            generated: node.type === 'start' || node.type === 'end',
             hidden: false,
           },
         }))
@@ -108,28 +108,135 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
       if (!migratedNodes.length) continue
 
       const migratedNodeIds = new Set(migratedNodes.map((node) => node.id))
-      const startNode = normalized.nodes.find((node) => node.type === 'start')
-      const endNode = normalized.nodes.find((node) => node.type === 'end')
+      const startNode = migratedNodes.find((node) => node.type === 'start')
       const migratedEdges = normalized.edges
         .map((edge) => {
-          const source = edge.source === startNode?.id ? bodyNode.id : edge.source
-          if (edge.target === endNode?.id) return null
-          if (source !== bodyNode.id && !migratedNodeIds.has(source)) return null
+          const source = edge.source
+          if (!migratedNodeIds.has(source)) return null
           if (!migratedNodeIds.has(edge.target)) return null
           return {
             ...JSON.parse(JSON.stringify(edge)),
             id: `e-${source}-${edge.sourceHandle ?? 'default'}-${edge.target}-${edge.targetHandle ?? 'default'}`,
             source,
             target: edge.target,
-            sourceHandle: source === bodyNode.id ? null : edge.sourceHandle ?? null,
+            sourceHandle: edge.sourceHandle ?? null,
             targetHandle: edge.targetHandle ?? null,
           }
         })
         .filter(Boolean) as NonNullable<typeof workflow.edges[number]>[]
 
+      if (startNode) {
+        migratedEdges.push({
+          id: `e-${bodyNode.id}-default-${startNode.id}-target`,
+          source: bodyNode.id,
+          target: startNode.id,
+          sourceHandle: null,
+          targetHandle: 'target',
+          composite: {
+            rootId: bodyNode.id,
+            parentId: bodyNode.id,
+            generated: true,
+            hidden: true,
+            locked: true,
+          },
+        })
+      }
+
       workflow.nodes.push(...migratedNodes)
       workflow.edges.push(...migratedEdges)
       delete bodyNode.data.bodyWorkflow
+    }
+  }
+
+  function ensureLoopBodyBoundaryNodes(): void {
+    const workflow = store.currentWorkflow
+    if (!workflow) return
+
+    for (const bodyNode of workflow.nodes) {
+      if (bodyNode.type !== LOOP_BODY_NODE_TYPE || bodyNode.composite?.role !== LOOP_BODY_ROLE) continue
+      const children = workflow.nodes.filter((node) => getCompositeParentId(node) === bodyNode.id)
+      for (const child of children) {
+        child.composite = {
+          ...(child.composite || {}),
+          rootId: bodyNode.id,
+          parentId: bodyNode.id,
+          ...(child.type === 'start' || child.type === 'end' ? { generated: true, hidden: false } : {}),
+        }
+      }
+      const hasStart = children.some((node) => node.type === 'start')
+      const hasEnd = children.some((node) => node.type === 'end')
+      if (hasStart && hasEnd) continue
+
+      const startNode: WorkflowNode = {
+        id: crypto.randomUUID(),
+        type: 'start',
+        label: '开始',
+        position: { x: bodyNode.position.x + 80, y: bodyNode.position.y + 140 },
+        data: {},
+        composite: {
+          rootId: bodyNode.id,
+          parentId: bodyNode.id,
+          generated: true,
+          hidden: false,
+        },
+      }
+      const endNode: WorkflowNode = {
+        id: crypto.randomUUID(),
+        type: 'end',
+        label: '结束',
+        position: { x: bodyNode.position.x + 420, y: bodyNode.position.y + 140 },
+        data: {},
+        composite: {
+          rootId: bodyNode.id,
+          parentId: bodyNode.id,
+          generated: true,
+          hidden: false,
+        },
+      }
+
+      if (!hasStart) workflow.nodes.push(startNode)
+      if (!hasEnd) workflow.nodes.push(endNode)
+      const entryTarget = hasStart ? children.find((node) => node.type === 'start')! : startNode
+      const endTarget = hasEnd ? children.find((node) => node.type === 'end')! : endNode
+      const entryEdgeId = `e-${bodyNode.id}-default-${entryTarget.id}-target`
+      const existingEntryEdge = workflow.edges.find((edge) => edge.id === entryEdgeId)
+      if (existingEntryEdge) {
+        existingEntryEdge.composite = {
+          ...(existingEntryEdge.composite || {}),
+          rootId: bodyNode.id,
+          parentId: bodyNode.id,
+          generated: true,
+          hidden: true,
+          locked: true,
+        }
+      } else {
+        workflow.edges.push({
+          id: entryEdgeId,
+          source: bodyNode.id,
+          target: entryTarget.id,
+          sourceHandle: null,
+          targetHandle: 'target',
+          composite: {
+            rootId: bodyNode.id,
+            parentId: bodyNode.id,
+            generated: true,
+            hidden: true,
+            locked: true,
+          },
+        })
+      }
+      if (!hasStart || !hasEnd) {
+        const startToEndId = `e-${entryTarget.id}-default-${endTarget.id}-target`
+        if (!workflow.edges.some((edge) => edge.id === startToEndId)) {
+          workflow.edges.push({
+            id: startToEndId,
+            source: entryTarget.id,
+            target: endTarget.id,
+            sourceHandle: null,
+            targetHandle: 'target',
+          })
+        }
+      }
     }
   }
 
@@ -496,6 +603,7 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     if (!id) return
     await nextTick()
     migrateEmbeddedLoopBodyNodes()
+    ensureLoopBodyBoundaryNodes()
     syncAllScopeBoundaries()
     const saved = getSavedViewport(id)
     if (saved) {
@@ -523,14 +631,14 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
         expandParent: false,
         draggable: true,
         dragHandle: n.type === LOOP_BODY_NODE_TYPE ? '.loop-body-header' : undefined,
-        zIndex: isLoopBody ? 0 : (isScopedChild ? 2 : 1),
+        zIndex: isLoopBody ? -1 : (isScopedChild ? 20 : 1),
         width,
         height,
         style: width || height ? {
           width: width ? `${width}px` : undefined,
           height: height ? `${height}px` : undefined,
-          ...(isLoopBody ? { zIndex: 0 } : {}),
-        } : (isLoopBody ? { zIndex: 0 } : undefined),
+          ...(isLoopBody ? { zIndex: -1 } : {}),
+        } : (isLoopBody ? { zIndex: -1 } : undefined),
         data: { ...n.data, label: n.label, nodeType: n.type }
       }
       })
@@ -571,6 +679,7 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
 
   const edges = computed(() =>
     (store.currentWorkflow?.edges || [])
+      .filter((e) => !isHiddenWorkflowEdge(e))
       .map((e) => ({
       id: e.id,
       type: 'custom',
@@ -608,5 +717,6 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     edges,
     handleConnect,
     handleNodesInitialized,
+    syncScopeBoundaryLayout,
   }
 }

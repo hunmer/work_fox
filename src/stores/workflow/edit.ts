@@ -13,6 +13,7 @@ import {
   isScopeBoundaryWorkflowNode,
   LOOP_BODY_ROLE,
   LOOP_NODE_TYPE,
+  LOOP_BODY_NODE_TYPE,
   LOOP_BODY_SOURCE_HANDLE,
   LOOP_NEXT_SOURCE_HANDLE,
 } from '@shared/workflow-composite'
@@ -199,6 +200,10 @@ export function createEditActions(
   function canDeleteNode(nodeId: string): boolean {
     const node = getNode(nodeId)
     if (!node) return false
+    const parentNode = node.composite?.parentId ? getNode(node.composite.parentId) : null
+    if (parentNode && isScopeBoundaryWorkflowNode(parentNode)) {
+      return node.type !== 'start' && node.type !== 'end'
+    }
     return !isGeneratedWorkflowNode(node)
   }
 
@@ -290,7 +295,9 @@ export function createEditActions(
       return { ok: false, reason: '不能跨循环体边界连线' }
     }
 
-    if (target.composite?.generated && target.id !== source.id) {
+    const targetParent = target.composite?.parentId ? getNode(target.composite.parentId) : null
+    const targetIsScopedBoundary = !!targetParent && isScopeBoundaryWorkflowNode(targetParent) && (target.type === 'start' || target.type === 'end')
+    if (target.composite?.generated && target.id !== source.id && !targetIsScopedBoundary) {
       return { ok: false, reason: '内部锚点节点不允许手动作为连线目标' }
     }
 
@@ -304,6 +311,59 @@ export function createEditActions(
 
   function appendEdge(edge: Workflow['edges'][number]): void {
     currentWorkflow.value!.edges.push(edge)
+  }
+
+  function createLoopBodyBoundaryNodes(bodyNode: WorkflowNode): void {
+    if (!currentWorkflow.value || bodyNode.type !== LOOP_BODY_NODE_TYPE) return
+    const startNode: WorkflowNode = {
+      id: crypto.randomUUID(),
+      type: 'start',
+      label: '开始',
+      position: { x: bodyNode.position.x + 80, y: bodyNode.position.y + 140 },
+      data: {},
+      composite: {
+        rootId: bodyNode.id,
+        parentId: bodyNode.id,
+        generated: true,
+        hidden: false,
+      },
+    }
+    const endNode: WorkflowNode = {
+      id: crypto.randomUUID(),
+      type: 'end',
+      label: '结束',
+      position: { x: bodyNode.position.x + 420, y: bodyNode.position.y + 140 },
+      data: {},
+      composite: {
+        rootId: bodyNode.id,
+        parentId: bodyNode.id,
+        generated: true,
+        hidden: false,
+      },
+    }
+    appendNode(startNode)
+    appendNode(endNode)
+    appendEdge({
+      id: `e-${bodyNode.id}-default-${startNode.id}-target`,
+      source: bodyNode.id,
+      target: startNode.id,
+      sourceHandle: null,
+      targetHandle: 'target',
+      composite: {
+        rootId: bodyNode.id,
+        parentId: bodyNode.id,
+        generated: true,
+        hidden: true,
+        locked: true,
+      },
+    })
+    appendEdge({
+      id: `e-${startNode.id}-default-${endNode.id}-target`,
+      source: startNode.id,
+      target: endNode.id,
+      sourceHandle: null,
+      targetHandle: 'target',
+    })
   }
 
   function createCompoundNodes(
@@ -322,7 +382,7 @@ export function createEditActions(
         data: createNodeData(type),
         composite: scopeNode
           ? {
-              rootId: scopeNode.composite?.rootId || scopeNode.id,
+              rootId: scopeNode.id,
               parentId: scopeNode.id,
               generated: false,
               hidden: false,
@@ -418,6 +478,11 @@ export function createEditActions(
       })
     }
 
+    const createdBodyNode = roleMap.get(LOOP_BODY_ROLE)
+    if (createdBodyNode?.type === LOOP_BODY_NODE_TYPE) {
+      createLoopBodyBoundaryNodes(createdBodyNode)
+    }
+
     return [rootNode, ...currentWorkflow.value!.nodes.filter((node) => node.composite?.rootId === rootNode.id && node.id !== rootNode.id)]
   }
 
@@ -468,6 +533,16 @@ export function createEditActions(
     undoRedo.pushUndo('删除节点')
     const rootNode = getNode(nodeId)
     if (!rootNode) return
+    const parentNode = rootNode.composite?.parentId ? getNode(rootNode.composite.parentId) : null
+    if (parentNode && isScopeBoundaryWorkflowNode(parentNode)) {
+      groupActions.cleanupGroupOnNodeDelete(nodeId)
+      currentWorkflow.value.nodes = currentWorkflow.value.nodes.filter((node) => node.id !== nodeId)
+      currentWorkflow.value.edges = currentWorkflow.value.edges.filter(
+        (edge) => edge.source !== nodeId && edge.target !== nodeId,
+      )
+      selectedNodeIds.value = selectedNodeIds.value.filter((id) => id !== nodeId)
+      return
+    }
     const rootId = getCompositeRootId(rootNode)
     const deleteNodeIds = new Set(
       currentWorkflow.value.nodes

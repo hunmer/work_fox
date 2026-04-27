@@ -58,7 +58,7 @@ import SettingsDialog from '@/components/settings/SettingsDialog.vue'
 import PluginPickerDialog from './PluginPickerDialog.vue'
 import { WORKFLOW_NODE_DRAG_MIME } from './dragDrop'
 import EditorRightBar from './EditorRightBar.vue'
-import { getCompositeParentId, LOOP_BODY_NODE_TYPE } from '@shared/workflow-composite'
+import { LOOP_BODY_NODE_TYPE } from '@shared/workflow-composite'
 
 import { useConnectionDrop } from '@/composables/workflow/useConnectionDrop'
 import { useEdgeInsert } from '@/composables/workflow/useEdgeInsert'
@@ -137,6 +137,7 @@ const {
   edges,
   handleConnect,
   handleNodesInitialized,
+  syncScopeBoundaryLayout,
 } = useFlowCanvas(store, FLOW_ID)
 
 const {
@@ -497,6 +498,9 @@ function addNodeFromDropEvent(event: DragEvent) {
   })
   const scopeNode = findDropLoopBodyScope(position)
   store.addNode(type, position, scopeNode ? { scopeNodeId: scopeNode.id } : undefined)
+  if (scopeNode) {
+    syncScopeBoundaryLayout(scopeNode.id)
+  }
 }
 
 function findDropLoopBodyScope(position: { x: number; y: number }): WorkflowNode | null {
@@ -506,10 +510,8 @@ function findDropLoopBodyScope(position: { x: number; y: number }): WorkflowNode
   const loopBodies = workflow.nodes.filter((node) => node.type === LOOP_BODY_NODE_TYPE)
   for (let i = loopBodies.length - 1; i >= 0; i--) {
     const node = loopBodies[i]
-    const parentId = getCompositeParentId(node)
-    const parent = parentId ? workflow.nodes.find((item) => item.id === parentId) : null
-    const absoluteX = node.position.x + (parent?.position.x ?? 0)
-    const absoluteY = node.position.y + (parent?.position.y ?? 0)
+    const absoluteX = node.position.x
+    const absoluteY = node.position.y
     const width = Number(node.data?.width || 520)
     const height = Number(node.data?.height || 260)
     if (
