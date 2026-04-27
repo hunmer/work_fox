@@ -6,7 +6,7 @@
 
 ## 模块职责
 
-1. **类型安全契约**：`channel-contracts.ts` 定义所有 backend WS 通道的请求/响应类型映射（`BackendChannelMap`）
+1. **类型安全契约**：`channel-contracts.ts` 定义所有 backend WS 通道的请求/响应类型映射（`BackendChannelMap`），含 Dashboard 统计契约
 2. **WS 消息协议**：`ws-protocol.ts` 定义 WS 消息格式（request/response/event/error/interaction）
 3. **执行事件协议**：`execution-events.ts` 定义工作流执行全生命周期事件类型和 recovery 协议
 4. **工作流类型**：`workflow-types.ts` 定义工作流核心数据模型（Workflow/Node/Edge/ExecutionLog 等），包括复合节点和嵌入式子工作流
@@ -29,7 +29,7 @@
 
 | 文件 | 主要导出 | 消费者 |
 |---|---|---|
-| `channel-contracts.ts` | `BackendChannelMap`, `BackendChannel`, `ChannelRequest<C>`, `ChannelResponse<C>` | backend/ws/*, src/lib/backend-api/*, src/lib/ws-bridge.ts |
+| `channel-contracts.ts` | `BackendChannelMap`, `BackendChannel`, `ChannelRequest<C>`, `ChannelResponse<C>`, `DashboardStatsResponse`, `DashboardExecutionsRequest/Response`, `DashboardWorkflowDetailRequest/Response` | backend/ws/*, src/lib/backend-api/*, src/lib/ws-bridge.ts |
 | `channel-metadata.ts` | `backendChannelMetadata`, `ChannelMetadata` | backend/ws/router.ts |
 | `ws-protocol.ts` | `WSRequest`, `WSResponse`, `WSEvent`, `WSError`, `InteractionRequest`, `InteractionResponse`, `WSClientHello` | backend/ws/connection-manager.ts, src/lib/ws-bridge.ts |
 | `execution-events.ts` | `ExecutionEventChannel`, `ExecutionEventMap`, `ExecutionRecoveryState`, `WorkflowExecuteRequest` | backend/workflow/*, src/stores/workflow.ts, src/lib/workflow/engine.ts |
@@ -63,6 +63,33 @@
 - **文件系统**: `fs:listDir/delete/createFile/createDir/rename`
 - **Chat**: `chat:completions`, `chat:abort`, `chat:register-client-nodes`, `chat:register-client-agent-tools`
 - **工具**: `agent:execTool`
+- **Dashboard**: `dashboard:stats`, `dashboard:executions`, `dashboard:workflow-detail`
+
+### Dashboard 契约类型
+
+```typescript
+// 统计概览
+interface DashboardStatsResponse {
+  workflowCount: number; runningCount: number; pluginCount: number;
+  todayExecutions: number; weekExecutions: number; totalExecutions: number;
+  dailyTrend: Array<{ date: string; count: number; success: number; error: number }>;
+}
+
+// 执行历史（分页）
+interface DashboardExecutionsRequest {
+  range?: 'today' | 'week' | 'all'; status?: string; page?: number; pageSize?: number;
+}
+interface DashboardExecutionsResponse {
+  items: DashboardExecutionItem[]; total: number; page: number; pageSize: number;
+}
+
+// 工作流详情（含版本 + 执行记录）
+interface DashboardWorkflowDetailResponse {
+  workflow: { id; name; folderId; nodeCount; edgeCount; createdAt; updatedAt };
+  versions: Array<{ id; version; createdAt; nodeCount; description? }>;
+  executions: { items: Array<...>; total: number };
+}
+```
 
 ### 复合节点系统
 
@@ -141,7 +168,7 @@ A: `EmbeddedWorkflow` 允许节点内部包含独立的子工作流（如 loop_b
 ```
 shared/
   index.ts                             统一 re-export
-  channel-contracts.ts                 WS 通道类型契约（BackendChannelMap）
+  channel-contracts.ts                 WS 通道类型契约（BackendChannelMap，含 Dashboard 契约）
   channel-metadata.ts                  通道元数据（超时/优先级/幂等性）
   ws-protocol.ts                       WS 消息协议（request/response/event/interaction）
   execution-events.ts                  执行事件协议与 recovery 类型
@@ -160,6 +187,7 @@ shared/
 
 | 日期 | 操作 | 说明 |
 |---|---|---|
+| 2026-04-27 | 增量更新 | 新增 Dashboard 契约类型（DashboardStatsResponse/ExecutionsRequest/Response/WorkflowDetailResponse）；新增 dashboard:stats/executions/workflow-detail 通道；补充 Dashboard 契约类型文档 |
 | 2026-04-25 | 增量更新 | 新增 embedded-workflow.ts、workflow-composite.ts、shortcut-types.ts；补充复合节点/嵌入式子工作流类型；新增 chat:register-client-nodes/agent-tools 通道；补充 workflow:debug-node 通道 |
 | 2026-04-23 | 增量更新 | 同步插件运行时约定、插件入口类型、`agent:execTool` 双实现 |
 | 2026-04-22 | 初始化 | 首次生成 shared 模块文档 |
