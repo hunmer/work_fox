@@ -57,11 +57,7 @@ import PluginsDialog from '@/components/plugins/PluginsDialog.vue'
 import SettingsDialog from '@/components/settings/SettingsDialog.vue'
 import PluginPickerDialog from './PluginPickerDialog.vue'
 import { WORKFLOW_NODE_DRAG_MIME } from './dragDrop'
-import { Activity, Layers } from 'lucide-vue-next'
-
-function toggleWsMonitor() {
-  window.dispatchEvent(new CustomEvent('toggle-ws-monitor'))
-}
+import EditorRightBar from './EditorRightBar.vue'
 
 import { useConnectionDrop } from '@/composables/workflow/useConnectionDrop'
 import { useEdgeInsert } from '@/composables/workflow/useEdgeInsert'
@@ -660,22 +656,7 @@ function onConnect(params: any) {
         />
       </div>
 
-      <div class="w-[50px] border-l border-border bg-muted/30 flex flex-col items-center pt-2 gap-1">
-        <button
-          class="inline-flex items-center justify-center w-8 h-8 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-          title="WS Monitor"
-          @click="toggleWsMonitor"
-        >
-          <Activity class="w-4 h-4" />
-        </button>
-        <button
-          class="inline-flex items-center justify-center w-8 h-8 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-          title="分组管理"
-          @click="groupPanelVisible = !groupPanelVisible"
-        >
-          <Layers class="w-4 h-4" />
-        </button>
-      </div>
+      <EditorRightBar @toggle-group-panel="groupPanelVisible = !groupPanelVisible" />
     </div>
 
     <Empty v-else-if="store.loadState === 'loading'" class="flex-1">
