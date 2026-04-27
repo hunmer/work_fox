@@ -137,6 +137,20 @@ const statusColor = computed(() => {
   }
 })
 
+const NODE_COLOR_MAP: Record<string, string> = {
+  emerald: '#10b981',
+  blue: '#3b82f6',
+  violet: '#8b5cf6',
+  rose: '#f43f5e',
+  orange: '#f97316',
+  amber: '#f59e0b',
+  cyan: '#06b6d4',
+  pink: '#ec4899',
+  slate: '#64748b',
+  red: '#ef4444',
+  indigo: '#6366f1',
+}
+
 /** 节点运行状态对应的背景样式 */
 const stateBackground = computed(() => {
   if (currentNodeState.value !== 'normal') {
@@ -150,6 +164,14 @@ const stateBackground = computed(() => {
   if (definition.value?.type === 'start') return 'bg-emerald-500/10'
   if (definition.value?.type === 'end') return 'bg-slate-500/10'
   return 'bg-background'
+})
+
+const nodeColorStyle = computed(() => {
+  const color = currentWorkflowNode.value?.nodeColor
+  if (!color) return null
+  const hex = NODE_COLOR_MAP[color]
+  if (!hex) return null
+  return { backgroundColor: `${hex}1a` }
 })
 
 /** 状态徽标文*/
@@ -544,6 +566,7 @@ async function handleStopAtBreakpoint() {
     ref="nodeRootRef"
     class="group/node border-2 rounded-lg shadow-sm w-full h-full cursor-pointer transition-colors relative flex flex-col"
     :class="[statusColor, stateBackground, props.selected ? 'ring-2 ring-primary' : '', { 'loop-body-node': isLoopBodyContainer }]"
+    :style="nodeColorStyle"
   >
         <!-- 输入连接点 -->
         <Handle

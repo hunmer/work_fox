@@ -16,6 +16,7 @@ export interface WorkflowNode {
   position: { x: number; y: number }
   data: Record<string, any>
   nodeState?: 'normal' | 'disabled' | 'skipped'
+  nodeColor?: string
 }
 
 export interface WorkflowEdge {

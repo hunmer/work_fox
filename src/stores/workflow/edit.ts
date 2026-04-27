@@ -570,6 +570,17 @@ export function createEditActions(
     }
   }
 
+  function updateNodeColor(nodeId: string, color: string | null): void {
+    undoRedo.pushUndo('修改节点颜色')
+    const node = currentWorkflow.value?.nodes.find((n) => n.id === nodeId)
+    if (!node) return
+    if (color) {
+      node.nodeColor = color
+    } else {
+      delete node.nodeColor
+    }
+  }
+
   function addEdge(source: string, target: string, sourceHandle: string | null = null, targetHandle: string | null = null): void {
     if (!currentWorkflow.value) return
     const connectCheck = canConnectNodes(source, target, sourceHandle)
@@ -732,6 +743,7 @@ export function createEditActions(
     updateNodeLabel,
     updateNodeState,
     updateNodeBreakpoint,
+    updateNodeColor,
     addEdge,
     removeEdge,
     mergeNodesToSubWorkflow,

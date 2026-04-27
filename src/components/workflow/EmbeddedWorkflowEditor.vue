@@ -32,6 +32,7 @@ const {
   getSelectedNodes,
   project,
   setViewport,
+  updateNodeInternals,
   viewport,
   vueFlowRef,
   zoomIn,
@@ -61,9 +62,9 @@ const fullscreenSnapshot = ref<{
 } | null>(null)
 const isFullscreen = computed(() => !!fullscreenSnapshot.value)
 const flowStyle = computed(() => ({
-  width: outerZoom.value === 1 ? '100%' : `${100 / outerZoom.value}%`,
-  height: outerZoom.value === 1 ? '100%' : `${100 / outerZoom.value}%`,
-  transform: outerZoom.value === 1 ? undefined : `scale(${outerZoom.value})`,
+  width: outerZoom.value === 1 ? '100%' : `${outerZoom.value * 100}%`,
+  height: outerZoom.value === 1 ? '100%' : `${outerZoom.value * 100}%`,
+  transform: outerZoom.value === 1 ? undefined : `scale(${1 / outerZoom.value})`,
   transformOrigin: 'top left',
 }))
 
@@ -157,6 +158,12 @@ function emitWorkflow(nextWorkflow: EmbeddedWorkflow) {
 function syncLocalState(nextWorkflow: EmbeddedWorkflow) {
   flowNodes.value = nextWorkflow.nodes.map(mapWorkflowNode)
   flowEdges.value = nextWorkflow.edges.map(mapWorkflowEdge)
+}
+
+function refreshEmbeddedNodeInternals() {
+  requestAnimationFrame(() => {
+    updateNodeInternals(flowNodes.value.map((node) => String(node.id)))
+  })
 }
 
 function addNodeAt(type: string, position: { x: number; y: number }): WorkflowNode | null {
@@ -346,9 +353,8 @@ function setOuterViewport(nextViewport: { x: number; y: number; zoom: number }) 
 }
 
 function syncOuterZoom() {
-  outerZoom.value = fullscreenSnapshot.value
-    ? (getOuterViewport()?.zoom || 1)
-    : 1
+  const zoom = getOuterViewport()?.zoom || 1
+  outerZoom.value = Number.isFinite(zoom) && zoom > 0 ? zoom : 1
 }
 
 function toggleFullscreen() {
@@ -402,8 +408,10 @@ watch(isFullscreen, (value) => {
     syncOuterZoom()
     return
   }
-  outerZoom.value = 1
+  syncOuterZoom()
 })
+
+watch(outerZoom, refreshEmbeddedNodeInternals)
 
 onMounted(() => {
   syncOuterZoom()
@@ -450,8 +458,8 @@ function getCanvasPositionFromEvent(event: MouseEvent | TouchEvent | PointerEven
   const point = 'changedTouches' in event ? event.changedTouches[0] : event
   if (!point) return null
   return project({
-    x: (point.clientX - bounds.left) / Math.max(outerZoom.value, 0.1),
-    y: (point.clientY - bounds.top) / Math.max(outerZoom.value, 0.1),
+    x: point.clientX - bounds.left,
+    y: point.clientY - bounds.top,
   })
 }
 
@@ -567,8 +575,8 @@ function onDrop(event: DragEvent) {
   if (!bounds) return
 
   const position = project({
-    x: (event.clientX - bounds.left) / Math.max(outerZoom.value, 0.1),
-    y: (event.clientY - bounds.top) / Math.max(outerZoom.value, 0.1),
+    x: event.clientX - bounds.left,
+    y: event.clientY - bounds.top,
   })
   if (type) {
     addNodeAt(type, position)

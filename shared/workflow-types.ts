@@ -37,6 +37,7 @@ export interface WorkflowNode {
   data: Record<string, unknown>
   nodeState?: NodeRunState
   breakpoint?: NodeBreakpoint
+  nodeColor?: string
   composite?: WorkflowNodeCompositeMeta
 }
 

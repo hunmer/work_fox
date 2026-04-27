@@ -4,7 +4,7 @@ import { VueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { MiniMap } from '@vue-flow/minimap'
 import { Controls } from '@vue-flow/controls'
-import { Plus, Maximize, CircleCheck, CircleSlash, SkipForward, Info, Group, Trash2, Flag, FlagOff, Settings, Copy, FolderTree, Workflow } from 'lucide-vue-next'
+import { Plus, Maximize, CircleCheck, CircleSlash, SkipForward, Info, Group, Trash2, Flag, FlagOff, Settings, Copy, FolderTree, Workflow, Palette } from 'lucide-vue-next'
 import CustomEdge from './CustomEdge.vue'
 import CanvasToolbar from './CanvasToolbar.vue'
 import { WORKFLOW_CANVAS_CONTEXT_KEY } from './workflowCanvasContext'
@@ -114,6 +114,34 @@ const hasPaneSelectionMenu = computed(() => menuContext.value === 'pane' && targ
 const showPaneActions = computed(() => menuContext.value === 'pane' && !hasPaneSelectionMenu.value)
 
 const availableGroups = computed(() => store.currentWorkflow?.groups || [])
+
+const NODE_COLORS = [
+  { label: '默认', value: null, class: 'bg-background border border-border' },
+  { label: '翡翠绿', value: 'emerald', class: 'bg-emerald-500' },
+  { label: '蓝色', value: 'blue', class: 'bg-blue-500' },
+  { label: '紫色', value: 'violet', class: 'bg-violet-500' },
+  { label: '玫红', value: 'rose', class: 'bg-rose-500' },
+  { label: '橙色', value: 'orange', class: 'bg-orange-500' },
+  { label: '琥珀', value: 'amber', class: 'bg-amber-500' },
+  { label: '青色', value: 'cyan', class: 'bg-cyan-500' },
+  { label: '粉色', value: 'pink', class: 'bg-pink-500' },
+  { label: '石板灰', value: 'slate', class: 'bg-slate-500' },
+  { label: '红色', value: 'red', class: 'bg-red-500' },
+  { label: '靛蓝', value: 'indigo', class: 'bg-indigo-500' },
+]
+
+function setNodeColor(color: string | null) {
+  if (menuContext.value === 'embedded-node') {
+    updateEmbeddedNode('update embedded node color', (node) => {
+      if (color) node.nodeColor = color
+      else delete node.nodeColor
+    })
+    return
+  }
+  for (const id of targetNodeIds.value) {
+    store.updateNodeColor(id, color)
+  }
+}
 
 function cloneEmbeddedWorkflow(hostNodeId: string): EmbeddedWorkflow | null {
   const hostNode = store.currentWorkflow?.nodes.find((node) => node.id === hostNodeId)
@@ -311,6 +339,23 @@ async function handleMergeToWorkflow() {
         <template v-if="menuContext === 'embedded-node'">
           <ContextMenuSub>
             <ContextMenuSubTrigger>
+              <Palette class="w-4 h-4 mr-2" />
+              节点颜色
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent>
+              <ContextMenuItem
+                v-for="c in NODE_COLORS"
+                :key="c.value ?? 'default'"
+                class="flex items-center gap-2"
+                @click="setNodeColor(c.value)"
+              >
+                <span class="w-3.5 h-3.5 rounded-sm shrink-0" :class="c.class" />
+                {{ c.label }}
+              </ContextMenuItem>
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
               <Settings class="w-4 h-4 mr-2" />
               节点状态
             </ContextMenuSubTrigger>
@@ -392,6 +437,23 @@ async function handleMergeToWorkflow() {
 
           <!-- 单选菜单 -->
           <template v-else>
+            <ContextMenuSub>
+              <ContextMenuSubTrigger>
+                <Palette class="w-4 h-4 mr-2" />
+                节点颜色
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent>
+                <ContextMenuItem
+                  v-for="c in NODE_COLORS"
+                  :key="c.value ?? 'default'"
+                  class="flex items-center gap-2"
+                  @click="setNodeColor(c.value)"
+                >
+                  <span class="w-3.5 h-3.5 rounded-sm shrink-0" :class="c.class" />
+                  {{ c.label }}
+                </ContextMenuItem>
+              </ContextMenuSubContent>
+            </ContextMenuSub>
             <ContextMenuSub>
               <ContextMenuSubTrigger>
                 <Settings class="w-4 h-4 mr-2" />

@@ -39,6 +39,7 @@ export interface WorkflowNode {
   data: Record<string, any> // 节点参数
   nodeState?: NodeRunState // 节点运行状态，默认 'normal'
   breakpoint?: NodeBreakpoint
+  nodeColor?: string // 节点背景颜色（如 'emerald', 'blue', 'red'）
   composite?: WorkflowNodeCompositeMeta
 }
 
