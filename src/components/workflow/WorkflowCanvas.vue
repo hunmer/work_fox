@@ -4,7 +4,7 @@ import { VueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { MiniMap } from '@vue-flow/minimap'
 import { Controls } from '@vue-flow/controls'
-import { Plus, Maximize, CircleCheck, CircleSlash, SkipForward, Info, Group, Trash2, Flag, FlagOff, Settings, Copy, FolderTree } from 'lucide-vue-next'
+import { Plus, Maximize, CircleCheck, CircleSlash, SkipForward, Info, Group, Trash2, Flag, FlagOff, Settings, Copy, FolderTree, Workflow } from 'lucide-vue-next'
 import CustomEdge from './CustomEdge.vue'
 import CanvasToolbar from './CanvasToolbar.vue'
 import { WORKFLOW_CANVAS_CONTEXT_KEY } from './workflowCanvasContext'
@@ -110,6 +110,8 @@ const targetNodeIds = computed(() => {
 })
 
 const isMultiSelect = computed(() => targetNodeIds.value.length >= 2)
+const hasPaneSelectionMenu = computed(() => menuContext.value === 'pane' && targetNodeIds.value.length > 0)
+const showPaneActions = computed(() => menuContext.value === 'pane' && !hasPaneSelectionMenu.value)
 
 const availableGroups = computed(() => store.currentWorkflow?.groups || [])
 
@@ -245,6 +247,12 @@ function handleBatchDelete() {
     store.removeNode(id)
   }
 }
+async function handleMergeToWorkflow() {
+  const ids = targetNodeIds.value.filter(id => store.canDeleteNode(id))
+  if (ids.length >= 2) {
+    await store.mergeNodesToSubWorkflow(ids)
+  }
+}
 </script>
 
 <template>
@@ -288,7 +296,7 @@ function handleBatchDelete() {
 
       <ContextMenuContent v-if="!store.isPreview" class="w-48">
         <!-- ── 画布菜单项（始终在节点右键时也隐藏，只在 pane 时显示） ── -->
-        <template v-if="menuContext === 'pane'">
+        <template v-if="showPaneActions">
           <ContextMenuItem @click="handleAddNode">
             <Plus class="w-4 h-4 mr-2" />
             新建节点
@@ -360,6 +368,10 @@ function handleBatchDelete() {
 
           <!-- 多选菜单 -->
           <template v-if="isMultiSelect">
+            <ContextMenuItem @click="handleMergeToWorkflow">
+              <Workflow class="w-4 h-4 mr-2" />
+              合并为工作流
+            </ContextMenuItem>
             <ContextMenuSub>
               <ContextMenuSubTrigger>
                 <Group class="w-4 h-4 mr-2" />

@@ -23,6 +23,7 @@
 | `workfox.aliyun-ai` | 阿里云百炼AI | 千问文生图/万相视频生成/可灵生图/声动人像等 | 有 | server |
 | `workfox.openai` | OpenAI 图片生成 | gpt-image-1/dall-e-3 文生图、图片编辑 | 有 | server |
 | `workfox.epub-parser` | EPUB解析器 | 解析 EPUB 电子书，提取书籍信息/目录/章节内容 | 有 | server |
+| `workfox.aliyun-oss` | 阿里云OSS | 阿里云 OSS 文件存储，支持上传/下载/删除/列举/签名URL | 有 | server |
 | `workfox.test-plugin` | Test Plugin | Web client 插件 manifest / runtime / view 示例 | 视图示例 | client（CDN manifest 示例） |
 
 ## 插件文件结构
@@ -51,6 +52,10 @@
   openai/
     info.json / main.js / tools.js / workflow.js
     *.md                               API 参考文档（Create image/Create image edit）
+  aliyun-oss/
+    info.json / main.js / tools.js / workflow.js / shared.js
+    doc.txt                            API 参考文档
+    node_modules/                      插件自有依赖
   epub-parser/
     info.json / main.js / tools.js / workflow.js
     node_modules/                      插件自有依赖（jszip/pako 等）
@@ -123,6 +128,7 @@ Web CDN client runtime 当前提供的是较轻量上下文：
 - `aliyun-ai`：需要配置阿里云百炼 DashScope API Key（北京地域），支持多种 AI 生成能力
 - `openai`：需要配置 OpenAI API Key，支持自定义 API 地址（代理），提供 tools.js Agent 工具
 - `epub-parser`：无配置项，自带 node_modules 依赖（jszip/pako 等），解析 EPUB 电子书
+- `aliyun-oss`：需要配置阿里云 OSS Region/AccessKey/Bucket，支持 HTTPS 协议，提供 tools.js Agent 工具和 workflow.js 工作流节点
 
 ## 相关文件清单
 
@@ -137,6 +143,7 @@ resources/
     fish-audio/                         FishAudio 语音插件（server）
     aliyun-ai/                          阿里云百炼AI 插件（server）
     openai/                             OpenAI 图片生成插件（server）
+    aliyun-oss/                         阿里云 OSS 存储插件（server）
     epub-parser/                        EPUB 解析器插件（server）
     test-plugin/                        Web client manifest / runtime / view 示例
 ```
@@ -145,6 +152,7 @@ resources/
 
 | 日期 | 操作 | 说明 |
 |---|---|---|
+| 2026-04-27 | 增量更新 | 新增 aliyun-oss 插件（阿里云 OSS 文件存储） |
 | 2026-04-25 | 增量更新 | 新增 aliyun-ai、openai、epub-parser 插件文档 |
 | 2026-04-23 | 增量更新 | 同步最新插件系统：server/client 分流、Web CDN manifest、window-manager Electron only |
 | 2026-04-22 | 增量更新 | 补充 fish-audio 插件、运行时类型说明、插件配置方案、info.json 结构 |

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch, inject, provide, type Ref, type App } from 'vue'
-import type { Workflow, WorkflowFolder, WorkflowNode, ExecutionLog, EmbeddedWorkflow, WorkflowGroup, NodeBreakpoint } from '@/lib/workflow/types'
+import type { Workflow, WorkflowFolder, WorkflowNode, ExecutionLog, EmbeddedWorkflow, WorkflowGroup, NodeBreakpoint, OutputField } from '@/lib/workflow/types'
 import type { EngineStatus } from '@shared/workflow-types'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { executeRendererWorkflowTool } from '@/lib/agent/workflow-renderer-tools'
@@ -389,6 +389,7 @@ function createCrudActions(
 
 function createEditActions(
   currentWorkflow: Ref<Workflow | null>,
+  workflows: Ref<Workflow[]>,
   selectedNodeIds: Ref<string[]>,
   executionStatus: Ref<EngineStatus>,
   executionLog: Ref<ExecutionLog | null>,
@@ -404,6 +405,122 @@ function createEditActions(
 
   function cloneData<T>(value: T): T {
     return JSON.parse(JSON.stringify(value)) as T
+  }
+
+  function makeInputReference(nodeId: string, fieldPath: string): string {
+    return `{{ __inputs__["${nodeId}"].${fieldPath} }}`
+  }
+
+  function makeDataReference(nodeId: string, fieldPath: string): string {
+    return `{{ __data__["${nodeId}"].${fieldPath} }}`
+  }
+
+  function sanitizeFieldKey(value: string): string {
+    const key = value.trim().replace(/[^\w]+/g, '_').replace(/^_+|_+$/g, '')
+    return key || 'input'
+  }
+
+  function normalizeInputKey(baseKey: string, usedKeys: Set<string>): string {
+    let key = sanitizeFieldKey(baseKey)
+    let index = 2
+    while (usedKeys.has(key)) {
+      key = `${sanitizeFieldKey(baseKey)}_${index}`
+      index += 1
+    }
+    usedKeys.add(key)
+    return key
+  }
+
+  function getReferenceFieldKey(node: WorkflowNode | undefined, fieldPath: string): string {
+    const prefix = node?.label || node?.type || 'input'
+    const leaf = fieldPath.split('.').filter(Boolean).at(-1) || 'value'
+    return `${prefix}_${leaf}`
+  }
+
+  function collectExternalReferences(value: unknown, selectedIds: Set<string>): Array<{ raw: string; source: '__data__' | '__inputs__'; nodeId: string; fieldPath: string }> {
+    const refs: Array<{ raw: string; source: '__data__' | '__inputs__'; nodeId: string; fieldPath: string }> = []
+    const pattern = /\{\{\s*(__data__|__inputs__)\[(["'])([^"']+)\2\]\.([^}]+?)\s*\}\}/g
+
+    const visit = (item: unknown) => {
+      if (typeof item === 'string') {
+        for (const match of item.matchAll(pattern)) {
+          const nodeId = match[3]
+          if (!selectedIds.has(nodeId)) {
+            refs.push({
+              raw: match[0],
+              source: match[1] as '__data__' | '__inputs__',
+              nodeId,
+              fieldPath: match[4].trim(),
+            })
+          }
+        }
+        return
+      }
+      if (Array.isArray(item)) {
+        for (const child of item) visit(child)
+        return
+      }
+      if (item && typeof item === 'object') {
+        for (const child of Object.values(item)) visit(child)
+      }
+    }
+
+    visit(value)
+    return refs
+  }
+
+  function replaceReferences(value: unknown, replacements: Map<string, string>): unknown {
+    if (typeof value === 'string') {
+      let next = value
+      for (const [raw, replacement] of replacements) {
+        next = next.split(raw).join(replacement)
+      }
+      return next
+    }
+    if (Array.isArray(value)) return value.map((item) => replaceReferences(item, replacements))
+    if (value && typeof value === 'object') {
+      const next: Record<string, unknown> = {}
+      for (const [key, child] of Object.entries(value)) {
+        next[key] = replaceReferences(child, replacements)
+      }
+      return next
+    }
+    return value
+  }
+
+  function remapSelectedWorkflowNodes(
+    nodes: WorkflowNode[],
+    edges: Workflow['edges'],
+    selectedIds: Set<string>,
+    startNodeId: string,
+    endNodeId: string,
+  ): { nodes: WorkflowNode[]; edges: Workflow['edges'] } {
+    const selectedNodes = nodes.filter((node) => selectedIds.has(node.id)).map((node) => cloneData(node))
+    const selectedEdges = edges.filter((edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target)).map((edge) => cloneData(edge))
+    const incomingNodes = new Set(edges.filter((edge) => !selectedIds.has(edge.source) && selectedIds.has(edge.target)).map((edge) => edge.target))
+    const outgoingNodes = new Set(edges.filter((edge) => selectedIds.has(edge.source) && !selectedIds.has(edge.target)).map((edge) => edge.source))
+    const targetNodes = incomingNodes.size > 0 ? incomingNodes : new Set(selectedNodes.map((node) => node.id))
+    const sourceNodes = outgoingNodes.size > 0 ? outgoingNodes : new Set(selectedNodes.map((node) => node.id))
+
+    const entryEdges = [...targetNodes].map((target) => ({
+      id: `e-${startNodeId}-default-${target}-default`,
+      source: startNodeId,
+      target,
+      sourceHandle: null,
+      targetHandle: null,
+    }))
+    const exitEdges = [...sourceNodes].map((source) => ({
+      id: `e-${source}-default-${endNodeId}-default`,
+      source,
+      target: endNodeId,
+      sourceHandle: null,
+      targetHandle: null,
+    }))
+
+    return {
+      nodes: selectedNodes,
+      edges: [...selectedEdges, ...entryEdges, ...exitEdges],
+    }
   }
 
   function getNode(nodeId: string): WorkflowNode | undefined {
@@ -816,6 +933,126 @@ function createEditActions(
     currentWorkflow.value.edges = currentWorkflow.value.edges.filter((e) => e.id !== edgeId)
   }
 
+  async function mergeNodesToSubWorkflow(nodeIds: string[]): Promise<Workflow | null> {
+    const workflow = currentWorkflow.value
+    if (!workflow) return null
+
+    const selectedIds = new Set(nodeIds.filter((id) => canDeleteNode(id)))
+    if (selectedIds.size < 2) return null
+    if ([...selectedIds].some((id) => {
+      const type = getNode(id)?.type
+      return type === 'start' || type === 'end'
+    })) {
+      return null
+    }
+
+    const nodes = workflow.nodes.filter((node) => selectedIds.has(node.id))
+    if (nodes.length < 2) return null
+
+    const startNodeId = crypto.randomUUID()
+    const endNodeId = crypto.randomUUID()
+    const subNodeId = crypto.randomUUID()
+    const bounds = {
+      minX: Math.min(...nodes.map((node) => node.position.x)),
+      minY: Math.min(...nodes.map((node) => node.position.y)),
+      maxX: Math.max(...nodes.map((node) => node.position.x)),
+    }
+
+    const usedInputKeys = new Set<string>()
+    const replacements = new Map<string, string>()
+    const startInputFields: OutputField[] = []
+    const subNodeInputFields: OutputField[] = []
+
+    for (const refItem of collectExternalReferences(nodes.map((node) => node.data), selectedIds)) {
+      if (replacements.has(refItem.raw)) continue
+      const sourceNode = workflow.nodes.find((node) => node.id === refItem.nodeId)
+      const inputKey = normalizeInputKey(getReferenceFieldKey(sourceNode, refItem.fieldPath), usedInputKeys)
+      const originalReference = refItem.source === '__inputs__'
+        ? makeInputReference(refItem.nodeId, refItem.fieldPath)
+        : makeDataReference(refItem.nodeId, refItem.fieldPath)
+      startInputFields.push({ key: inputKey, type: 'any', value: originalReference })
+      subNodeInputFields.push({ key: inputKey, type: 'any', value: originalReference })
+      replacements.set(refItem.raw, makeInputReference(startNodeId, inputKey))
+    }
+
+    const selectedSnapshot = remapSelectedWorkflowNodes(workflow.nodes, workflow.edges, selectedIds, startNodeId, endNodeId)
+    const extractedNodes = selectedSnapshot.nodes.map((node) => ({
+      ...node,
+      data: replaceReferences(node.data, replacements) as Record<string, any>,
+      position: {
+        x: node.position.x - bounds.minX + 260,
+        y: node.position.y - bounds.minY + 120,
+      },
+    }))
+    const now = Date.now()
+    const newWorkflow: Workflow = {
+      id: crypto.randomUUID(),
+      name: `${workflow.name}-子工作流`,
+      folderId: workflow.folderId,
+      nodes: [
+        { id: startNodeId, type: 'start', label: '开始', position: { x: 80, y: 120 }, data: { inputFields: startInputFields } },
+        ...extractedNodes,
+        { id: endNodeId, type: 'end', label: '结束', position: { x: bounds.maxX - bounds.minX + 520, y: 120 }, data: {} },
+      ],
+      edges: selectedSnapshot.edges,
+      createdAt: now,
+      updatedAt: now,
+      enabledPlugins: workflow.enabledPlugins ? cloneData(workflow.enabledPlugins) : undefined,
+      pluginConfigSchemes: workflow.pluginConfigSchemes ? cloneData(workflow.pluginConfigSchemes) : undefined,
+      agentConfig: workflow.agentConfig ? cloneData(workflow.agentConfig) : undefined,
+    }
+
+    const { id: _localId, ...workflowToCreate } = newWorkflow
+    void _localId
+    const createdWorkflow = await createWorkflowDomainApi().workflow.create(workflowToCreate) as Workflow
+    if (!workflows.value.some((item) => item.id === createdWorkflow.id)) {
+      workflows.value.push(createdWorkflow)
+    }
+
+    undoRedo.pushUndo('合并为子工作流')
+    const incomingEdges = workflow.edges.filter((edge) => !selectedIds.has(edge.source) && selectedIds.has(edge.target))
+    const outgoingEdges = workflow.edges.filter((edge) => selectedIds.has(edge.source) && !selectedIds.has(edge.target))
+    const replacementNode: WorkflowNode = {
+      id: subNodeId,
+      type: 'sub_workflow',
+      label: '子工作流',
+      position: { x: bounds.minX, y: bounds.minY },
+      data: {
+        workflowId: createdWorkflow.id,
+        workflowName: createdWorkflow.name,
+        inputFields: subNodeInputFields,
+      },
+    }
+
+    const replacementEdges: Workflow['edges'] = []
+    for (const edge of incomingEdges) {
+      const id = `e-${edge.source}-${edge.sourceHandle ?? 'default'}-${subNodeId}-default`
+      if (!replacementEdges.some((item) => item.id === id)) {
+        replacementEdges.push({ ...cloneData(edge), id, target: subNodeId, targetHandle: null })
+      }
+    }
+    for (const edge of outgoingEdges) {
+      const id = `e-${subNodeId}-default-${edge.target}-${edge.targetHandle ?? 'default'}`
+      if (!replacementEdges.some((item) => item.id === id)) {
+        replacementEdges.push({ ...cloneData(edge), id, source: subNodeId, sourceHandle: null })
+      }
+    }
+
+    workflow.nodes = [
+      ...workflow.nodes.filter((node) => !selectedIds.has(node.id)),
+      replacementNode,
+    ]
+    workflow.edges = [
+      ...workflow.edges.filter((edge) => !selectedIds.has(edge.source) && !selectedIds.has(edge.target)),
+      ...replacementEdges,
+    ]
+    for (const id of selectedIds) {
+      groupActions.cleanupGroupOnNodeDelete(id)
+    }
+    selectedNodeIds.value = [subNodeId]
+    return createdWorkflow
+  }
+
   return {
     newWorkflow,
     addNode,
@@ -829,6 +1066,7 @@ function createEditActions(
     updateNodeBreakpoint,
     addEdge,
     removeEdge,
+    mergeNodesToSubWorkflow,
     canDeleteNode,
     canCloneNode,
     canEditNodeLabel,
@@ -1708,7 +1946,16 @@ export function createWorkflowStore(tabId: string) {
     const dirtyTracker = createDirtyTracker()
     const crudActions = createCrudActions(workflows, workflowFolders, currentWorkflow, api, dirtyTracker, versionMgr)
     const groupActions = createGroupActions(currentWorkflow, undoRedo)
-    const editActions = createEditActions(currentWorkflow, selectedNodeIds, executionStatus, executionLog, executionContext, undoRedo, groupActions)
+    const editActions = createEditActions(
+      currentWorkflow,
+      workflows,
+      selectedNodeIds,
+      executionStatus,
+      executionLog,
+      executionContext,
+      undoRedo,
+      groupActions,
+    )
     const execActions = createExecutionActions(
       currentWorkflow,
       executionStatus,
