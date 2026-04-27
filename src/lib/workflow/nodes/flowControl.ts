@@ -3,6 +3,7 @@ import LoopBodyContainer from '@/components/workflow/LoopBodyContainer.vue'
 import SubWorkflowSelector from '@/components/workflow/SubWorkflowSelector.vue'
 import { createDefaultEmbeddedWorkflow } from '@shared/embedded-workflow'
 import {
+  LOOP_BREAK_NODE_TYPE,
   LOOP_BODY_NODE_TYPE,
   LOOP_BODY_ROLE,
   LOOP_BODY_SOURCE_HANDLE,
@@ -169,6 +170,24 @@ export const flowControlNodes: NodeTypeDefinition[] = [
       {
         key: 'result',
         type: 'object',
+      },
+    ],
+  },
+  {
+    type: LOOP_BREAK_NODE_TYPE,
+    label: '跳出循环',
+    category: '流程控制',
+    icon: 'LogOut',
+    description: '在 loop_body 中标记本轮结束后停止后续循环。',
+    properties: [],
+    handles: {
+      target: true,
+      source: true,
+    },
+    outputs: [
+      {
+        key: 'break',
+        type: 'boolean',
       },
     ],
   },

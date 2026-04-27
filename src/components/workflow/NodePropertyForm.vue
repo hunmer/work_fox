@@ -11,7 +11,8 @@ import { CodeEditor } from '@/components/ui/code-editor'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Braces, Info, Plus, Trash2, Timer } from 'lucide-vue-next'
+import { Braces, Info, Plus, Trash2, Timer, ChevronRight } from 'lucide-vue-next'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import OutputFieldEditor from './OutputFieldEditor.vue'
 import ConditionEditor from './ConditionEditor.vue'
@@ -25,6 +26,7 @@ const props = defineProps<{
 
 const store = useWorkflowStore()
 const textModeKeys = ref<Set<string>>(new Set())
+const collapsedKeys = ref<Set<string>>(new Set())
 
 const activeNode = computed(() => props.node ?? store.selectedNode)
 const activeNodeId = computed(() => props.nodeId ?? store.effectiveSelectedNodeId)
@@ -173,36 +175,51 @@ function insertArrayVariable(propKey: string, index: number, fieldKey: string, v
       </Popover>
     </div>
 
-    <div
+    <Collapsible
       v-for="prop in visibleProperties"
       :key="prop.key"
+      :open="!collapsedKeys.has(prop.key)"
       class="space-y-1"
+      @update:open="(v: boolean) => { const s = new Set(collapsedKeys); v ? s.delete(prop.key) : s.add(prop.key); collapsedKeys = s }"
     >
-      <label class="text-xs font-medium flex items-center gap-1">
-        <span class="flex-1 flex items-center gap-1">
-          {{ prop.label }}
-          <span
-            v-if="prop.required"
-            class="text-red-500"
-          >*</span>
-          <TooltipProvider
-            v-if="prop.tooltip"
-            :delay-duration="300"
+      <div class="text-xs font-medium flex items-center gap-1">
+        <CollapsibleTrigger
+          as-child
+        >
+          <button
+            type="button"
+            class="flex-1 flex items-center gap-1 text-left hover:bg-accent/50 rounded px-0.5 -ml-0.5 transition-colors"
           >
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <Info class="w-3 h-3 text-muted-foreground cursor-help" />
-              </TooltipTrigger>
-              <TooltipContent
-                side="right"
-                class="max-w-[240px]"
+            <ChevronRight
+              class="w-3 h-3 shrink-0 text-muted-foreground transition-transform"
+              :class="!collapsedKeys.has(prop.key) ? 'rotate-90' : ''"
+            />
+            <span class="flex items-center gap-1">
+              {{ prop.label }}
+              <span
+                v-if="prop.required"
+                class="text-red-500"
+              >*</span>
+              <TooltipProvider
+                v-if="prop.tooltip"
+                :delay-duration="300"
               >
-                <p>{{ prop.tooltip }}</p>
-                <p class="text-[10px] opacity-60 mt-0.5">类型: {{ prop.type }}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </span>
+                <Tooltip>
+                  <TooltipTrigger as-child>
+                    <Info class="w-3 h-3 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="right"
+                    class="max-w-[240px]"
+                  >
+                    <p>{{ prop.tooltip }}</p>
+                    <p class="text-[10px] opacity-60 mt-0.5">类型: {{ prop.type }}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </span>
+          </button>
+        </CollapsibleTrigger>
         <button
           v-if="!isTextType(prop.type)"
           type="button"
@@ -213,8 +230,9 @@ function insertArrayVariable(propKey: string, index: number, fieldKey: string, v
         >
           <Braces class="w-3.5 h-3.5" />
         </button>
-      </label>
+      </div>
 
+      <CollapsibleContent>
       <InputGroup
         v-if="textModeKeys.has(prop.key) || isTextType(prop.type)"
         class="h-7"
@@ -421,7 +439,8 @@ function insertArrayVariable(propKey: string, index: number, fieldKey: string, v
           @update:model-value="setFieldValue(prop.key, $event)"
         />
       </template>
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
 
     <div
       v-if="visibleProperties.length === 0"

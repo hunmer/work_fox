@@ -30,6 +30,7 @@ import {
   getCompositeParentId,
   getNodesForExecutionScope,
   isGeneratedWorkflowNode,
+  LOOP_BREAK_NODE_TYPE,
   LOOP_BODY_ROLE,
   LOOP_BODY_NODE_TYPE,
   LOOP_NEXT_SOURCE_HANDLE,
@@ -103,13 +104,20 @@ interface LoopExecutionFrame {
   parentData?: Record<string, unknown>
   bodyAnchorId: string
   variables: Record<string, unknown>
+  breakRequested?: boolean
   metadata: {
     index: number
-    count: number
+    count: number | null
     item: unknown
     isFirst: boolean
     isLast: boolean
   }
+}
+
+interface LoopIterations {
+  count: number | null
+  items: unknown[]
+  infinite: boolean
 }
 
 const MAX_RECENT_EVENTS = 100
@@ -582,6 +590,8 @@ export class BackendWorkflowExecutionManager {
       case LOOP_BODY_NODE_TYPE:
       case 'sticky_note':
         return null
+      case LOOP_BREAK_NODE_TYPE:
+        return this.executeLoopBreak(session, appendNodeLog)
       case 'end':
         return this.buildOutputObject(resolvedData.outputs)
       case 'gallery_preview':
@@ -663,6 +673,20 @@ export class BackendWorkflowExecutionManager {
     if (Array.isArray(value)) return value.length === 0
     if (typeof value === 'object') return Object.keys(value).length === 0
     return false
+  }
+
+  private executeLoopBreak(
+    session: ExecutionSession,
+    appendNodeLog: (level: ExecutionLogEntry['level'], message: string) => void,
+  ): Record<string, boolean> {
+    const frame = this.getLoopFrame(session)
+    if (!frame) {
+      throw new Error('loop_break node can only execute inside a loop body')
+    }
+
+    frame.breakRequested = true
+    appendNodeLog('info', 'Loop break requested')
+    return { break: true }
   }
 
   private async executeAgentRun(
@@ -802,8 +826,15 @@ if (typeof main === 'function') return main({ params, context })`)
     const sharedVariables = this.initializeLoopSharedVariables(resolvedData.sharedVariables)
     const items: unknown[] = []
 
-    appendNodeLog('info', `开始执行循环，共 ${iterations.count} 次`)
-    for (let index = 0; index < iterations.count; index++) {
+    appendNodeLog('info', iterations.infinite ? '开始执行无限循环' : `开始执行循环，共 ${iterations.count} 次`)
+    for (let index = 0; iterations.infinite || index < (iterations.count ?? 0); index++) {
+      if (session.stopRequested) {
+        throw new Error('执行已停止')
+      }
+      if (iterations.infinite && index > 0) {
+        await sleep(0)
+      }
+
       session.loopStack.push({
         loopNodeId: node.id,
         parentData: session.context.__data__,
@@ -814,15 +845,22 @@ if (typeof main === 'function') return main({ params, context })`)
           count: iterations.count,
           item: iterations.items[index],
           isFirst: index === 0,
-          isLast: index === iterations.count - 1,
+          isLast: iterations.count !== null && index === iterations.count - 1,
         },
       })
 
       try {
         this.syncLoopContext(session)
-        appendNodeLog('info', `循环第 ${index + 1}/${iterations.count} 次`)
+        appendNodeLog('info', iterations.infinite ? `循环第 ${index + 1} 次` : `循环第 ${index + 1}/${iterations.count} 次`)
         const result = await this.executeLoopBody(session, bodyNode)
         items.push(this.normalizeLoopIterationResult(result))
+        if (session.status === 'error') {
+          break
+        }
+        if (this.getLoopFrame(session)?.breakRequested) {
+          appendNodeLog('info', 'Loop break requested; stop after current loop body')
+          break
+        }
       } finally {
         session.loopStack.pop()
         this.syncLoopContext(session)
@@ -865,20 +903,21 @@ if (typeof main === 'function') return main({ params, context })`)
     return result
   }
 
-  private resolveLoopIterations(loopType: string, resolvedData: Record<string, any>): { count: number; items: unknown[] } {
+  private resolveLoopIterations(loopType: string, resolvedData: Record<string, any>): LoopIterations {
     if (loopType === 'array') {
       const items = Array.isArray(resolvedData.arrayPath) ? resolvedData.arrayPath : []
-      return { count: items.length, items }
+      return { count: items.length, items, infinite: false }
     }
 
     if (loopType === 'infinite') {
-      throw new Error('当前版本暂不支持无限循环，请先使用按次数循环或数组循环')
+      return { count: null, items: [], infinite: true }
     }
 
     const count = Math.max(0, Math.floor(Number(resolvedData.count) || 0))
     return {
       count,
       items: Array.from({ length: count }, () => undefined),
+      infinite: false,
     }
   }
 

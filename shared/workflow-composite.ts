@@ -2,6 +2,7 @@ import type { WorkflowEdge, WorkflowNode } from './workflow-types'
 
 export const LOOP_NODE_TYPE = 'loop'
 export const LOOP_BODY_NODE_TYPE = 'loop_body'
+export const LOOP_BREAK_NODE_TYPE = 'loop_break'
 export const LOOP_ROOT_ROLE = 'loop'
 export const LOOP_BODY_ROLE = 'loop_body'
 export const LOOP_BODY_SOURCE_HANDLE = 'loop-body'
