@@ -87,6 +87,7 @@ interface JsonPreset {
   name: string
   data: Record<string, any>
   inputs: Record<string, any>
+  outputs?: Record<string, any>
 }
 
 const JSON_PRESETS_KEY = '__jsonPresets'
@@ -530,7 +531,11 @@ export class BackendWorkflowExecutionManager {
     }
 
     try {
-      const result = await this.dispatchNode(session, node, resolvedData, appendNodeLog)
+      const presetOutput = this.getPresetOutput(resolvedData)
+      if (presetOutput) {
+        appendNodeLog('info', '使用 JSON 预设 outputs，跳过节点实际执行')
+      }
+      const result = presetOutput ?? await this.dispatchNode(session, node, resolvedData, appendNodeLog)
       step.finishedAt = Date.now()
       step.status = 'completed'
       step.output = result && Array.isArray(result._logs)
@@ -1219,7 +1224,27 @@ if (typeof main === 'function') return main({ params, context })`)
       ...data,
       ...preset.data,
       inputFields: this.objectToOutputFields(preset.inputs),
+      ...(this.isPlainObject(preset.outputs) && Object.keys(preset.outputs).length > 0
+        ? { outputs: this.objectToOutputFields(preset.outputs) }
+        : {}),
     }
+  }
+
+  private getPresetOutput(resolvedData: Record<string, any>): Record<string, any> | null {
+    const selectedId = typeof resolvedData?.[SELECTED_JSON_PRESET_KEY] === 'string'
+      ? resolvedData[SELECTED_JSON_PRESET_KEY]
+      : ''
+    if (!selectedId) return null
+
+    const presets = Array.isArray(resolvedData?.[JSON_PRESETS_KEY])
+      ? resolvedData[JSON_PRESETS_KEY] as JsonPreset[]
+      : []
+    const preset = presets.find((item) => item?.id === selectedId)
+    if (!preset || !this.isPlainObject(preset.outputs) || Object.keys(preset.outputs).length === 0) {
+      return null
+    }
+
+    return this.buildOutputObject(resolvedData.outputs) ?? {}
   }
 
   private objectToOutputFields(value: Record<string, any>): OutputField[] {

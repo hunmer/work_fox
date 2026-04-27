@@ -6,10 +6,11 @@
 
 WorkFox 是一款桌面端工作流自动化工具，核心定位：
 
-- **可视化工作流编辑器**：基于 Vue Flow 的拖拽式 DAG 编辑器，支持多种节点类型（流程控制、AI 执行、浏览器交互、展示等），含复合节点（loop 等）和嵌入式子工作流
+- **可视化工作流编辑器**：基于 Vue Flow 的拖拽式 DAG 编辑器，支持多种节点类型（流程控制、AI 执行、浏览器交互、展示等），含复合节点（loop 等）、嵌入式子工作流、分组节点、便签
 - **AI Agent 集成**：通过 Claude Agent SDK（@anthropic-ai/claude-agent-sdk）在主进程和 backend 中运行 AI Agent，支持流式输出、工具调用、thinking blocks、MCP Server 工具桥接
 - **插件系统**：支持 `server` / `client` / Web CDN manifest 三类插件扩展，可注册自定义工作流节点、工具和视图；client 插件可通过 WS 通道注册到 backend
 - **多标签页**：多工作流并行编辑，每个标签页独立维护工作流状态和 Chat 会话
+- **Dashboard 仪表盘**：统计概览（工作流数/执行数/插件数）、执行趋势图、执行历史、工作流详情、工作流列表，含侧边栏导航
 - **Web 模式**：支持脱离 Electron 在纯浏览器中运行，通过 WebSocket 连接 backend 服务
 
 ## 架构总览
@@ -19,9 +20,9 @@ WorkFox 是一款桌面端工作流自动化工具，核心定位：
 ```
 Renderer (Vue 3 + Vite)
   |-- src/                      渲染进程（前端）
-  |   |-- views/                页面级组件（Home / Editor / Gallery）
-  |   |-- components/           业务组件（chat / workflow / settings / gallery / command-palette / ui）
-  |   |-- stores/               Pinia 状态管理（chat / workflow / ai-provider / tab / plugin / ...）
+  |   |-- views/                页面级组件（Home / Editor / Gallery / Dashboard）
+  |   |-- components/           业务组件（chat / workflow / dashboard / settings / gallery / command-palette / ui）
+  |   |-- stores/               Pinia 状态管理（chat / workflow / ai-provider / tab / plugin / dashboard / ...）
   |   |-- lib/                  核心逻辑库
   |   |   |-- agent/            Agent 流式通信、工具发现、工作流工具定义
   |   |   |-- workflow/         工作流引擎（拓扑排序、节点分发、变量解析、执行引擎）
@@ -48,9 +49,13 @@ Main (Electron)
           |-- plugin-runtime-host.ts    Electron client 插件运行时宿主
           |-- plugin-catalog.ts         Electron 本地插件目录扫描与元数据
           |-- store.ts                  electron-store 全局配置（AI providers / shortcuts / tabs）
-          |-- chat-history-store.ts     Chat 历史（IndexedDB 跨进程代理或文件存储）
           |-- workflow-node-registry.ts 工作流节点注册表（内置 + 插件）
-          |-- builtin-nodes.ts          内置节点定义（start/end/run_code/toast/switch/loop/sub_workflow）
+          |-- builtin-nodes.ts          内置节点入口（聚合 nodes/ 子目录）
+          |-- desktop-native.ts         桌面原生能力（剪贴板/通知/对话框/Shell）
+          |-- nodes/                    节点定义拆分
+          |   |-- flow-control.ts       流程控制节点（start/end/switch/loop/variable_aggregate/loop_break/sub_workflow/run_code/toast）
+          |   |-- ai.ts                 AI 节点（agent_run）
+          |   |-- display.ts            展示节点（gallery_preview/music_player/table_display/sticky_note）
           |-- ...
   |
 Backend (Node.js 子进程)
@@ -61,15 +66,16 @@ Backend (Node.js 子进程)
       |-- workflow/             execution-manager / interaction-manager
       |-- storage/              workflow / version / execution-log / operation-history / ai-provider / chat-history / settings
       |-- plugins/              plugin-registry / builtin-fs-api / builtin-fetch-api
-      |-- chat/                 chat-runtime / chat-tool-adapter / chat-workflow-tool-executor / client-node-cache
+      |-- chat/                 chat-runtime / chat-tool-adapter / chat-workflow-tool-executor / client-node-cache / chat-event-sender
+      |-- dashboard/            stats-store（统计聚合与缓存）
   |
 Shared
   |-- shared/                  前后端共享协议、执行事件、插件入口与能力定义
-      |-- channel-contracts.ts  BackendChannel 类型安全契约（请求/响应类型映射）
+      |-- channel-contracts.ts  BackendChannel 类型安全契约（请求/响应类型映射，含 Dashboard 契约）
       |-- channel-metadata.ts   通道元数据（超时/优先级/幂等性）
       |-- execution-events.ts   工作流执行事件协议
       |-- ws-protocol.ts        WS 消息协议（request/response/event/interaction）
-      |-- workflow-types.ts     工作流核心类型定义（含复合节点/嵌入式工作流）
+      |-- workflow-types.ts     工作流核心类型定义（含复合节点/嵌入式工作流/分组）
       |-- workflow-composite.ts 复合节点查询工具（loop 节点树遍历/scope/过滤）
       |-- embedded-workflow.ts  嵌入式子工作流创建与规范化
       |-- shortcut-types.ts     快捷键类型定义
@@ -100,6 +106,7 @@ graph TD
 
     COMPONENTS --> CHAT_CMP["chat/"]
     COMPONENTS --> WF_CMP["workflow/"]
+    COMPONENTS --> DASHBOARD_CMP["dashboard/ -- 仪表盘"]
     COMPONENTS --> SETTINGS_CMP["settings/"]
     COMPONENTS --> GALLERY_CMP["gallery/"]
     COMPONENTS --> CMD_CMP["command-palette/"]
@@ -122,6 +129,7 @@ graph TD
     SERVICES --> WF_STORE["workflow-store.ts"]
     SERVICES --> PLUGIN_MGR["plugin-manager.ts"]
     SERVICES --> STORE_GLOBAL["store.ts"]
+    SERVICES --> DESKTOP_NATIVE["desktop-native.ts"]
 
     BACKEND --> BACKEND_MAIN["main.ts"]
     BACKEND --> BACKEND_APP["app/"]
@@ -130,11 +138,13 @@ graph TD
     BACKEND --> BACKEND_STORAGE["storage/"]
     BACKEND --> BACKEND_PLUGINS["plugins/"]
     BACKEND --> BACKEND_CHAT["chat/"]
+    BACKEND --> BACKEND_DASHBOARD["dashboard/ -- 统计"]
 
     BACKEND_CHAT --> CHAT_RT["chat-runtime.ts"]
     BACKEND_CHAT --> CHAT_ADAPTER["chat-tool-adapter.ts"]
     BACKEND_CHAT --> CHAT_EXECUTOR["chat-workflow-tool-executor.ts"]
     BACKEND_CHAT --> CLIENT_CACHE["client-node-cache.ts"]
+    BACKEND_CHAT --> CHAT_SENDER["chat-event-sender.ts"]
 
     SHARED --> SHARED_CONTRACTS["channel-contracts.ts"]
     SHARED --> SHARED_EVENTS["execution-events.ts"]
@@ -158,27 +168,39 @@ graph TD
 
 | 模块路径 | 职责 | 语言 | 入口文件 |
 |---|---|---|---|
-| `src/` | 渲染进程（Vue 3 SPA），含 Web 模式 | TypeScript / Vue | `src/main.ts` / `src/web/web-entry.ts` |
+| `src/` | 渲染进程（Vue 3 SPA），含 Web 模式和 Dashboard | TypeScript / Vue | `src/main.ts` / `src/web/web-entry.ts` |
 | `src/lib/agent/` | AI Agent 流式通信、工具发现、工作流工具 | TypeScript | `agent.ts` |
 | `src/lib/workflow/` | 工作流本地 fallback 执行引擎 | TypeScript | `engine.ts` |
-| `src/lib/backend-api/` | Backend WS 通道客户端适配层 | TypeScript | `workflow-domain.ts` |
+| `src/lib/backend-api/` | Backend WS 通道客户端适配层（含 Dashboard API） | TypeScript | `workflow-domain.ts` |
 | `src/components/chat/` | Chat 对话面板组件集 | Vue / TS | - |
-| `src/components/workflow/` | 工作流编辑器组件集（画布、节点、属性面板、嵌入式子工作流） | Vue / TS | - |
+| `src/components/workflow/` | 工作流编辑器组件集（画布、节点、属性面板、嵌入式子工作流、分组、便签） | Vue / TS | - |
+| `src/components/dashboard/` | Dashboard 仪表盘组件集（统计卡片、执行趋势图、历史表格、工作流详情） | Vue / TS | - |
 | `src/components/settings/` | 设置对话框组件 | Vue / TS | - |
-| `src/stores/` | Pinia 状态管理 | TypeScript | - |
+| `src/stores/` | Pinia 状态管理（含 dashboard store） | TypeScript | - |
 | `src/types/` | 全局类型定义 | TypeScript | `index.ts` |
 | `src/web/` | Web 模式入口与 BrowserAPIAdapter | TypeScript | `web-entry.ts` |
 | `preload/` | Electron Preload（contextBridge） | TypeScript | `index.ts` |
 | `electron/` | Electron 主进程 | TypeScript | `main.ts` |
 | `electron/ipc/` | IPC Handler 注册 | TypeScript | - |
-| `electron/services/` | 主进程业务服务 | TypeScript | - |
+| `electron/services/` | 主进程业务服务（含 desktop-native、nodes 子目录） | TypeScript | - |
 | `backend/` | Node.js backend 服务（独立子进程） | TypeScript | `backend/main.ts` |
 | `backend/workflow/` | 工作流执行管理器与交互管理器 | TypeScript | `execution-manager.ts` |
 | `backend/storage/` | 后端数据持久化层 | TypeScript | - |
 | `backend/plugins/` | 后端插件注册表 | TypeScript | `plugin-registry.ts` |
-| `backend/chat/` | Chat 运行时、工具适配器、工作流工具执行器、客户端节点缓存 | TypeScript | `chat-runtime.ts` |
-| `shared/` | 前后端共享协议、类型与工具（含复合节点/嵌入式工作流/快捷键） | TypeScript | `shared/index.ts` |
+| `backend/chat/` | Chat 运行时、工具适配器、工作流工具执行器、客户端节点缓存、事件发送器 | TypeScript | `chat-runtime.ts` |
+| `backend/dashboard/` | Dashboard 统计存储（聚合查询与缓存） | TypeScript | `stats-store.ts` |
+| `shared/` | 前后端共享协议、类型与工具（含复合节点/嵌入式工作流/快捷键/Dashboard 契约） | TypeScript | `shared/index.ts` |
 | `resources/plugins/` | 内置插件与商店元数据（含 Web client manifest 示例） | JavaScript / JSON | 各 `main.js` / `web-plugin.json` |
+
+## 页面路由
+
+| 路径 | 组件 | 功能 |
+|---|---|---|
+| `/` | 重定向到 `/home` | - |
+| `/home` | `HomePage.vue` | 主页（标签页管理、最近工作流） |
+| `/editor` | `EditorPage.vue` | 工作流编辑器 |
+| `/gallery` | `GalleryPage.vue` | 资源画廊 |
+| `/dashboard` | `DashboardPage.vue` | Dashboard 仪表盘（统计概览/工作流列表） |
 
 ## 运行与开发
 
@@ -249,6 +271,7 @@ WorkFox 支持两种运行模式：
   - `workfox.aliyun-ai` -> `server`
   - `workfox.openai` -> `server`
   - `workfox.epub-parser` -> `server`
+  - `workfox.aliyun-oss` -> `server`
 - 工作流节点执行分流：
   - backend 可执行插件节点通过 backend `agent:execTool` / `pluginRegistry.executeWorkflowNode()`
   - 本地桥接节点（如 `delay`）通过 Electron `window.api.agent.execTool(...)`
@@ -264,6 +287,8 @@ WorkFox 支持两种运行模式：
 - Chat 工具体系通过 `ChatToolAdapter` 桥接到 Claude Agent SDK MCP Server 模式
 - `ChatWorkflowToolExecutor` 支持在 Chat 对话中直接操作工作流图结构（含复合节点和嵌入式子工作流）
 - `ClientNodeCache` 管理来自客户端注册的插件节点和工具
+- `ChatEventSender` 封装 9 个 WS chat 事件通道（chunk/tool-call/tool-call-args/tool-result/thinking/usage/done/error/retry）
+- Dashboard 统计通过 backend `DashboardStatsStore` 聚合查询，含 60 秒缓存
 
 ### Feature Flag
 
@@ -296,6 +321,14 @@ pnpm build
   - `LoopBodyContainer` 是 loop_body 节点的专用容器
 - **执行端支持**：`ExecutionManager` 支持递归执行嵌入式子工作流；`ChatWorkflowToolExecutor` 支持通过 `embeddedInNodeId` 参数操作子工作流
 
+## Dashboard 仪表盘
+
+- **后端**：`backend/dashboard/stats-store.ts` 聚合所有工作流的执行日志，提供统计概览、执行历史分页、工作流详情查询
+- **WS 通道**：`dashboard:stats`（统计概览）、`dashboard:executions`（执行历史列表）、`dashboard:workflow-detail`（工作流详情含版本和执行记录）
+- **前端**：`src/stores/dashboard.ts` 管理 Dashboard 状态；`src/views/DashboardPage.vue` 渲染页面；9 个子组件在 `src/components/dashboard/`
+- **API 适配**：`src/lib/backend-api/dashboard.ts` 封装 WS 通道调用
+- **路由**：`/dashboard`，含 SidebarProvider 布局和 WS 连接状态提示
+
 ## 测试策略
 
 当前项目尚未包含自动化测试框架。建议未来引入：
@@ -316,7 +349,7 @@ pnpm build
   - 渲染进程：Dexie（IndexedDB）用于 Chat 会话/消息
   - 主进程：electron-store（JSON 文件）用于全局配置；独立 JSON 文件用于工作流
   - Backend：JSON 文件存储（通过 `BackendSettingsStore` 和各 domain store）
-- **组件库**：shadcn-vue 风格的基础 UI 组件（`src/components/ui/`）
+- **组件库**：shadcn-vue 风格的基础 UI 组件（`src/components/ui/`，含 sidebar/chart/card 等 41 个组件目录）
 
 ## AI 使用指引
 
@@ -327,7 +360,7 @@ pnpm build
 3. 主进程 `claude-agent-runtime.ts` / 后端 `chat-runtime.ts` 使用 Claude Agent SDK 创建流式会话
 4. Backend 中 `ChatToolAdapter` 将工具桥接到 MCP Server（workflow / plugin / browser 三类）
 5. `ChatWorkflowToolExecutor` 允许 AI 直接操作工作流图结构
-6. 流式事件通过 IPC `chat:stream:*` 或 WS `chat:chunk/thinking/usage/done/error` 回传
+6. 流式事件通过 IPC `chat:stream:*` 或 WS 9 个 chat 事件通道回传（`ChatEventSender` 封装）
 7. 渲染进程 `lib/agent/stream.ts` 解析事件，更新 Pinia store，驱动 UI 更新
 
 ### 工作流执行
@@ -351,7 +384,7 @@ pnpm build
 
 ### WS 通道架构
 
-- 所有 backend 通道在 `shared/channel-contracts.ts` 中定义类型安全契约
+- 所有 backend 通道在 `shared/channel-contracts.ts` 中定义类型安全契约（含 Dashboard 通道）
 - 通道元数据（超时/优先级/幂等/流式）在 `shared/channel-metadata.ts` 中集中管理
 - WS 路由器（`backend/ws/router.ts`）根据通道名 dispatch 到注册的 handler
 - ConnectionManager 管理客户端会话、心跳、token 验证
@@ -371,11 +404,13 @@ pnpm build
   - 如果是复合节点，需要在 `shared/workflow-types.ts` 中定义 `CompoundNodeDefinition`
 - Web 模式下所有 `window.api` 调用走 `BrowserAPIAdapter`，新增 IPC 接口时需同步适配
 - 新增 Chat 工具时，需要在 `backend/chat/chat-tool-adapter.ts` 或 `backend/chat/chat-workflow-tool-executor.ts` 中注册
+- 新增 Dashboard 数据查询时，在 `backend/dashboard/stats-store.ts` 添加方法，在 `backend/ws/dashboard-channels.ts` 注册通道
 
 ## 变更记录 (Changelog)
 
 | 日期 | 操作 | 说明 |
 |---|---|---|
+| 2026-04-27 | 增量更新 | 新增 Dashboard 仪表盘系统（后端 stats-store/dashboard-channels + 前端 store/页面/9 个组件 + WS 通道契约）、新增 GroupNode/GroupManagePanel 分组节点、新增 StickyNoteView 便签、新增 aliyun-oss 内置插件、新增 desktop-native 桌面原生能力、新增 variable_aggregate/loop_break/sticky_note 节点类型、Electron 节点定义拆分为 nodes/ 子目录、新增 ChatEventSender 9 事件通道、新增 sidebar/chart/card 等 UI 组件 |
 | 2026-04-25 | 增量更新 | 补充复合节点/嵌入式子工作流、Chat 工具适配器/执行器/客户端节点缓存、MCP Server 桥接、新增内置插件（aliyun-ai/openai/epub-parser）、新增 shared 文件（workflow-composite/embedded-workflow/shortcut-types）|
 | 2026-04-22 | 增量更新 | 补充 backend/ChatRuntime/web 模式/WS 通道架构/交互协议/fish-audio 插件；更新模块结构图与索引 |
 | 2026-04-20 | 初始化 | 首次生成项目架构文档，完成全仓扫描 |

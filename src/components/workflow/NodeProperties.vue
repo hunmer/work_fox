@@ -92,6 +92,7 @@ type JsonPreset = {
   name: string
   data: Record<string, any>
   inputs: Record<string, any>
+  outputs: Record<string, any>
 }
 
 const JSON_PRESETS_KEY = '__jsonPresets'
@@ -165,7 +166,7 @@ function selectJsonPreset(id: string) {
 function openAddPresetDialog() {
   presetEditingId.value = null
   presetName.value = ''
-  presetJson.value = JSON.stringify({ data: {}, inputs: {} }, null, 2)
+  presetJson.value = JSON.stringify({ data: {}, inputs: {}, outputs: {} }, null, 2)
   presetError.value = ''
   presetDialogOpen.value = true
 }
@@ -173,7 +174,11 @@ function openAddPresetDialog() {
 function openEditPresetDialog(preset: JsonPreset) {
   presetEditingId.value = preset.id
   presetName.value = preset.name
-  presetJson.value = JSON.stringify({ data: preset.data, inputs: preset.inputs }, null, 2)
+  presetJson.value = JSON.stringify({
+    data: preset.data,
+    inputs: preset.inputs,
+    outputs: preset.outputs ?? {},
+  }, null, 2)
   presetError.value = ''
   presetDialogOpen.value = true
 }
@@ -199,8 +204,13 @@ function saveJsonPreset() {
 
   try {
     const parsed = JSON.parse(presetJson.value)
-    if (!isPlainObject(parsed) || !isPlainObject(parsed.data) || !isPlainObject(parsed.inputs)) {
-      presetError.value = 'JSON 必须是 { "data": {}, "inputs": {} } 格式'
+    if (
+      !isPlainObject(parsed)
+      || !isPlainObject(parsed.data)
+      || !isPlainObject(parsed.inputs)
+      || (parsed.outputs !== undefined && !isPlainObject(parsed.outputs))
+    ) {
+      presetError.value = 'JSON 必须是 { "data": {}, "inputs": {}, "outputs": {} } 格式'
       return
     }
 
@@ -209,6 +219,7 @@ function saveJsonPreset() {
       name,
       data: parsed.data,
       inputs: parsed.inputs,
+      outputs: parsed.outputs ?? {},
     }
     const next = presetEditingId.value
       ? jsonPresets.value.map((item) => item.id === preset.id ? preset : item)
@@ -657,7 +668,7 @@ function confirmImport() {
             <Textarea
               v-model="presetJson"
               class="min-h-[220px] text-xs font-mono"
-              placeholder="{&quot;data&quot;: {}, &quot;inputs&quot;: {}}"
+              placeholder="{&quot;data&quot;: {}, &quot;inputs&quot;: {}, &quot;outputs&quot;: {}}"
               @keydown.ctrl.enter="saveJsonPreset"
             />
           </div>
