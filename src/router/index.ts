@@ -24,6 +24,11 @@ const router = createRouter({
       component: () => import('@/views/GalleryPage.vue'),
     },
     {
+      path: '/dashboard',
+      name: 'dashboard',
+      component: () => import('@/views/DashboardPage.vue'),
+    },
+    {
       path: '/:pathMatch(.*)*',
       component: () => import('@/views/NotFoundPage.vue'),
     },

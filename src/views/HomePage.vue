@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useTabStore } from '@/stores/tab'
 import { workflowBackendApi } from '@/lib/backend-api/workflow'
 import WelcomePage from '@/components/workflow/WelcomePage.vue'
+import { BarChart3 } from 'lucide-vue-next'
 import type { Workflow } from '@/lib/workflow/types'
 
 const router = useRouter()
@@ -45,10 +46,21 @@ function handleImport() {
 </script>
 
 <template>
-  <WelcomePage
-    :recent-workflows="recentWorkflows"
-    @open="handleOpen"
-    @select="handleSelect"
-    @import="handleImport"
-  />
+  <div class="flex-1 flex flex-col">
+    <div class="flex justify-end px-6 py-3">
+      <router-link
+        to="/dashboard"
+        class="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+      >
+        <BarChart3 class="h-4 w-4" />
+        统计面板
+      </router-link>
+    </div>
+    <WelcomePage
+      :recent-workflows="recentWorkflows"
+      @open="handleOpen"
+      @select="handleSelect"
+      @import="handleImport"
+    />
+  </div>
 </template>
