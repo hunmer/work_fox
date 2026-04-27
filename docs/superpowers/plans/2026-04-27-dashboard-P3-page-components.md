@@ -57,13 +57,13 @@ import { computed } from 'vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-  IconWorkflow,
-  IconPlayerPlay,
-  IconPlug,
-  IconCalendarEvent,
-  IconCalendarWeek,
-  IconChartBar,
-} from '@tabler/icons-vue'
+  Workflow,
+  Play,
+  Plug,
+  CalendarDays,
+  CalendarRange,
+  BarChart3,
+} from 'lucide-vue-next'
 import type { DashboardStatsResponse } from '@shared/channel-contracts'
 
 const props = defineProps<{
@@ -74,12 +74,12 @@ const props = defineProps<{
 const cards = computed(() => {
   if (!props.stats) return []
   return [
-    { title: '工作流总数', value: props.stats.workflowCount, icon: IconWorkflow },
-    { title: '正在运行', value: props.stats.runningCount, icon: IconPlayerPlay },
-    { title: '插件数量', value: props.stats.pluginCount, icon: IconPlug },
-    { title: '今日调用', value: props.stats.todayExecutions, icon: IconCalendarEvent },
-    { title: '本周调用', value: props.stats.weekExecutions, icon: IconCalendarWeek },
-    { title: '总调用次数', value: props.stats.totalExecutions, icon: IconChartBar },
+    { title: '工作流总数', value: props.stats.workflowCount, icon: Workflow },
+    { title: '正在运行', value: props.stats.runningCount, icon: Play },
+    { title: '插件数量', value: props.stats.pluginCount, icon: Plug },
+    { title: '今日调用', value: props.stats.todayExecutions, icon: CalendarDays },
+    { title: '本周调用', value: props.stats.weekExecutions, icon: CalendarRange },
+    { title: '总调用次数', value: props.stats.totalExecutions, icon: BarChart3 },
   ]
 })
 </script>
@@ -114,15 +114,9 @@ const cards = computed(() => {
 </template>
 ```
 
-**注意**：`@tabler/icons-vue` 中的图标名称可能不完全匹配上述名称。查看 `src/components/AppSidebar.vue` 中使用了哪些图标来确认正确的 import 路径。或者用 `lucide-vue-next`（`components.json` 中配置的默认图标库）。
+**图标库**：使用 `lucide-vue-next`（项目主要图标库）。确认 `Workflow`、`Play`、`Plug`、`CalendarDays`、`CalendarRange`、`BarChart3` 在 lucide 中存在。如不存在，替换为最接近的图标名。
 
-- [ ] **Step 2: 确认图标库**
-
-Run: `grep -r "icon" "G:/programming/nodejs/work_fox/src/components/AppSidebar.vue" | head -10`
-
-确认项目使用 `@tabler/icons-vue` 还是 `lucide-vue-next`。调整 import。
-
-- [ ] **Step 3: Commit**
+- [ ] **Step 2: Commit**
 
 ```bash
 git add src/components/dashboard/StatsCards.vue
@@ -144,6 +138,8 @@ git commit -m "feat(dashboard): add StatsCards component with 6 metric cards"
 <script setup lang="ts">
 import { computed } from 'vue'
 import { VisArea, VisAxis, VisXYContainer } from '@unovis/vue'
+import { ChartContainer, type ChartConfig } from '@/components/ui/chart'
+import { ChartCrosshair, ChartTooltip } from '@/components/ui/chart'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { DashboardStatsResponse } from '@shared/channel-contracts'
@@ -156,6 +152,12 @@ const props = defineProps<{
 type TrendItem = DashboardStatsResponse['dailyTrend'][number]
 
 const chartData = computed(() => props.stats?.dailyTrend ?? [])
+
+// 使用 ChartConfig 注册颜色——使用项目已有的 CSS 变量
+const chartConfig = {
+  success: { label: '成功', color: 'hsl(var(--primary))' },
+  error: { label: '失败', color: 'hsl(var(--destructive))' },
+} satisfies ChartConfig
 </script>
 
 <template>
@@ -165,12 +167,14 @@ const chartData = computed(() => props.stats?.dailyTrend ?? [])
     </CardHeader>
     <CardContent>
       <Skeleton v-if="loading" class="h-[300px] w-full" />
-      <div v-else-if="chartData.length" class="h-[300px]">
-        <VisXYContainer :data="chartData" :padding="{ top: 10 }">
+      <ChartContainer v-else-if="chartData.length" :config="chartConfig" class="h-[300px] w-full">
+        <VisXYContainer :data="chartData" :padding="{ top: 10, bottom: 20, left: 10, right: 10 }">
+          <ChartCrosshair />
+          <ChartTooltip />
           <VisArea
-            :x="(d: TrendItem, i: number) => i"
+            :x="(_d: TrendItem, i: number) => i"
             :y="[(d: TrendItem) => d.success, (d: TrendItem) => d.error]"
-            :color="['hsl(var(--chart-1))', 'hsl(var(--chart-5))']"
+            :color="[chartConfig.success.color, chartConfig.error.color]"
             :opacity="0.3"
             :curve-type="'monotoneX'"
           />
@@ -187,7 +191,7 @@ const chartData = computed(() => props.stats?.dailyTrend ?? [])
             :domain-line="false"
           />
         </VisXYContainer>
-      </div>
+      </ChartContainer>
       <div v-else class="flex h-[300px] items-center justify-center text-muted-foreground">
         暂无趋势数据
       </div>
@@ -196,32 +200,19 @@ const chartData = computed(() => props.stats?.dailyTrend ?? [])
 </template>
 ```
 
-**注意**：
-- 需要确认 `@unovis/vue` 中 `VisArea`、`VisAxis`、`VisXYContainer` 的确切 API。参考 `src/components/` 中是否有使用 Unovis 的现有组件。
-- CSS 变量 `--chart-1` 到 `--chart-5` 需要在 `globals.css` 中定义。查看是否已存在。
-- 如果项目中已有 `ChartAreaInteractive` 类似组件，优先复用其模式。
+**关键变更**：
+- 使用 `ChartContainer` 包装器（提供 CSS 上下文、主题变量注入）
+- 使用 `ChartConfig` 定义颜色，通过 `hsl(var(--primary))` 和 `hsl(var(--destructive))` 使用项目已有 CSS 变量
+- 添加 `ChartCrosshair` 和 `ChartTooltip` 组件
+- **不需要新增 chart CSS 变量**
 
-- [ ] **Step 2: 确认 Unovis 用法**
+- [ ] **Step 2: 参考 ChartAreaInteractive 确认用法**
 
-Run: `grep -r "VisArea\|VisXY\|@unovis" "G:/programming/nodejs/work_fox/src/components/" | head -10`
+Run: `cat "G:/programming/nodejs/work_fox/src/components/ChartAreaInteractive.vue"`
 
-如果有现有 Unovis 用法，参考其模式。如果没有，上面的代码需要调整为实际的 Unovis API。
+确认 `ChartContainer` 的用法（config prop、class 等）。如果项目中已有 `ChartAreaInteractive`，参考其具体模式调整上述代码。
 
-- [ ] **Step 3: 确认 chart CSS 变量**
-
-Run: `grep "chart-" "G:/programming/nodejs/work_fox/src/styles/globals.css" | head -10`
-
-如果不存在 chart 颜色变量，需要在 `@theme inline` 块中添加：
-
-```css
---color-chart-1: hsl(220 70% 50%);
---color-chart-2: hsl(160 60% 45%);
---color-chart-3: hsl(30 80% 55%);
---color-chart-4: hsl(280 65% 60%);
---color-chart-5: hsl(0 70% 50%);
-```
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
 git add src/components/dashboard/ExecutionChart.vue
@@ -242,6 +233,7 @@ git commit -m "feat(dashboard): add ExecutionChart area chart component"
 ```vue
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -351,8 +343,6 @@ function openWorkflow(workflowId: string) {
   </Card>
 </template>
 ```
-
-**注意**：需要在文件顶部添加 `Card`、`CardHeader`、`CardTitle`、`CardContent` 的 import。
 
 - [ ] **Step 2: Commit**
 
@@ -611,6 +601,7 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { ChevronRight } from 'lucide-vue-next'
 import type { Workflow, WorkflowFolder } from '@shared/workflow-types'
 
 const props = defineProps<{
@@ -721,8 +712,6 @@ const uncategorizedWorkflows = computed(() =>
 </template>
 ```
 
-**注意**：需要添加 `ChevronRight` 图标的 import。确认使用 `lucide-vue-next` 还是 `@tabler/icons-vue`。
-
 - [ ] **Step 2: Commit**
 
 ```bash
@@ -743,8 +732,7 @@ git commit -m "feat(dashboard): add DashboardSidebar with folder tree and workfl
 
 ```vue
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { onMounted } from 'vue'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import DashboardSidebar from '@/components/dashboard/DashboardSidebar.vue'
 import StatsCards from '@/components/dashboard/StatsCards.vue'
@@ -754,7 +742,6 @@ import WorkflowDetailPanel from '@/components/dashboard/WorkflowDetailPanel.vue'
 import { useDashboardStore } from '@/stores/dashboard'
 
 const store = useDashboardStore()
-const router = useRouter()
 
 onMounted(() => {
   store.init()

@@ -170,7 +170,7 @@ import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import type { DashboardStatsResponse, DashboardExecutionsRequest, DashboardExecutionsResponse, DashboardExecutionItem, DashboardWorkflowDetailResponse } from '@shared/channel-contracts'
 import type { Workflow, ExecutionLog } from '@shared/workflow-types'
-import type { BackendPaths } from '../storage/paths'
+import type { StoragePaths } from '../storage/paths'
 
 interface CacheEntry<T> {
   data: T
@@ -182,7 +182,7 @@ export class DashboardStatsStore {
   private readonly CACHE_TTL = 60_000 // 60 seconds
 
   constructor(
-    private paths: BackendPaths,
+    private paths: StoragePaths,
     private listWorkflows: () => Workflow[],
     private getWorkflow: (id: string) => Workflow | undefined,
     private runningSessionCount: () => number,
@@ -354,7 +354,7 @@ export class DashboardStatsStore {
   }
 
   private readVersionsForWorkflow(workflowId: string): DashboardWorkflowDetailResponse['versions'] {
-    const versionsDir = this.paths.versionsDir?.(workflowId)
+    const versionsDir = this.paths.versionsDir(workflowId)
     if (!versionsDir || !existsSync(versionsDir)) return []
     try {
       return readdirSync(versionsDir)
@@ -423,7 +423,7 @@ export interface DashboardServices {
 export function registerDashboardChannels(router: WSRouter, services: DashboardServices): void {
   const { dashboardStatsStore } = services
 
-  router.register('dashboard:stats', () => {
+  router.register('dashboard:stats', (_data) => {
     return dashboardStatsStore.getStats()
   })
 
