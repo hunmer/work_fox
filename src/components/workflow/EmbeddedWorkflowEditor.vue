@@ -8,7 +8,7 @@ import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { useWorkflowStore } from '@/stores/workflow'
 import { createWorkflowShortcutHandler } from '@/composables/workflow/useEditorShortcuts'
 import { WORKFLOW_NODE_DRAG_MIME } from './dragDrop'
-import EmbeddedWorkflowNode from './EmbeddedWorkflowNode.vue'
+import CustomNodeWrapper from './CustomNodeWrapper.vue'
 import EmbeddedWorkflowEdge from './EmbeddedWorkflowEdge.vue'
 import NodeSelectDialog from './NodeSelectDialog.vue'
 
@@ -23,7 +23,7 @@ const emit = defineEmits<{
 }>()
 
 const store = useWorkflowStore()
-const nodeTypes = { embedded: markRaw(EmbeddedWorkflowNode) }
+const nodeTypes = { embedded: markRaw(CustomNodeWrapper) }
 const edgeTypes = { embedded: markRaw(EmbeddedWorkflowEdge) }
 
 const {
@@ -64,17 +64,27 @@ function cloneWorkflow(): EmbeddedWorkflow {
 }
 
 function mapWorkflowNode(node: WorkflowNode) {
+  const width = typeof node.data?.width === 'number' ? node.data.width : undefined
+  const height = typeof node.data?.height === 'number' ? node.data.height : undefined
   return {
     id: node.id,
     type: 'embedded',
     position: node.position,
+    width,
+    height,
+    style: width || height ? {
+      width: width ? `${width}px` : undefined,
+      height: height ? `${height}px` : undefined,
+    } : undefined,
     data: {
       ...node.data,
       label: node.label,
       nodeType: node.type,
+      embeddedHostNodeId: props.hostNodeId,
+      embeddedWorkflowNode: JSON.parse(JSON.stringify(node)),
     },
     draggable: true,
-    dragHandle: '.embedded-node-body',
+    dragHandle: '.embedded-node-drag-handle',
     selectable: true,
     connectable: true,
   }
@@ -431,10 +441,6 @@ function onNodeClick({ node, event }: any) {
   selectEmbeddedNode(String(nodeId), !!event?.shiftKey || !!event?.metaKey)
 }
 
-function onEmbeddedNodeSelect(payload: { id: string; event: MouseEvent }) {
-  selectEmbeddedNode(payload.id, payload.event.shiftKey || payload.event.metaKey)
-}
-
 function onPaneClick() {
   clearEmbeddedSelection()
 }
@@ -452,6 +458,23 @@ function onNodesChange(changes: Array<any>) {
         nextWorkflow.nodes[index] = {
           ...nextWorkflow.nodes[index],
           position: change.position,
+        }
+      }
+    }
+
+    if (change.type === 'dimensions' && change.dimensions) {
+      const node = props.modelValue.nodes.find((item) => item.id === change.id)
+      if (!node) continue
+      if (!nextWorkflow) nextWorkflow = cloneWorkflow()
+      const index = nextWorkflow.nodes.findIndex((item) => item.id === change.id)
+      if (index >= 0) {
+        nextWorkflow.nodes[index] = {
+          ...nextWorkflow.nodes[index],
+          data: {
+            ...nextWorkflow.nodes[index].data,
+            ...(typeof change.dimensions.width === 'number' ? { width: change.dimensions.width } : {}),
+            ...(typeof change.dimensions.height === 'number' ? { height: change.dimensions.height } : {}),
+          },
         }
       }
     }
@@ -606,13 +629,6 @@ function handleSelectDialogOpenChange(open: boolean) {
       @edges-change="onEdgesChange"
     >
       <Background :gap="20" :size="1" pattern-color="rgba(148, 163, 184, 0.18)" />
-
-      <template #node-embedded="nodeProps">
-        <EmbeddedWorkflowNode
-          v-bind="nodeProps"
-          @select-node="onEmbeddedNodeSelect"
-        />
-      </template>
 
       <template #edge-embedded="edgeProps">
         <EmbeddedWorkflowEdge

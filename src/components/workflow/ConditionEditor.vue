@@ -15,10 +15,13 @@ const store = useWorkflowStore()
 const { updateNodeInternals } = useVueFlow()
 
 const conditions = computed<ConditionItem[]>({
-  get: () => store.selectedNode?.data?.conditions || [],
+  get: () => {
+    const value = store.selectedNode?.data?.conditions
+    return Array.isArray(value) ? value : []
+  },
   set: (val) => {
     if (store.selectedNodeId) {
-      store.updateNodeData(store.selectedNodeId, { conditions: val })
+      store.updateNodeData(store.selectedNodeId, { conditions: Array.isArray(val) ? val : [] })
       nextTick(() => updateNodeInternals([store.selectedNodeId!]))
     }
   },

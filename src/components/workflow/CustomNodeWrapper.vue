@@ -10,7 +10,7 @@ import JsonEditor from '@/components/ui/json-editor/JsonEditor.vue'
 import NodePropertyForm from './NodePropertyForm.vue'
 import { useWorkflowStore } from '@/stores/workflow'
 import { resolveInteraction, rejectInteraction } from '@/lib/backend-api/interaction'
-import type { NodeBreakpoint, NodeRunState, WorkflowNode } from '@/lib/workflow/types'
+import type { EmbeddedWorkflow, NodeBreakpoint, NodeRunState, WorkflowNode } from '@/lib/workflow/types'
 import {
   Popover,
   PopoverContent,
@@ -45,7 +45,14 @@ const definition = computed(() => getNodeDefinition(props.data?.nodeType || prop
 const IconComponent = computed(() => resolveLucideIcon(definition.value?.icon || 'Circle'))
 const nodeMinWidth = computed(() => definition.value?.customViewMinSize?.width || 140)
 const nodeMinHeight = computed(() => definition.value?.customViewMinSize?.height || 60)
+const embeddedHostNodeId = computed(() => typeof props.data?.embeddedHostNodeId === 'string' ? props.data.embeddedHostNodeId : null)
+const isEmbeddedNode = computed(() => !!embeddedHostNodeId.value)
+const embeddedWorkflowNode = computed<WorkflowNode | null>(() => {
+  const node = props.data?.embeddedWorkflowNode
+  return node && typeof node === 'object' ? (node as WorkflowNode) : null
+})
 const currentWorkflowNode = computed<WorkflowNode | null>(() => {
+  if (isEmbeddedNode.value) return embeddedWorkflowNode.value
   return store.currentWorkflow?.nodes.find((n) => n.id === props.id) ?? null
 })
 const renderedNodeSize = computed(() => ({
@@ -63,13 +70,11 @@ const isBoundaryNode = computed(() => definition.value?.type === 'start' || defi
 
 /** 获取当前节点的运行状*/
 const currentNodeState = computed<NodeRunState>(() => {
-  const node = store.currentWorkflow?.nodes.find((n) => n.id === props.id)
-  return node?.nodeState || 'normal'
+  return currentWorkflowNode.value?.nodeState || 'normal'
 })
 
 const currentBreakpoint = computed<NodeBreakpoint | null>(() => {
-  const node = store.currentWorkflow?.nodes.find((n) => n.id === props.id)
-  return node?.breakpoint || null
+  return currentWorkflowNode.value?.breakpoint || null
 })
 
 /** 执行时的节点状*/
@@ -178,10 +183,20 @@ function startEdit() {
 
 function finishEdit() {
   isEditing.value = false
+  if (isEmbeddedNode.value) {
+    updateEmbeddedWorkflowNode('rename embedded node', (node) => {
+      node.label = editLabel.value
+    })
+    return
+  }
   store.updateNodeLabel(String(props.id), editLabel.value)
 }
 
 function handleDelete() {
+  if (isEmbeddedNode.value) {
+    deleteEmbeddedWorkflowNode()
+    return
+  }
   if (!store.canDeleteNode(String(props.id))) return
   store.removeNode(String(props.id))
 }
@@ -192,7 +207,56 @@ function handleClone() {
 }
 
 function setNodeState(state: NodeRunState) {
+  if (isEmbeddedNode.value) {
+    updateEmbeddedWorkflowNode('update embedded node state', (node) => {
+      node.nodeState = state
+    })
+    return
+  }
   store.updateNodeState(String(props.id), state)
+}
+
+function cloneEmbeddedWorkflow() {
+  const hostNodeId = embeddedHostNodeId.value
+  if (!hostNodeId) return null
+  const hostNode = store.currentWorkflow?.nodes.find((node) => node.id === hostNodeId)
+  const workflow = hostNode?.data?.bodyWorkflow
+  if (!workflow || !Array.isArray(workflow.nodes) || !Array.isArray(workflow.edges)) return null
+  return JSON.parse(JSON.stringify(workflow)) as EmbeddedWorkflow
+}
+
+function updateEmbeddedWorkflowNode(description: string, updater: (node: WorkflowNode) => void) {
+  const hostNodeId = embeddedHostNodeId.value
+  if (!hostNodeId) return
+
+  const nextWorkflow = cloneEmbeddedWorkflow()
+  if (!nextWorkflow) return
+
+  const node = nextWorkflow.nodes.find((item) => item.id === String(props.id))
+  if (!node) return
+
+  updater(node)
+  store.updateEmbeddedWorkflow(hostNodeId, nextWorkflow, { description })
+
+  if (store.selectedEmbeddedNode?.hostNodeId === hostNodeId && store.selectedEmbeddedNode.nodeId === String(props.id)) {
+    store.selectedEmbeddedNode.node = JSON.parse(JSON.stringify(node))
+  }
+}
+
+function deleteEmbeddedWorkflowNode() {
+  const hostNodeId = embeddedHostNodeId.value
+  if (!hostNodeId || isBoundaryNode.value) return
+
+  const nextWorkflow = cloneEmbeddedWorkflow()
+  if (!nextWorkflow) return
+
+  nextWorkflow.nodes = nextWorkflow.nodes.filter((node) => node.id !== String(props.id))
+  nextWorkflow.edges = nextWorkflow.edges.filter((edge) => edge.source !== String(props.id) && edge.target !== String(props.id))
+  store.updateEmbeddedWorkflow(hostNodeId, nextWorkflow, { description: 'delete embedded node' })
+
+  if (store.selectedEmbeddedNode?.hostNodeId === hostNodeId && store.selectedEmbeddedNode.nodeId === String(props.id)) {
+    store.selectedEmbeddedNode = null
+  }
 }
 
 // ── 节点内部刷新 ──
@@ -228,6 +292,7 @@ function handleCustomViewPointerDown(event: PointerEvent) {
 
 const displayLabel = computed(() => props.data?.label || definition.value?.label || props.type)
 const isFirstConnectedNode = computed(() => {
+  if (isEmbeddedNode.value) return false
   const workflow = store.currentWorkflow
   if (!workflow) return false
   const nodeId = String(props.id)
@@ -340,7 +405,8 @@ const customViewProps = computed(() => {
 const hasCustomView = computed(() => !!CustomViewComponent.value)
 const isLoopBodyContainer = computed(() => definition.value?.type === LOOP_BODY_NODE_TYPE)
 const showInlinePropertyForm = computed(() => {
-  return !hasCustomView.value
+  return !isEmbeddedNode.value
+    && !hasCustomView.value
     && renderedNodeSize.value.width > 200
     && renderedNodeSize.value.height > 200
     && !!currentWorkflowNode.value
@@ -350,7 +416,8 @@ const showInlinePropertyForm = computed(() => {
 const dynamicHandles = computed(() => {
   const ds = definition.value?.handles?.dynamicSource
   if (!ds) return null
-  const conditions: any[] = props.data?.[ds.dataKey] || []
+  const value = props.data?.[ds.dataKey]
+  const conditions: any[] = Array.isArray(value) ? value : []
   const extra = ds.extraCount || 0
   const total = conditions.length + extra
   if (total === 0) return null
@@ -441,7 +508,7 @@ async function handleTestNode() {
     store.cancelDebug()
     return
   }
-  await store.debugSingleNode(String(props.id))
+  await store.debugSingleNode(String(props.id), isEmbeddedNode.value ? currentWorkflowNode.value ?? undefined : undefined)
 }
 
 async function handlePartialTest() {
@@ -493,7 +560,7 @@ async function handleStopAtBreakpoint() {
 
         <!-- 悬浮删除按钮（开结束节点隐藏，预览模式下隐藏-->
         <button
-          v-if="!isBoundaryNode && !store.isPreview && store.canDeleteNode(String(props.id))"
+          v-if="!isBoundaryNode && !store.isPreview && (isEmbeddedNode || store.canDeleteNode(String(props.id)))"
           class="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-opacity hover:bg-destructive/80 z-10"
           @click.stop="handleDelete"
         >
@@ -548,7 +615,7 @@ async function handleStopAtBreakpoint() {
           </Tooltip>
         </TooltipProvider>
 
-        <div v-if="!isLoopBodyContainer" class="flex items-center gap-2 px-3 py-2 border-b border-border/50">
+        <div v-if="!isLoopBodyContainer" class="embedded-node-drag-handle flex items-center gap-2 px-3 py-2 border-b border-border/50">
           <component
             :is="IconComponent"
             v-if="IconComponent"
