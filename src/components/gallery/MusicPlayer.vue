@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch, onBeforeUnmount, reactive } from 'vue'
 import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Repeat, Repeat1, Music, Loader } from 'lucide-vue-next'
 
 export interface TrackItem {
@@ -41,6 +41,8 @@ const duration = ref(0)
 const localVolume = ref(props.volume)
 const localLoop = ref(props.loop)
 const isLoading = ref(false)
+const resolvedDurations = reactive<Record<string, number>>({})
+const metadataLoaders = new Map<string, HTMLAudioElement>()
 
 // ── 计算属性 ──
 const currentTrack = computed(() => props.tracks[currentIndex.value] ?? null)
@@ -65,6 +67,52 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+function getTrackKey(track: TrackItem): string {
+  return `${track.id}:${track.src}`
+}
+
+function getTrackDuration(track: TrackItem | null): number {
+  if (!track) return 0
+  if (Number.isFinite(track.duration) && track.duration! > 0) return track.duration!
+  return resolvedDurations[getTrackKey(track)] ?? 0
+}
+
+function disposeMetadataLoader(key: string) {
+  const loader = metadataLoaders.get(key)
+  if (!loader) return
+  loader.src = ''
+  metadataLoaders.delete(key)
+}
+
+function loadMissingDuration(track: TrackItem) {
+  if (!track.src || getTrackDuration(track) > 0) return
+
+  const key = getTrackKey(track)
+  if (metadataLoaders.has(key)) return
+
+  const loader = new Audio()
+  metadataLoaders.set(key, loader)
+
+  loader.preload = 'metadata'
+  loader.addEventListener('loadedmetadata', () => {
+    if (Number.isFinite(loader.duration) && loader.duration > 0) {
+      resolvedDurations[key] = loader.duration
+      if (currentTrack.value && getTrackKey(currentTrack.value) === key) {
+        duration.value = loader.duration
+      }
+    }
+    disposeMetadataLoader(key)
+  }, { once: true })
+  loader.addEventListener('error', () => {
+    disposeMetadataLoader(key)
+  }, { once: true })
+  loader.src = toLocalUrl(track.src)
+}
+
+function loadMissingDurations() {
+  props.tracks.forEach(loadMissingDuration)
+}
+
 // ── 播放控制 ──
 function initAudio() {
   if (!audioRef.value) {
@@ -84,6 +132,8 @@ function loadTrack(index: number) {
   if (!track?.src) return
 
   isLoading.value = true
+  currentTime.value = 0
+  duration.value = getTrackDuration(track)
   audioRef.value.src = toLocalUrl(track.src)
   audioRef.value.volume = localVolume.value / 100
   audioRef.value.loop = false // 单曲循环通过 ended 事件处理
@@ -202,6 +252,9 @@ function onTimeUpdate() {
 function onLoadedMetadata() {
   if (audioRef.value) {
     duration.value = audioRef.value.duration
+    if (currentTrack.value && Number.isFinite(audioRef.value.duration) && audioRef.value.duration > 0) {
+      resolvedDurations[getTrackKey(currentTrack.value)] = audioRef.value.duration
+    }
   }
 }
 
@@ -229,8 +282,12 @@ watch(() => props.tracks, () => {
   }
   if (!hasTracks.value) {
     stopPlayback()
+    duration.value = 0
+    return
   }
-})
+  duration.value = getTrackDuration(currentTrack.value)
+  loadMissingDurations()
+}, { immediate: true, deep: true })
 
 watch(() => props.volume, (val) => {
   localVolume.value = val
@@ -254,6 +311,10 @@ onBeforeUnmount(() => {
     audioRef.value.src = ''
     audioRef.value = null
   }
+  metadataLoaders.forEach((loader) => {
+    loader.src = ''
+  })
+  metadataLoaders.clear()
 })
 </script>
 
@@ -316,7 +377,7 @@ onBeforeUnmount(() => {
                 />
               </div>
               <div class="music-progress-time">
-                <span>{{ track.duration ? formatTime(track.duration) : '--:--' }}</span>
+                <span>{{ getTrackDuration(track) ? formatTime(getTrackDuration(track)) : '--:--' }}</span>
               </div>
             </div>
           </div>

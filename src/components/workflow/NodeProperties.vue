@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
-import { Bug, Loader2, CheckCircle2, XCircle, ChevronDown, ChevronRight, Import, FileDown, Plus, Trash2, Pencil, Check } from 'lucide-vue-next'
+import { Bug, Loader2, CheckCircle2, XCircle, Import, FileDown, Plus, Trash2, Pencil, Check } from 'lucide-vue-next'
 import { JsonEditor } from '@/components/ui/json-editor'
 import OutputFieldEditor from './OutputFieldEditor.vue'
 import NodePropertyForm from './NodePropertyForm.vue'
@@ -40,10 +40,52 @@ const IconComponent = computed(() => {
 const isDebugging = computed(() => store.debugNodeStatus === 'running')
 const isLoopBodyNode = computed(() => store.selectedNode?.type === LOOP_BODY_NODE_TYPE)
 const canDebugSelectedNode = computed(() => definition.value?.debuggable !== false)
-const outputExpanded = ref(true)
-const inputsExpanded = ref(true)
-const outputsExpanded = ref(true)
 const jsonPresetPopoverOpen = ref(false)
+
+/** 整页滚动容器引用 */
+const scrollContainer = ref<HTMLElement | null>(null)
+/** 当前激活的锚点 */
+const activeAnchor = ref('properties')
+
+/** 锚点区块定义 */
+const anchorSections = computed(() => {
+  const sections = [
+    { id: 'properties', label: '属性' },
+  ]
+  if (hasDebugOutput.value) {
+    sections.unshift({ id: 'debug', label: '调试' })
+  }
+  if (allowInputFields.value) {
+    sections.push({ id: 'input-fields', label: '输入' })
+  }
+  sections.push({ id: 'output-fields', label: '输出' })
+  return sections
+})
+
+/** 点击锚点平滑滚动到目标区块 */
+function scrollToSection(sectionId: string) {
+  activeAnchor.value = sectionId
+  const container = scrollContainer.value
+  if (!container) return
+  const target = container.querySelector(`#${sectionId}`) as HTMLElement | null
+  if (!target) return
+  container.scrollTo({ top: target.offsetTop - container.offsetTop, behavior: 'smooth' })
+}
+
+/** 监听滚动更新激活锚点 */
+function onScroll() {
+  const container = scrollContainer.value
+  if (!container) return
+  const scrollTop = container.scrollTop
+  let current = anchorSections.value[0]?.id ?? 'properties'
+  for (const section of anchorSections.value) {
+    const el = container.querySelector(`#${section.id}`) as HTMLElement | null
+    if (el && el.offsetTop - container.offsetTop <= scrollTop + 8) {
+      current = section.id
+    }
+  }
+  activeAnchor.value = current
+}
 
 type JsonPreset = {
   id: string
@@ -210,6 +252,9 @@ const nodeInputFields = computed<OutputField[]>({
 const allowInputFields = computed(() => !!definition.value?.allowInputFields)
 const inputFieldsTitle = computed(() => store.selectedNode?.type === 'sub_workflow' ? '开始节点输入' : '输入字段')
 
+/** 是否有调试输出结果 */
+const hasDebugOutput = computed(() => !!(store.debugNodeResult && selectedNodeId.value === store.debugNodeId))
+
 async function handleDebug() {
   const nodeId = store.effectiveSelectedNodeId
   if (!nodeId) return
@@ -217,7 +262,6 @@ async function handleDebug() {
     store.cancelDebug()
     return
   }
-  outputExpanded.value = true
 
   // embedded node：直接传入节点对象
   if (store.selectedEmbeddedNode) {
@@ -300,7 +344,8 @@ function confirmImport() {
     </template>
 
     <template v-else>
-      <div class="flex items-center gap-2 p-3 border-b border-border">
+      <!-- 固定头部：节点信息 + 预设 -->
+      <div class="flex items-center gap-2 p-3 border-b border-border shrink-0">
         <component
           :is="IconComponent"
           v-if="IconComponent"
@@ -391,76 +436,85 @@ function confirmImport() {
         </Popover>
       </div>
 
-      <!-- 调试按钮 -->
-      <div v-if="canDebugSelectedNode" class="px-3 py-2 border-b border-border">
+      <!-- 锚点导航栏 -->
+      <div class="flex items-center gap-1 px-3 py-1.5 border-b border-border shrink-0">
+        <button
+          v-for="section in anchorSections"
+          :key="section.id"
+          type="button"
+          class="px-2 py-1 rounded text-[11px] transition-colors"
+          :class="activeAnchor === section.id
+            ? 'bg-primary/10 text-primary font-medium'
+            : 'text-muted-foreground hover:text-foreground hover:bg-accent'"
+          @click="scrollToSection(section.id)"
+        >
+          {{ section.label }}
+        </button>
+        <!-- 调试图标按钮 -->
         <Button
+          v-if="canDebugSelectedNode"
+          variant="ghost"
           size="sm"
-          :variant="isDebugging ? 'destructive' : 'outline'"
-          class="w-full h-7 text-xs gap-1.5"
+          class="ml-auto h-6 w-6 p-0"
+          :class="isDebugging ? 'text-destructive' : 'text-muted-foreground hover:text-foreground'"
           @click="handleDebug"
         >
           <Loader2
             v-if="isDebugging"
-            class="w-3 h-3 animate-spin"
+            class="h-3.5 w-3.5 animate-spin"
           />
           <Bug
             v-else
-            class="w-3 h-3"
+            class="h-3.5 w-3.5"
           />
-          {{ isDebugging ? '取消调试' : '调试此节点' }}
         </Button>
       </div>
 
-      <!-- 调试输出 -->
+      <!-- 整页滚动容器 -->
       <div
-        v-if="store.debugNodeResult && selectedNodeId === store.debugNodeId"
-        class="px-3 py-2 border-b border-border"
+        ref="scrollContainer"
+        class="flex-1 min-h-0 overflow-y-auto"
+        @scroll="onScroll"
       >
-        <!-- 状态 + 折叠 -->
-        <button
-          class="flex items-center gap-1.5 w-full text-left"
-          @click="outputExpanded = !outputExpanded"
-        >
-          <component
-            :is="outputExpanded ? ChevronDown : ChevronRight"
-            class="w-3 h-3 text-muted-foreground shrink-0"
-          />
-          <CheckCircle2
-            v-if="store.debugNodeResult.status === 'completed'"
-            class="w-3 h-3 text-green-500 shrink-0"
-          />
-          <XCircle
-            v-else
-            class="w-3 h-3 text-red-500 shrink-0"
-          />
-          <span class="text-xs font-medium">
-            {{ store.debugNodeResult.status === 'completed' ? '执行成功' : '执行失败' }}
-          </span>
-          <span class="text-[10px] text-muted-foreground ml-auto">
-            {{ store.debugNodeResult.duration }}ms
-          </span>
-        </button>
-
+        <!-- 调试输出区块（仅在有效果时显示，置顶） -->
         <div
-          v-if="outputExpanded"
-          class="mt-2 space-y-1.5"
+          v-if="hasDebugOutput"
+          id="debug"
+          class="p-3 border-b border-border"
         >
+          <div class="flex items-center gap-1.5 mb-2">
+            <CheckCircle2
+              v-if="store.debugNodeResult!.status === 'completed'"
+              class="w-3 h-3 text-green-500 shrink-0"
+            />
+            <XCircle
+              v-else
+              class="w-3 h-3 text-red-500 shrink-0"
+            />
+            <span class="text-xs font-medium">
+              {{ store.debugNodeResult!.status === 'completed' ? '执行成功' : '执行失败' }}
+            </span>
+            <span class="text-[10px] text-muted-foreground ml-auto">
+              {{ store.debugNodeResult!.duration }}ms
+            </span>
+          </div>
+
           <!-- 错误信息 -->
           <div
-            v-if="store.debugNodeResult.error"
-            class="rounded bg-red-500/10 p-2"
+            v-if="store.debugNodeResult!.error"
+            class="rounded bg-red-500/10 p-2 mb-2"
           >
             <p class="text-[11px] text-red-500 font-mono break-all">
-              {{ store.debugNodeResult.error }}
+              {{ store.debugNodeResult!.error }}
             </p>
           </div>
           <!-- 输出结果 -->
           <div
-            v-if="store.debugNodeResult.output !== undefined"
-            class="mt-1 w-full"
+            v-if="store.debugNodeResult!.output !== undefined"
+            class="w-full"
           >
             <JsonEditor
-              :model-value="store.debugNodeResult.output"
+              :model-value="store.debugNodeResult!.output"
               :read-only="true"
               mode="tree"
               :height="240"
@@ -468,81 +522,56 @@ function confirmImport() {
             />
           </div>
         </div>
-      </div>
 
-      <div class="flex-1 min-h-0 overflow-y-auto">
-        <div class="p-3">
+        <!-- 属性区块 -->
+        <div id="properties" class="p-3">
           <NodePropertyForm />
         </div>
-      </div>
 
-      <!-- 输入字段编辑区（可选，按节点定义开启） -->
-      <div
-        v-if="allowInputFields"
-        class="border-t border-border shrink-0"
-      >
-        <div class="flex items-center gap-1.5 px-3 py-2">
-          <button
-            class="flex items-center gap-1.5 text-left flex-1"
-            @click="inputsExpanded = !inputsExpanded"
-          >
-            <component
-              :is="inputsExpanded ? ChevronDown : ChevronRight"
-              class="w-3 h-3 text-muted-foreground shrink-0"
-            />
-            <span class="text-xs font-medium">输入字段</span>
-          </button>
-        </div>
+        <!-- 输入字段区块 -->
         <div
-          v-if="inputsExpanded"
-          class="px-3 pb-3 max-h-[40vh] overflow-y-auto"
+          v-if="allowInputFields"
+          id="input-fields"
+          class="px-3 pb-3 border-t border-border pt-3"
         >
+          <div class="flex items-center gap-1.5 mb-2">
+            <span class="text-xs font-medium text-muted-foreground">{{ inputFieldsTitle }}</span>
+          </div>
           <OutputFieldEditor
             v-model="nodeInputFields"
             :exclude-node-id="selectedNodeId"
           />
         </div>
-      </div>
 
-      <!-- 输出字段编辑区（固定底部） -->
-      <div class="border-t border-border shrink-0">
-        <div class="flex items-center gap-1.5 px-3 py-2">
-          <button
-            class="flex items-center gap-1.5 text-left flex-1"
-            @click="outputsExpanded = !outputsExpanded"
-          >
-            <component
-              :is="outputsExpanded ? ChevronDown : ChevronRight"
-              class="w-3 h-3 text-muted-foreground shrink-0"
-            />
-            <span class="text-xs font-medium">输出字段</span>
-          </button>
-          <div class="flex items-center gap-0.5">
-            <Button
-              variant="ghost"
-              size="sm"
-              class="h-5 px-1.5 text-[10px] gap-0.5 text-muted-foreground hover:text-foreground"
-              @click="openImportDialog"
-            >
-              <Import class="w-3 h-3" />
-              导入
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              class="h-5 px-1.5 text-[10px] gap-0.5 text-muted-foreground hover:text-foreground"
-              :disabled="!store.debugNodeResult?.output"
-              @click="applyDebugOutput"
-            >
-              <FileDown class="w-3 h-3" />
-              应用输出
-            </Button>
-          </div>
-        </div>
+        <!-- 输出字段区块 -->
         <div
-          v-if="outputsExpanded"
-          class="px-3 pb-3 max-h-[40vh] overflow-y-auto"
+          id="output-fields"
+          class="px-3 pb-3 border-t border-border pt-3"
         >
+          <div class="flex items-center gap-1.5 mb-2">
+            <span class="text-xs font-medium text-muted-foreground">输出字段</span>
+            <div class="flex items-center gap-0.5 ml-auto">
+              <Button
+                variant="ghost"
+                size="sm"
+                class="h-5 px-1.5 text-[10px] gap-0.5 text-muted-foreground hover:text-foreground"
+                @click="openImportDialog"
+              >
+                <Import class="w-3 h-3" />
+                导入
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                class="h-5 px-1.5 text-[10px] gap-0.5 text-muted-foreground hover:text-foreground"
+                :disabled="!store.debugNodeResult?.output"
+                @click="applyDebugOutput"
+              >
+                <FileDown class="w-3 h-3" />
+                应用输出
+              </Button>
+            </div>
+          </div>
           <OutputFieldEditor
             v-model="nodeOutputs"
             :exclude-node-id="selectedNodeId"

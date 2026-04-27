@@ -91,7 +91,8 @@ async function handleCopy() {
 
 <style>
 .json-editor-host,
-.json-editor-host>div,
+.json-editor-host > div,
+.json-editor-host > div > div,
 .json-editor-host .jse-main {
   height: 100%;
 }
@@ -117,7 +118,6 @@ async function handleCopy() {
 }
 
 .json-editor-wrapper.jse-readonly .jse-contents {
-  pointer-events: none;
   user-select: text;
 }
 
