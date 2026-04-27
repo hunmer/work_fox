@@ -313,6 +313,24 @@ export function createEditActions(
     currentWorkflow.value!.edges.push(edge)
   }
 
+  function collectCompositeDescendants(parentIds: Set<string>): Set<string> {
+    const result = new Set<string>()
+    if (!currentWorkflow.value) return result
+    let changed = true
+    while (changed) {
+      changed = false
+      for (const node of currentWorkflow.value.nodes) {
+        const parentId = getCompositeParentId(node)
+        if (!parentId || result.has(node.id)) continue
+        if (parentIds.has(parentId) || result.has(parentId)) {
+          result.add(node.id)
+          changed = true
+        }
+      }
+    }
+    return result
+  }
+
   function createLoopBodyBoundaryNodes(bodyNode: WorkflowNode): void {
     if (!currentWorkflow.value || bodyNode.type !== LOOP_BODY_NODE_TYPE) return
     const startNode: WorkflowNode = {
@@ -549,6 +567,9 @@ export function createEditActions(
         .filter((node) => getCompositeRootId(node) === rootId)
         .map((node) => node.id),
     )
+    for (const descendantId of collectCompositeDescendants(deleteNodeIds)) {
+      deleteNodeIds.add(descendantId)
+    }
     for (const did of deleteNodeIds) {
       groupActions.cleanupGroupOnNodeDelete(did)
     }
