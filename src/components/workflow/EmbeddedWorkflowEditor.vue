@@ -40,7 +40,15 @@ const {
 } = useVueFlow({ id: props.flowId })
 const nodeSelectOpen = ref(false)
 const editorRef = ref<HTMLElement | null>(null)
-const pendingInsert = ref<{ sourceId: string; targetId?: string; position?: { x: number; y: number } } | null>(null)
+const pendingInsert = ref<{
+  sourceId: string
+  targetId?: string
+  sourceHandle?: string | null
+  targetHandle?: string | null
+  position?: { x: number; y: number }
+} | null>(null)
+const connectSource = ref<{ nodeId: string; handleId: string | null } | null>(null)
+const connectSucceeded = ref(false)
 const flowNodes = ref<Array<Record<string, any>>>([])
 const flowEdges = ref<Array<Record<string, any>>>([])
 const clipboardNodes = ref<WorkflowNode[]>([])
@@ -416,6 +424,7 @@ onUnmounted(() => {
 
 function onConnect(params: { source?: string | null; target?: string | null; sourceHandle?: string | null; targetHandle?: string | null }) {
   if (!params.source || !params.target) return
+  connectSucceeded.value = true
   const nextWorkflow = cloneWorkflow()
   const exists = nextWorkflow.edges.some((edge) =>
     edge.source === params.source
@@ -433,6 +442,36 @@ function onConnect(params: { source?: string | null; target?: string | null; sou
   })
   syncLocalState(nextWorkflow)
   emitWorkflow(nextWorkflow)
+}
+
+function getCanvasPositionFromEvent(event: MouseEvent | TouchEvent | PointerEvent) {
+  const bounds = vueFlowRef.value?.getBoundingClientRect()
+  if (!bounds) return null
+  const point = 'changedTouches' in event ? event.changedTouches[0] : event
+  if (!point) return null
+  return project({
+    x: (point.clientX - bounds.left) / Math.max(outerZoom.value, 0.1),
+    y: (point.clientY - bounds.top) / Math.max(outerZoom.value, 0.1),
+  })
+}
+
+function onConnectStart(params: { nodeId?: string; handleId?: string | null }) {
+  const nodeId = params.nodeId ?? null
+  connectSource.value = nodeId ? { nodeId, handleId: params.handleId ?? null } : null
+  connectSucceeded.value = false
+}
+
+function onConnectEnd(event?: MouseEvent | TouchEvent | PointerEvent) {
+  const source = connectSource.value
+  connectSource.value = null
+  if (!source || connectSucceeded.value) return
+  const position = event ? getCanvasPositionFromEvent(event) : null
+  pendingInsert.value = {
+    sourceId: source.nodeId,
+    sourceHandle: source.handleId,
+    position: position ?? undefined,
+  }
+  nodeSelectOpen.value = true
 }
 
 function onNodeClick({ node, event }: any) {
@@ -575,9 +614,21 @@ function handleSelectNodeType(type: string) {
   if (insert.sourceId && insert.targetId) {
     nextWorkflow.edges = nextWorkflow.edges.filter((edge) => !(edge.source === insert.sourceId && edge.target === insert.targetId))
     nextWorkflow.edges.push(
-      { id: `e-${insert.sourceId}-${inserted.id}`, source: insert.sourceId, target: inserted.id },
+      {
+        id: `e-${insert.sourceId}-${insert.sourceHandle ?? 'default'}-${inserted.id}-default`,
+        source: insert.sourceId,
+        target: inserted.id,
+        sourceHandle: insert.sourceHandle ?? null,
+      },
       { id: `e-${inserted.id}-${insert.targetId}`, source: inserted.id, target: insert.targetId },
     )
+  } else if (insert.sourceId) {
+    nextWorkflow.edges.push({
+      id: `e-${insert.sourceId}-${insert.sourceHandle ?? 'default'}-${inserted.id}-default`,
+      source: insert.sourceId,
+      target: inserted.id,
+      sourceHandle: insert.sourceHandle ?? null,
+    })
   }
 
   syncLocalState(nextWorkflow)
@@ -623,6 +674,8 @@ function handleSelectDialogOpenChange(open: boolean) {
       :select-nodes-on-drag="false"
       :elements-selectable="true"
       @connect="onConnect"
+      @connect-start="onConnectStart"
+      @connect-end="onConnectEnd"
       @node-click="onNodeClick"
       @pane-click="onPaneClick"
       @nodes-change="onNodesChange"

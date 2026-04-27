@@ -433,6 +433,13 @@ function getHandleTop(index: number, total: number): string {
   return `${((index + 1) / (total + 1)) * 100}%`
 }
 
+function getSourceHandleStyle(index: number, total: number) {
+  return {
+    top: getHandleTop(index, total),
+    borderWidth: '2px',
+  }
+}
+
 let nodeResizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
@@ -745,21 +752,23 @@ async function handleStopAtBreakpoint() {
           <template v-else>
             <div
               v-for="(h, index) in staticSourceHandles"
-              :key="h.id"
-              class="absolute right-0 flex items-center"
-              :style="{ top: getHandleTop(index, staticSourceHandles.length), transform: 'translateY(-50%)' }"
+              :key="`${h.id}-label`"
+              class="source-handle-label"
+              :style="{ top: getHandleTop(index, staticSourceHandles.length) }"
             >
               <span class="text-[9px] text-muted-foreground mr-1 whitespace-nowrap">{{ h.label || h.id }}</span>
-              <Handle
-                :id="h.id"
-                type="source"
-                :position="Position.Right"
-                :connectable="props.connectable"
-                class="!relative !top-0 !translate-y-0 !z-10 !w-2.5 !h-2.5 handle-dot"
-                :class="h.id === LOOP_BODY_SOURCE_HANDLE ? '!bg-blue-500 !border-blue-300' : '!bg-emerald-500 !border-emerald-300'"
-                :style="{ borderWidth: '2px' }"
-              />
             </div>
+            <Handle
+              v-for="(h, index) in staticSourceHandles"
+              :id="h.id"
+              :key="h.id"
+              type="source"
+              :position="Position.Right"
+              :connectable="props.connectable"
+              class="!z-10 !w-2.5 !h-2.5 handle-dot"
+              :class="h.id === LOOP_BODY_SOURCE_HANDLE ? '!bg-blue-500 !border-blue-300' : '!bg-emerald-500 !border-emerald-300'"
+              :style="getSourceHandleStyle(index, staticSourceHandles.length)"
+            />
           </template>
         </template>
 
@@ -767,21 +776,23 @@ async function handleStopAtBreakpoint() {
         <template v-if="dynamicHandles">
           <div
             v-for="h in dynamicHandles"
-            :key="h.id"
-            class="absolute right-0 flex items-center"
-            :style="{ top: getHandleTop(h.index, h.total), transform: 'translateY(-50%)' }"
+            :key="`${h.id}-label`"
+            class="source-handle-label"
+            :style="{ top: getHandleTop(h.index, h.total) }"
           >
             <span class="text-[9px] text-muted-foreground mr-1 whitespace-nowrap">{{ h.label }}</span>
-            <Handle
-              :id="h.id"
-              type="source"
-              :position="Position.Right"
-              :connectable="props.connectable"
-              class="!relative !top-0 !translate-y-0 !z-10 !w-2.5 !h-2.5 handle-dot"
-              :class="h.id === 'default' ? '!bg-orange-500 !border-orange-300' : '!bg-emerald-500 !border-emerald-300'"
-              :style="{ borderWidth: '2px' }"
-            />
           </div>
+          <Handle
+            v-for="h in dynamicHandles"
+            :id="h.id"
+            :key="h.id"
+            type="source"
+            :position="Position.Right"
+            :connectable="props.connectable"
+            class="!z-10 !w-2.5 !h-2.5 handle-dot"
+            :class="h.id === 'default' ? '!bg-orange-500 !border-orange-300' : '!bg-emerald-500 !border-emerald-300'"
+            :style="getSourceHandleStyle(h.index, h.total)"
+          />
         </template>
   </div>
 
@@ -818,6 +829,15 @@ async function handleStopAtBreakpoint() {
 .handle-dot:hover {
   scale: 1.6;
   box-shadow: 0 0 6px currentColor;
+}
+
+.source-handle-label {
+  position: absolute;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  transform: translateY(-50%);
 }
 
 .loop-body-node {
