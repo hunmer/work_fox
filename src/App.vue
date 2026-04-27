@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { Toaster } from '@/components/ui/sonner'
 import CommandPaletteDialog from '@/components/command-palette/CommandPaletteDialog.vue'
+import WorkflowInfoCardDialog from '@/components/command-palette/WorkflowInfoCardDialog.vue'
+import { createWorkflowProvider } from '@/components/command-palette/providers/workflowProvider'
 import WsMessageMonitor from '@/components/utils/WsMessageMonitor.vue'
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Button } from '@/components/ui/button'
@@ -10,6 +12,8 @@ import { usePluginStore } from '@/stores/plugin'
 import { useAIProviderStore } from '@/stores/ai-provider'
 import { useShortcutActions } from '@/composables/useShortcutActions'
 import { wsBridge } from '@/lib/ws-bridge'
+import type { CommandProvider } from '@/types/command'
+import type { Workflow } from '@shared/workflow-types'
 
 const tabStore = useTabStore()
 const pluginStore = usePluginStore()
@@ -19,6 +23,32 @@ const commandPaletteOpen = ref(false)
 const wsError = ref<string | null>(null)
 const reconnecting = ref(false)
 const reconnectAttempt = ref(0)
+
+// 工作流信息卡片状态
+const workflowInfoOpen = ref(false)
+const selectedWorkflowId = ref<string | null>(null)
+
+function handleWorkflowSelect(wf: Workflow) {
+  selectedWorkflowId.value = wf.id
+  workflowInfoOpen.value = true
+  commandPaletteOpen.value = false
+}
+
+function handleOpenInEditor(wf: Workflow) {
+  // 复用标签页逻辑：检查是否已有 tab 打开此工作流
+  const existing = tabStore.tabs.find((t) => t.workflowId === wf.id)
+  if (existing) {
+    if (existing.id !== tabStore.activeTabId) {
+      tabStore.switchTab(existing.id)
+    }
+    return
+  }
+  tabStore.addTab(wf.id, wf.name)
+}
+
+const commandProviders = computed<CommandProvider[]>(() => [
+  createWorkflowProvider(handleWorkflowSelect),
+])
 
 useShortcutActions(commandPaletteOpen)
 
@@ -74,7 +104,14 @@ onUnmounted(() => {
     <Toaster />
     <CommandPaletteDialog
       :open="commandPaletteOpen"
+      :providers="commandProviders"
       @update:open="commandPaletteOpen = $event"
+    />
+    <WorkflowInfoCardDialog
+      :open="workflowInfoOpen"
+      :workflow-id="selectedWorkflowId"
+      @update:open="workflowInfoOpen = $event"
+      @open-in-editor="handleOpenInEditor"
     />
     <WsMessageMonitor />
 
