@@ -5,7 +5,7 @@
 
 ## 概述
 
-在 WorkFox 前端新增 `/dashboard` 路由，提供全局统计概览和单工作流详情两种视图。页面采用 shadcn-vue Sidebar 组件实现独立侧边栏布局，不依赖全局导航改动。后端新增专用 HTTP API 端点提供聚合统计数据。
+在 WorkFox 前端新增 `/dashboard` 路由，提供全局统计概览和单工作流详情两种视图。页面采用 shadcn-vue Sidebar 组件实现独立侧边栏布局，不依赖全局导航改动。后端新增 WS 通道提供聚合统计数据，遵循项目现有的全 WS 通信架构。
 
 ## 1. 路由与页面结构
 
@@ -54,18 +54,23 @@ DashboardPage.vue
 
 在 HomePage 中添加一个入口卡片/按钮链接到 `/dashboard`，后续可扩展到全局导航。
 
-## 2. 后端 HTTP API
+## 2. 后端 WS 通道
 
-在后端新增 `backend/dashboard/` 目录，提供 3 个 HTTP 端点。在 `backend/main.ts` 中注册路由。
+在后端新增 `backend/ws/dashboard-channels.ts`，注册 3 个 WS 通道。遵循项目现有的 WS 通道架构：
+- 在 `shared/channel-contracts.ts` 中定义请求/响应类型映射
+- 在 `shared/channel-metadata.ts` 中注册通道元数据
+- 在 `backend/ws/` 中注册 handler
 
-### `GET /api/dashboard/stats`
+### `dashboard:stats`
 
-返回全局聚合统计。
+返回全局聚合统计。前端通过 `wsBridge.invoke('dashboard:stats')` 调用。
 
 ```typescript
+// 请求：无参数
+// 响应：
 interface DashboardStats {
   workflowCount: number
-  runningCount: number
+  runningCount: number           // 从 ExecutionManager.sessions.size 获取实时运行数
   pluginCount: number
   todayExecutions: number
   weekExecutions: number
@@ -74,43 +79,53 @@ interface DashboardStats {
   dailyTrend: Array<{
     date: string       // YYYY-MM-DD
     count: number      // 总执行次数
-    success: number    // 成功次数
-    error: number      // 失败次数
+    success: number    // 'completed' 状态计数
+    error: number      // 'error' 状态计数
   }>
 }
 ```
 
-**实现策略**：遍历所有工作流的 `execution_history/` 目录，读取执行日志元数据，聚合计算统计值。趋势数据从执行日志的 `startedAt` 字段按日聚合。
+**实现策略**：
+- `runningCount` 从 `ExecutionManager` 的活跃 session Map 中获取（`sessions.size`），非文件扫描。
+- 其余统计值由 `DashboardStatsStore` 聚合计算：遍历所有工作流的 `execution_history/` 目录，读取执行日志。
+- **缓存策略**：`DashboardStatsStore` 维护内存缓存，TTL 60 秒。首次请求后缓存结果，后续请求在 TTL 内直接返回缓存。缓存失效时重新计算。
+- `dailyTrend` 在缓存构建时从日志的 `startedAt`（`number` 时间戳）按日聚合。
+- 所有时间字段在 API 层保持原始 `number` 类型（与 `ExecutionLog.startedAt` 一致），前端负责格式化显示。
 
-### `GET /api/dashboard/executions`
+**字段来源说明**：
+- `workflowCount` = `WorkflowStore.listWorkflows().length`
+- `runningCount` = `ExecutionManager.sessions.size`
+- `pluginCount` = `PluginRegistry` 已注册插件数
+- `todayExecutions/weekExecutions/totalExecutions` = 从执行日志按 `startedAt` 时间戳过滤计数
+- `workflowName` = 需关联 `WorkflowStore.getWorkflow(workflowId).name`
+- `stepCount` = 派生自 `ExecutionLog.steps.length`
+- `duration` = 派生自 `finishedAt - startedAt`（均为 `number` 毫秒时间戳）
+- `triggerType` = 当前不存在于 `ExecutionLog` 中，**移除**（见 YAGNI 章节）
+
+### `dashboard:executions`
 
 返回跨工作流执行历史，支持分页和日期范围筛选。
 
-查询参数：
-
 ```typescript
-interface ExecutionQuery {
+// 请求：
+interface DashboardExecutionsRequest {
   range?: 'today' | 'week' | 'all'  // 日期范围，默认 all
   status?: string                     // 可选状态过滤
   page?: number                       // 分页页码，默认 1
   pageSize?: number                   // 每页条数，默认 20
 }
-```
 
-响应结构：
-
-```typescript
-interface ExecutionHistoryResponse {
+// 响应：
+interface DashboardExecutionsResponse {
   items: Array<{
     id: string
     workflowId: string
-    workflowName: string
+    workflowName: string        // 关联 WorkflowStore 获取
     status: 'running' | 'completed' | 'paused' | 'error'
-    startedAt: string
-    finishedAt: string | null
-    duration: number | null           // 毫秒
-    stepCount: number
-    triggerType?: string
+    startedAt: number           // Unix 时间戳（ms），与 ExecutionLog 一致
+    finishedAt: number | null   // Unix 时间戳（ms）
+    duration: number | null     // 毫秒，派生自 finishedAt - startedAt
+    stepCount: number           // 派生自 steps.length
   }>
   total: number
   page: number
@@ -118,27 +133,31 @@ interface ExecutionHistoryResponse {
 }
 ```
 
-### `GET /api/dashboard/workflow/:id`
+### `dashboard:workflow-detail`
 
 返回单个工作流的详情，包含基本信息、版本列表和执行记录。
 
-响应结构：
-
 ```typescript
-interface WorkflowDetailResponse {
+// 请求：
+interface DashboardWorkflowDetailRequest {
+  workflowId: string
+}
+
+// 响应：
+interface DashboardWorkflowDetailResponse {
   workflow: {
     id: string
     name: string
     folderId: string | null
     nodeCount: number
     edgeCount: number
-    createdAt: string
-    updatedAt: string
+    createdAt: number          // Unix 时间戳（ms），与 Workflow 类型一致
+    updatedAt: number          // Unix 时间戳（ms）
   }
   versions: Array<{
     id: string
     version: number
-    createdAt: string
+    createdAt: number          // Unix 时间戳（ms）
     nodeCount: number
     description?: string
   }>
@@ -146,9 +165,9 @@ interface WorkflowDetailResponse {
     items: Array<{
       id: string
       status: 'running' | 'completed' | 'paused' | 'error'
-      startedAt: string
-      finishedAt: string | null
-      duration: number | null
+      startedAt: number        // Unix 时间戳（ms）
+      finishedAt: number | null
+      duration: number | null  // 毫秒
       stepCount: number
     }>
     total: number
@@ -171,17 +190,22 @@ src/components/dashboard/
   ├── WorkflowInfoCard.vue               -- 工作流基本信息卡片
   ├── WorkflowVersionList.vue            -- 历史版本列表
   └── WorkflowExecutionTable.vue         -- 单个工作流执行记录表格
-src/lib/backend-api/dashboard.ts         -- Dashboard HTTP API 客户端
+src/lib/backend-api/dashboard.ts         -- Dashboard WS 通道客户端
 src/stores/dashboard.ts                  -- Dashboard Pinia store
 ```
 
 ### 后端新增文件
 
 ```
+backend/ws/dashboard-channels.ts         -- WS 通道 handler 注册
 backend/dashboard/
-  ├── routes.ts                          -- HTTP 路由定义
-  └── stats-store.ts                     -- 聚合查询逻辑
+  └── stats-store.ts                     -- 聚合查询逻辑（含内存缓存）
 ```
+
+### Shared 新增内容
+
+在 `shared/channel-contracts.ts` 中新增 `dashboard:stats`、`dashboard:executions`、`dashboard:workflow-detail` 的类型映射。
+在 `shared/channel-metadata.ts` 中新增对应元数据。
 
 ### Dashboard Store 核心状态
 
@@ -214,15 +238,19 @@ interface DashboardState {
 ```
 DashboardPage.vue
   └── useDashboardStore()
-        ├── fetchStats()          → GET /api/dashboard/stats         → StatsCards + ExecutionChart
-        ├── fetchExecutions(range)→ GET /api/dashboard/executions    → ExecutionHistoryTable
-        ├── fetchWorkflowDetail() → GET /api/dashboard/workflow/:id  → WorkflowDetailPanel
-        └── 左侧 Sidebar 选择      → selectedWorkflowId              → 切换右侧视图模式
+        ├── fetchStats()          → wsBridge.invoke('dashboard:stats')         → StatsCards + ExecutionChart
+        ├── fetchExecutions(range)→ wsBridge.invoke('dashboard:executions')   → ExecutionHistoryTable
+        ├── fetchWorkflowDetail() → wsBridge.invoke('dashboard:workflow-detail') → WorkflowDetailPanel
+        ├── fetchFolders()        → wsBridge.invoke('workflowFolder:list')     → DashboardSidebar
+        ├── fetchWorkflows()      → wsBridge.invoke('workflow:list')           → DashboardSidebar
+        └── 左侧 Sidebar 选择      → selectedWorkflowId                       → 切换右侧视图模式
 ```
+
+**侧边栏数据来源**：文件夹和工作流列表复用现有 WS 通道（`workflowFolder:list`、`workflow:list`），不新增接口。
 
 ### 交互逻辑
 
-1. **页面加载**：并行请求 `stats` + `executions(all)` + `folders` + `workflows`
+1. **页面加载**：并行请求 `stats` + `executions(all)` + `folders`（复用 `workflowFolder:list`）+ `workflows`（复用 `workflow:list`）
 2. **左侧点击工作流**：设置 `selectedWorkflowId`，请求 `workflowDetail`，右侧切换到详情模式
 3. **左侧点击"全部"**：清除 `selectedWorkflowId`，右侧回到概览模式
 4. **范围筛选切换**（今日/本周/全部）：重新请求 `executions` 对应 range
@@ -234,12 +262,11 @@ DashboardPage.vue
 
 | 列名 | 字段 | 说明 |
 |---|---|---|
-| 工作流名称 | `workflowName` | 可点击跳转到编辑器 |
+| 工作流名称 | `workflowName` | 可点击跳转到编辑器（`router.push({ path: '/editor', query: { workflow_id } })`） |
 | 状态 | `status` | Badge 显示（completed=绿色, error=红色, running=蓝色, paused=黄色） |
-| 开始时间 | `startedAt` | 格式化显示 |
+| 开始时间 | `startedAt` | 格式化显示（前端将 `number` 时间戳转为本地时间字符串） |
 | 耗时 | `duration` | 友好格式（如 "2m 30s"） |
-| 步骤数 | `stepCount` | 执行步骤总数 |
-| 触发方式 | `triggerType` | 可选列 |
+| 步骤数 | `stepCount` | 执行步骤总数（派生自 `steps.length`） |
 
 支持排序（按时间/状态）和日期范围筛选 Tabs。
 
@@ -258,18 +285,20 @@ DashboardPage.vue
 
 ### 版本列表（WorkflowVersionList）
 
-列表形式展示（非表格），每项包含版本号、创建时间、节点数、备注。可点击恢复或查看 diff。
+列表形式展示（非表格），每项包含版本号、创建时间、节点数、备注。暂仅展示信息，不提供恢复或 diff 操作（见 YAGNI 章节）。
 
 ## 5. 错误处理
 
-- API 请求失败时，卡片和表格区域显示 Empty 状态组件（使用已有 `ui/empty/`）
+- WS 通道请求失败时，卡片和表格区域显示 Empty 状态组件（使用已有 `ui/empty/`）
 - 加载中显示 Skeleton（使用已有 `ui/skeleton/`）
-- 后端未启动时，Dashboard 页面显示连接提示（参考现有 WS 断线处理逻辑）
+- 后端未启动或 WS 断线时，Dashboard 页面显示连接提示（复用 `ws-bridge.ts` 的断线检测逻辑）
 
 ## 6. 不包含的内容（YAGNI）
 
-- 实时 WebSocket 推送统计数据（首次加载用 HTTP 拉取即可，后续可扩展）
+- 实时 WebSocket 推送统计数据（首次加载用 WS 请求-响应拉取，后续可扩展为推送）
 - 导出报表功能
 - 自定义日期范围选择器（仅支持今日/本周/全部三档）
 - 工作流执行对比功能
 - 多用户/权限相关
+- 版本恢复或 diff 查看功能（版本列表仅展示信息）
+- `triggerType` 字段（当前 `ExecutionLog` 不包含此字段，不虚构）
