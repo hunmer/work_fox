@@ -10,7 +10,7 @@ import CanvasToolbar from './CanvasToolbar.vue'
 import { WORKFLOW_CANVAS_CONTEXT_KEY } from './workflowCanvasContext'
 import { useWorkflowStore } from '@/stores/workflow'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
-import type { NodeBreakpoint, NodeRunState } from '@/lib/workflow/types'
+import type { EmbeddedWorkflow, NodeBreakpoint, NodeRunState, WorkflowNode } from '@/lib/workflow/types'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -99,6 +99,9 @@ const targetNodeIds = computed(() => {
   if (menuContext.value === 'pane') {
     return store.selectedNodeIds
   }
+  if (menuContext.value === 'embedded-node') {
+    return contextNodeId.value ? [contextNodeId.value] : []
+  }
   // 节点右键时，如果有 2+ 已选中节点（且包含右键节点），走多选逻辑
   if (store.selectedNodeIds.length >= 2 && contextNodeId.value && store.selectedNodeIds.includes(contextNodeId.value)) {
     return store.selectedNodeIds
@@ -109,6 +112,43 @@ const targetNodeIds = computed(() => {
 const isMultiSelect = computed(() => targetNodeIds.value.length >= 2)
 
 const availableGroups = computed(() => store.currentWorkflow?.groups || [])
+
+function cloneEmbeddedWorkflow(hostNodeId: string): EmbeddedWorkflow | null {
+  const hostNode = store.currentWorkflow?.nodes.find((node) => node.id === hostNodeId)
+  const workflow = hostNode?.data?.bodyWorkflow
+  if (!workflow || !Array.isArray(workflow.nodes) || !Array.isArray(workflow.edges)) return null
+  return JSON.parse(JSON.stringify(workflow)) as EmbeddedWorkflow
+}
+
+function findEmbeddedContextNode(): WorkflowNode | null {
+  if (!contextHostNodeId.value || !contextNodeId.value) return null
+  const workflow = cloneEmbeddedWorkflow(contextHostNodeId.value)
+  return workflow?.nodes.find((node) => node.id === contextNodeId.value) ?? null
+}
+
+function updateEmbeddedNode(description: string, updater: (node: WorkflowNode) => void) {
+  const hostNodeId = contextHostNodeId.value
+  const nodeId = contextNodeId.value
+  if (!hostNodeId || !nodeId) return
+
+  const nextWorkflow = cloneEmbeddedWorkflow(hostNodeId)
+  if (!nextWorkflow) return
+
+  const node = nextWorkflow.nodes.find((item) => item.id === nodeId)
+  if (!node) return
+
+  updater(node)
+  store.updateEmbeddedWorkflow(hostNodeId, nextWorkflow, { description })
+
+  if (store.selectedEmbeddedNode?.hostNodeId === hostNodeId && store.selectedEmbeddedNode.nodeId === nodeId) {
+    store.selectedEmbeddedNode.node = JSON.parse(JSON.stringify(node))
+  }
+}
+
+const isContextBoundaryNode = computed(() => {
+  const node = menuContext.value === 'embedded-node' ? findEmbeddedContextNode() : contextNode.value
+  return node?.type === 'start' || node?.type === 'end'
+})
 
 // ── 画布操作 ──
 function handleAddNode() {
@@ -123,12 +163,27 @@ function handleFitView() {
 
 // ── 节点操作 ──
 function setNodeState(state: NodeRunState) {
+  if (menuContext.value === 'embedded-node') {
+    updateEmbeddedNode('update embedded node state', (node) => {
+      node.nodeState = state
+    })
+    return
+  }
+
   for (const id of targetNodeIds.value) {
     store.updateNodeState(id, state)
   }
 }
 
 function setNodeBreakpoint(breakpoint: NodeBreakpoint | null) {
+  if (menuContext.value === 'embedded-node') {
+    updateEmbeddedNode('update embedded node breakpoint', (node) => {
+      if (breakpoint) node.breakpoint = breakpoint
+      else delete node.breakpoint
+    })
+    return
+  }
+
   for (const id of targetNodeIds.value) {
     store.updateNodeBreakpoint(id, breakpoint)
   }
@@ -143,6 +198,23 @@ function handleCloneNode() {
 
 function handleDeleteNode() {
   const id = targetNodeIds.value[0]
+  if (menuContext.value === 'embedded-node') {
+    const hostNodeId = contextHostNodeId.value
+    if (!hostNodeId || !id || isContextBoundaryNode.value) return
+
+    const nextWorkflow = cloneEmbeddedWorkflow(hostNodeId)
+    if (!nextWorkflow) return
+
+    nextWorkflow.nodes = nextWorkflow.nodes.filter((node) => node.id !== id)
+    nextWorkflow.edges = nextWorkflow.edges.filter((edge) => edge.source !== id && edge.target !== id)
+    store.updateEmbeddedWorkflow(hostNodeId, nextWorkflow, { description: 'delete embedded node' })
+
+    if (store.selectedEmbeddedNode?.hostNodeId === hostNodeId && store.selectedEmbeddedNode.nodeId === id) {
+      store.selectedEmbeddedNode = null
+    }
+    return
+  }
+
   if (id && store.canDeleteNode(id)) {
     store.removeNode(id)
   }
@@ -229,9 +301,57 @@ function handleBatchDelete() {
 
         <!-- ── 节点菜单项（节点右键 或 画布右键有选中节点时显示） ── -->
         <template v-if="menuContext === 'embedded-node'">
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <Settings class="w-4 h-4 mr-2" />
+              节点状态
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent>
+              <ContextMenuItem @click="setNodeState('normal')">
+                <CircleCheck class="w-4 h-4 mr-2 text-green-500" />
+                正常
+              </ContextMenuItem>
+              <ContextMenuItem @click="setNodeState('disabled')">
+                <CircleSlash class="w-4 h-4 mr-2 text-red-500" />
+                禁用（中止执行）
+              </ContextMenuItem>
+              <ContextMenuItem @click="setNodeState('skipped')">
+                <SkipForward class="w-4 h-4 mr-2 text-yellow-500" />
+                跳过（跳过执行）
+              </ContextMenuItem>
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <Flag class="w-4 h-4 mr-2" />
+              断点设置
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent>
+              <ContextMenuItem @click="setNodeBreakpoint('start')">
+                <Flag class="w-4 h-4 mr-2 text-blue-500" />
+                设置开始断点
+              </ContextMenuItem>
+              <ContextMenuItem @click="setNodeBreakpoint('end')">
+                <Flag class="w-4 h-4 mr-2 text-purple-500" />
+                设置结束断点
+              </ContextMenuItem>
+              <ContextMenuItem @click="setNodeBreakpoint(null)">
+                <FlagOff class="w-4 h-4 mr-2 text-muted-foreground" />
+                取消断点
+              </ContextMenuItem>
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+          <ContextMenuSeparator />
           <ContextMenuItem @click="handleShowNodeInfo">
             <Info class="w-4 h-4 mr-2" />
             查看节点信息
+          </ContextMenuItem>
+          <ContextMenuItem
+            v-if="!isContextBoundaryNode"
+            class="text-destructive"
+            @click="handleDeleteNode"
+          >
+            删除节点
           </ContextMenuItem>
         </template>
 
