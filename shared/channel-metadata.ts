@@ -148,6 +148,11 @@ export const backendChannelMetadata: Record<BackendChannel, ChannelMetadata> = {
     streaming: false,
     description: 'Execute agent tool',
   },
+
+  // --- Dashboard ---
+  'dashboard:stats': crud('dashboard:stats', 'Get dashboard statistics overview'),
+  'dashboard:executions': crud('dashboard:executions', 'List dashboard execution records'),
+  'dashboard:workflow-detail': crud('dashboard:workflow-detail', 'Get dashboard workflow detail'),
 }
 
 function crud(channel: BackendChannel, description: string): ChannelMetadata {

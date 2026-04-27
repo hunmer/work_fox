@@ -128,6 +128,81 @@ export interface ExecutionLogDeleteRequest {
   id: string
 }
 
+// ---- Dashboard ----
+export interface DashboardStatsResponse {
+  workflowCount: number
+  runningCount: number
+  pluginCount: number
+  todayExecutions: number
+  weekExecutions: number
+  totalExecutions: number
+  dailyTrend: Array<{
+    date: string
+    count: number
+    success: number
+    error: number
+  }>
+}
+
+export interface DashboardExecutionsRequest {
+  range?: 'today' | 'week' | 'all'
+  status?: string
+  page?: number
+  pageSize?: number
+}
+
+export interface DashboardExecutionItem {
+  id: string
+  workflowId: string
+  workflowName: string
+  status: 'running' | 'completed' | 'paused' | 'error'
+  startedAt: number
+  finishedAt: number | null
+  duration: number | null
+  stepCount: number
+}
+
+export interface DashboardExecutionsResponse {
+  items: DashboardExecutionItem[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export interface DashboardWorkflowDetailRequest {
+  workflowId: string
+}
+
+export interface DashboardWorkflowDetailResponse {
+  workflow: {
+    id: string
+    name: string
+    folderId: string | null
+    nodeCount: number
+    edgeCount: number
+    createdAt: number
+    updatedAt: number
+  }
+  versions: Array<{
+    id: string
+    version: number
+    createdAt: number
+    nodeCount: number
+    description?: string
+  }>
+  executions: {
+    items: Array<{
+      id: string
+      status: 'running' | 'completed' | 'paused' | 'error'
+      startedAt: number
+      finishedAt: number | null
+      duration: number | null
+      stepCount: number
+    }>
+    total: number
+  }
+}
+
 export interface ExecutionLogClearRequest {
   workflowId: string
 }
@@ -305,6 +380,11 @@ export interface BackendChannelMap {
 
   // --- Agent / Workflow Tool ---
   'agent:execTool': ChannelContract<{ toolType: string; params: Record<string, unknown>; targetTabId?: string }, any>
+
+  // --- Dashboard ---
+  'dashboard:stats': ChannelContract<EmptyRequest, DashboardStatsResponse>
+  'dashboard:executions': ChannelContract<DashboardExecutionsRequest, DashboardExecutionsResponse>
+  'dashboard:workflow-detail': ChannelContract<DashboardWorkflowDetailRequest, DashboardWorkflowDetailResponse>
 }
 
 export type BackendChannel = keyof BackendChannelMap
