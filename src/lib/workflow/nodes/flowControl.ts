@@ -1,7 +1,6 @@
 import type { NodeTypeDefinition } from '../types'
 import LoopBodyContainer from '@/components/workflow/LoopBodyContainer.vue'
 import SubWorkflowSelector from '@/components/workflow/SubWorkflowSelector.vue'
-import { createDefaultEmbeddedWorkflow } from '@shared/embedded-workflow'
 import {
   LOOP_BREAK_NODE_TYPE,
   LOOP_BODY_NODE_TYPE,
@@ -267,7 +266,6 @@ export const flowControlNodes: NodeTypeDefinition[] = [
           data: {
             width: 520,
             height: 260,
-            bodyWorkflow: createDefaultEmbeddedWorkflow(),
           },
         },
       ],

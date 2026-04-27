@@ -416,7 +416,7 @@ export class BackendWorkflowExecutionManager {
       const node = session.executionOrder[i]
       const nodeState = node.nodeState || 'normal'
 
-      if (node.type === LOOP_BODY_NODE_TYPE && isGeneratedWorkflowNode(node)) {
+      if ((node.type === LOOP_BODY_NODE_TYPE && isGeneratedWorkflowNode(node)) || getCompositeParentId(node)) {
         continue
       }
 
@@ -946,6 +946,10 @@ if (typeof main === 'function') return main({ params, context })`)
   }
 
   private async executeLoopBody(session: ExecutionSession, bodyNode: WorkflowNode): Promise<unknown> {
+    if (getNodesForExecutionScope(session.nodes, bodyNode.id).length > 0) {
+      return this.executeScopedLoopBody(session, bodyNode)
+    }
+
     const bodyWorkflowData = bodyNode.data?.bodyWorkflow
     if (bodyWorkflowData && typeof bodyWorkflowData === 'object') {
       return this.executeEmbeddedWorkflow(

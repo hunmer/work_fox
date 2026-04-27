@@ -8,7 +8,7 @@ interface WorkflowShortcutHandlerOptions {
   undo?: () => void
   redo?: () => void
   copySelectedNodes: () => void
-  pasteClipboardNodes: () => void
+  pasteClipboardNodes: () => void | Promise<void>
   deleteSelected: () => void
   selectAllNodes: () => void
 }
@@ -77,7 +77,7 @@ export function useEditorShortcuts(
   deps: {
     saveWorkflow: () => Promise<void>
     copySelectedNodes: () => void
-    pasteClipboardNodes: () => void
+    pasteClipboardNodes: () => void | Promise<void>
     deleteSelected: () => void
     addSelectedNodes: (nodes: any[]) => void
     getNodes: { value: any[] }

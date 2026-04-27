@@ -1,11 +1,13 @@
 import { computed, watch, nextTick, onUnmounted } from 'vue'
 import { useVueFlow, MarkerType } from '@vue-flow/core'
 import type { WorkflowStore } from '@/stores/workflow'
-import type { WorkflowGroup } from '@/lib/workflow/types'
+import type { WorkflowGroup, WorkflowNode } from '@/lib/workflow/types'
+import { normalizeEmbeddedWorkflow } from '@shared/embedded-workflow'
 import {
   isHiddenWorkflowNode,
   isScopeBoundaryWorkflowNode,
   getCompositeParentId,
+  LOOP_BODY_ROLE,
   LOOP_BODY_NODE_TYPE,
 } from '@shared/workflow-composite'
 
@@ -58,8 +60,8 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     const maxX = Math.max(...children.map((node) => node.position.x + Number(node.data?.width || 220)))
     const maxY = Math.max(...children.map((node) => node.position.y + Number(node.data?.height || 120)))
 
-    const nextX = Math.max(0, minX - CONTAINER_PADDING.left)
-    const nextY = Math.max(0, minY - CONTAINER_PADDING.top)
+    const nextX = Math.max(0, scopeNode.position.x + minX - CONTAINER_PADDING.left)
+    const nextY = Math.max(0, scopeNode.position.y + minY - CONTAINER_PADDING.top)
     const nextWidth = Math.max(MIN_CONTAINER_SIZE.width, maxX - minX + CONTAINER_PADDING.left + CONTAINER_PADDING.right)
     const nextHeight = Math.max(MIN_CONTAINER_SIZE.height, maxY - minY + CONTAINER_PADDING.top + CONTAINER_PADDING.bottom)
 
@@ -79,6 +81,59 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
       width: nextWidth,
       height: nextHeight,
     })
+  }
+
+  function migrateEmbeddedLoopBodyNodes(): void {
+    const workflow = store.currentWorkflow
+    if (!workflow) return
+
+    for (const bodyNode of workflow.nodes) {
+      if (bodyNode.type !== LOOP_BODY_NODE_TYPE || bodyNode.composite?.role !== LOOP_BODY_ROLE) continue
+      if (workflow.nodes.some((node) => getCompositeParentId(node) === bodyNode.id)) continue
+
+      const embedded = bodyNode.data?.bodyWorkflow
+      if (!embedded || typeof embedded !== 'object') continue
+
+      const normalized = normalizeEmbeddedWorkflow(embedded, () => crypto.randomUUID())
+      const migratedNodes = normalized.nodes
+        .filter((node) => node.type !== 'start' && node.type !== 'end')
+        .map((node): WorkflowNode => ({
+          ...JSON.parse(JSON.stringify(node)),
+          composite: {
+            ...(node.composite ? JSON.parse(JSON.stringify(node.composite)) : {}),
+            rootId: bodyNode.composite?.rootId || bodyNode.id,
+            parentId: bodyNode.id,
+            generated: false,
+            hidden: false,
+          },
+        }))
+
+      if (!migratedNodes.length) continue
+
+      const migratedNodeIds = new Set(migratedNodes.map((node) => node.id))
+      const startNode = normalized.nodes.find((node) => node.type === 'start')
+      const endNode = normalized.nodes.find((node) => node.type === 'end')
+      const migratedEdges = normalized.edges
+        .map((edge) => {
+          const source = edge.source === startNode?.id ? bodyNode.id : edge.source
+          if (edge.target === endNode?.id) return null
+          if (source !== bodyNode.id && !migratedNodeIds.has(source)) return null
+          if (!migratedNodeIds.has(edge.target)) return null
+          return {
+            ...JSON.parse(JSON.stringify(edge)),
+            id: `e-${source}-${edge.sourceHandle ?? 'default'}-${edge.target}-${edge.targetHandle ?? 'default'}`,
+            source,
+            target: edge.target,
+            sourceHandle: source === bodyNode.id ? null : edge.sourceHandle ?? null,
+            targetHandle: edge.targetHandle ?? null,
+          }
+        })
+        .filter(Boolean) as NonNullable<typeof workflow.edges[number]>[]
+
+      workflow.nodes.push(...migratedNodes)
+      workflow.edges.push(...migratedEdges)
+      delete bodyNode.data.bodyWorkflow
+    }
   }
 
   function syncAllScopeBoundaries(): void {
@@ -222,7 +277,14 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     const node = store.currentWorkflow?.nodes.find(n => n.id === nodeId)
     if (!node) return null
     const size = getRenderedNodeSize(node.id, node.data)
-    return { x: position.x, y: position.y, width: size.width, height: size.height }
+    const parentId = getCompositeParentId(node)
+    const parent = parentId ? store.currentWorkflow?.nodes.find(n => n.id === parentId) : null
+    return {
+      x: position.x + (parent?.position.x ?? 0),
+      y: position.y + (parent?.position.y ?? 0),
+      width: size.width,
+      height: size.height,
+    }
   }
 
   function findGroupExternalCollision(groupId: string, bounds: Bounds): string | null {
@@ -271,6 +333,17 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
         width: childBounds.width,
         height: childBounds.height,
       })
+    }
+  }
+
+  function toWorkflowPosition(node: WorkflowNode, position: { x: number; y: number }): { x: number; y: number } {
+    const parentId = getCompositeParentId(node)
+    if (!parentId) return position
+    const parent = store.currentWorkflow?.nodes.find(n => n.id === parentId)
+    if (!parent) return position
+    return {
+      x: position.x - parent.position.x,
+      y: position.y - parent.position.y,
     }
   }
 
@@ -328,12 +401,13 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
         }
 
         const currentNode = store.currentWorkflow?.nodes.find((node) => node.id === change.id)
+        const nextPosition = currentNode ? toWorkflowPosition(currentNode, change.position) : change.position
         const previousPosition = currentNode ? { ...currentNode.position } : null
         const groupId = findGroupOfNode(change.id)
         const group = groupId ? store.currentWorkflow?.groups?.find(g => g.id === groupId) : null
         const currentGroupBounds = group ? computeGroupBoundingBox(group) : null
         const nextGroupBounds = groupId
-          ? expandGroupToContent(groupId, { id: change.id, position: change.position })
+          ? expandGroupToContent(groupId, { id: change.id, position: nextPosition })
           : null
 
         if (
@@ -349,7 +423,11 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
           continue
         }
 
-        store.updateNodePosition(change.id, change.position)
+        if (currentNode) {
+          store.updateNodePosition(change.id, nextPosition)
+        } else {
+          store.updateNodePosition(change.id, change.position)
+        }
         if (groupId && nextGroupBounds) {
           store.updateGroupBounds(groupId, nextGroupBounds)
         }
@@ -423,6 +501,7 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
   watch(() => store.currentWorkflow?.id, async (id) => {
     if (!id) return
     await nextTick()
+    migrateEmbeddedLoopBodyNodes()
     syncAllScopeBoundaries()
     const saved = getSavedViewport(id)
     if (saved) {
