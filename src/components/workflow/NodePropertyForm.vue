@@ -64,6 +64,11 @@ function getFieldValue(key: string): any {
   return activeNode.value?.data[key] ?? ''
 }
 
+function getTextFieldValue(key: string): string | number {
+  const value = getFieldValue(key)
+  return typeof value === 'string' || typeof value === 'number' ? value : ''
+}
+
 function setFieldValue(key: string, value: any) {
   if (!props.node && store.selectedEmbeddedNode) {
     const embedded = store.selectedEmbeddedNode
@@ -86,11 +91,16 @@ function setFieldValue(key: string, value: any) {
 }
 
 function insertVariable(propKey: string, variablePath: string) {
-  const current = getFieldValue(propKey) || ''
+  const current = getTextFieldValue(propKey)
   setFieldValue(propKey, current + variablePath)
 }
 
 function getArrayItems(key: string): Record<string, any>[] {
+  const value = getFieldValue(key)
+  return Array.isArray(value) ? value : []
+}
+
+function getConditionItems(key: string) {
   const value = getFieldValue(key)
   return Array.isArray(value) ? value : []
 }
@@ -210,7 +220,7 @@ function insertArrayVariable(propKey: string, index: number, fieldKey: string, v
         class="h-7"
       >
         <InputGroupInput
-          :model-value="getFieldValue(prop.key)"
+          :model-value="getTextFieldValue(prop.key)"
           :readonly="prop.readonly"
           :placeholder="prop.label"
           class="text-xs"
@@ -228,8 +238,15 @@ function insertArrayVariable(propKey: string, index: number, fieldKey: string, v
       </InputGroup>
 
       <template v-else>
+        <ConditionEditor
+          v-if="prop.type === 'conditions'"
+          :model-value="getConditionItems(prop.key)"
+          :exclude-node-id="activeNodeId"
+          @update:model-value="setFieldValue(prop.key, $event)"
+        />
+
         <CodeEditor
-          v-if="prop.type === 'code'"
+          v-else-if="prop.type === 'code'"
           :model-value="getFieldValue(prop.key)"
           :language="prop.codeLanguage || 'javascript'"
           :readonly="prop.readonly"
@@ -412,7 +429,5 @@ function insertArrayVariable(propKey: string, index: number, fieldKey: string, v
     >
       该节点无配置参数
     </div>
-
-    <ConditionEditor v-if="definition.type === 'switch' && !props.node" />
   </div>
 </template>

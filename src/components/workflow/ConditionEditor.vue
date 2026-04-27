@@ -14,15 +14,33 @@ import { X, GripVertical } from 'lucide-vue-next'
 const store = useWorkflowStore()
 const { updateNodeInternals } = useVueFlow()
 
+const props = defineProps<{
+  modelValue?: ConditionItem[]
+  excludeNodeId?: string | null
+}>()
+
+const emit = defineEmits<{
+  'update:modelValue': [value: ConditionItem[]]
+}>()
+
+const excludeNodeId = computed(() => props.excludeNodeId ?? store.effectiveSelectedNodeId)
+
 const conditions = computed<ConditionItem[]>({
   get: () => {
-    const value = store.selectedNode?.data?.conditions
+    const value = props.modelValue ?? store.selectedNode?.data?.conditions
     return Array.isArray(value) ? value : []
   },
   set: (val) => {
-    if (store.selectedNodeId) {
-      store.updateNodeData(store.selectedNodeId, { conditions: Array.isArray(val) ? val : [] })
-      nextTick(() => updateNodeInternals([store.selectedNodeId!]))
+    const next = Array.isArray(val) ? val : []
+    emit('update:modelValue', next)
+
+    if (props.modelValue === undefined && store.selectedNodeId) {
+      store.updateNodeData(store.selectedNodeId, { conditions: next })
+    }
+
+    const nodeId = excludeNodeId.value
+    if (nodeId) {
+      nextTick(() => updateNodeInternals([nodeId]))
     }
   },
 })
@@ -57,9 +75,9 @@ function insertVariable(index: number, variablePath: string) {
 }
 
 function onDragEnd() {
-  // vuedraggable 已修改 modelValue 数组顺序，无需额外操作
   nextTick(() => {
-    if (store.selectedNodeId) updateNodeInternals([store.selectedNodeId])
+    const nodeId = excludeNodeId.value
+    if (nodeId) updateNodeInternals([nodeId])
   })
 }
 </script>
@@ -99,8 +117,8 @@ function onDragEnd() {
                 @update:model-value="updateCondition(idx, 'variable', String($event))"
               />
               <VariablePicker
-                v-if="store.selectedNodeId"
-                :exclude-node-id="store.selectedNodeId"
+                v-if="excludeNodeId"
+                :exclude-node-id="excludeNodeId"
                 @select="insertVariable(idx, $event)"
               />
             </div>
