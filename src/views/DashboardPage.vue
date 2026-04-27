@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import DashboardSidebar from '@/components/dashboard/DashboardSidebar.vue'
 import StatsCards from '@/components/dashboard/StatsCards.vue'
@@ -7,11 +7,23 @@ import ExecutionChart from '@/components/dashboard/ExecutionChart.vue'
 import ExecutionHistoryTable from '@/components/dashboard/ExecutionHistoryTable.vue'
 import WorkflowDetailPanel from '@/components/dashboard/WorkflowDetailPanel.vue'
 import { useDashboardStore } from '@/stores/dashboard'
+import { wsBridge } from '@/lib/ws-bridge'
 
 const store = useDashboardStore()
+const wsConnected = ref(wsBridge.isConnected())
+
+const handleWsConnected = () => { wsConnected.value = true }
+const handleWsDisconnected = () => { wsConnected.value = false }
 
 onMounted(() => {
+  wsBridge.on('ws:connected', handleWsConnected)
+  wsBridge.on('ws:disconnected', handleWsDisconnected)
   store.init()
+})
+
+onUnmounted(() => {
+  wsBridge.off('ws:connected', handleWsConnected)
+  wsBridge.off('ws:disconnected', handleWsDisconnected)
 })
 
 function handleSelectWorkflow(workflowId: string | null) {
@@ -40,6 +52,9 @@ function handleRangeChange(range: 'today' | 'week' | 'all') {
       @select="handleSelectWorkflow"
     />
     <SidebarInset>
+      <div v-if="!wsConnected" class="border-b bg-destructive/10 px-4 py-2 text-center text-sm text-destructive">
+        后端服务未连接，统计数据无法加载
+      </div>
       <header class="flex h-12 items-center border-b px-4">
         <h1 class="text-lg font-semibold">
           {{ store.isOverviewMode ? '统计概览' : store.workflowDetail?.workflow.name ?? '工作流详情' }}
