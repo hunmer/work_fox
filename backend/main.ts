@@ -20,6 +20,8 @@ import { registerFsChannels } from './ws/fs-channels'
 import { ChatRuntime } from './chat/chat-runtime'
 import { registerChatChannels } from './ws/chat-channels'
 import { ClientNodeCache } from './chat/client-node-cache'
+import { DashboardStatsStore } from './dashboard/stats-store'
+import { registerDashboardChannels } from './ws/dashboard-channels'
 
 async function main(): Promise<void> {
   const config = loadBackendConfig()
@@ -70,6 +72,15 @@ async function main(): Promise<void> {
     appVersion: '0.0.12',
   })
   registerFsChannels(backend.router)
+  // Dashboard
+  const dashboardStatsStore = new DashboardStatsStore(
+    paths,
+    () => workflowStore.listWorkflows(),
+    (id: string) => workflowStore.getWorkflow(id),
+    () => executionManager.getRunningSessionCount(),
+    () => plugins.list().length,
+  )
+  registerDashboardChannels(backend.router, { dashboardStatsStore })
   backend.connections.onClientDisconnected((clientId) => {
     clientNodeCache.unregisterClient(clientId)
   })

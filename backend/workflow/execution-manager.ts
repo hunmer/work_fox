@@ -121,6 +121,14 @@ export class BackendWorkflowExecutionManager {
 
   constructor(private deps: ExecutionManagerDeps) {}
 
+  getRunningSessionCount(): number {
+    let count = 0
+    for (const session of this.sessions.values()) {
+      if (session.status === 'running' || session.status === 'paused') count++
+    }
+    return count
+  }
+
   async execute(request: WorkflowExecuteRequest, ownerClientId: string): Promise<WorkflowExecuteResponse> {
     const workflow = this.deps.workflowStore.getWorkflow(request.workflowId)
     if (!workflow) {
