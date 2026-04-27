@@ -30,27 +30,44 @@ if (!canvas) {
 const store = useWorkflowStore()
 
 // ── 右键菜单上下文 ──
-const menuContext = ref<'pane' | 'node'>('pane')
+const menuContext = ref<'pane' | 'node' | 'embedded-node'>('pane')
 const contextNodeId = ref<string | null>(null)
+const contextHostNodeId = ref<string | null>(null)
 
 /** 在捕获阶段检测右键目标，先于 ContextMenu trigger 设置状态 */
 function handleContextMenuCapture(event: MouseEvent) {
   if (store.isPreview) return
   const target = event.target as HTMLElement
   const nodeEl = target.closest('.vue-flow__node')
+  const embeddedEditor = target.closest('[data-embedded-workflow="true"]') as HTMLElement | null
+  if (embeddedEditor && (!nodeEl || !embeddedEditor.contains(nodeEl))) {
+    menuContext.value = 'pane'
+    contextNodeId.value = null
+    contextHostNodeId.value = null
+    return
+  }
   if (nodeEl) {
     const nodeId = nodeEl.getAttribute('data-id')
+    if (nodeId && embeddedEditor?.contains(nodeEl)) {
+      menuContext.value = 'embedded-node'
+      contextNodeId.value = nodeId
+      contextHostNodeId.value = embeddedEditor.dataset.hostNodeId || null
+      return
+    }
     // 排除 group 虚拟节点
     if (nodeId && !store.currentWorkflow?.groups?.some(g => g.id === nodeId)) {
       menuContext.value = 'node'
       contextNodeId.value = nodeId
+      contextHostNodeId.value = null
     } else {
       menuContext.value = 'pane'
       contextNodeId.value = null
+      contextHostNodeId.value = null
     }
   } else {
     menuContext.value = 'pane'
     contextNodeId.value = null
+    contextHostNodeId.value = null
   }
 }
 
@@ -133,7 +150,8 @@ function handleDeleteNode() {
 
 function handleShowNodeInfo() {
   const id = targetNodeIds.value[0]
-  if (id) canvas.openNodeInfoDialog(id)
+  if (!id) return
+  canvas.openNodeInfoDialog(id, contextHostNodeId.value ? { hostNodeId: contextHostNodeId.value } : undefined)
 }
 
 function handleShowGroupPicker() {
@@ -210,6 +228,13 @@ function handleBatchDelete() {
         </template>
 
         <!-- ── 节点菜单项（节点右键 或 画布右键有选中节点时显示） ── -->
+        <template v-if="menuContext === 'embedded-node'">
+          <ContextMenuItem @click="handleShowNodeInfo">
+            <Info class="w-4 h-4 mr-2" />
+            查看节点信息
+          </ContextMenuItem>
+        </template>
+
         <template v-if="menuContext === 'node' || (menuContext === 'pane' && targetNodeIds.length > 0)">
           <ContextMenuSeparator v-if="menuContext === 'pane'" />
 

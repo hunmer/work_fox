@@ -95,6 +95,36 @@ const MUSIC_FORMATS = [
   { label: 'hex (默认)', value: 'hex' },
 ]
 
+const HER_MESSAGE_NAMES = {
+  system: 'AI',
+  user_system: '用户',
+  group: '场景',
+  sample_message_user: '示例用户',
+  sample_message_ai: '示例AI',
+  user: '用户',
+  assistant: 'AI',
+}
+
+const HER_MESSAGE_ROLES = new Set(Object.keys(HER_MESSAGE_NAMES))
+
+function cleanHerMessages(raw, defaultRole = 'user') {
+  const items = Array.isArray(raw)
+    ? raw
+    : (raw != null ? [{ role: defaultRole, content: raw }] : [])
+
+  return items
+    .filter(m => m != null)
+    .map(m => {
+      const role = HER_MESSAGE_ROLES.has(m.role) ? m.role : defaultRole
+      const content = typeof m.content === 'string' ? m.content : String(m.content ?? '')
+      const message = { role, content }
+      if (m.name) message.name = String(m.name)
+      else if (HER_MESSAGE_NAMES[role]) message.name = HER_MESSAGE_NAMES[role]
+      return message
+    })
+    .filter(m => m.content.trim())
+}
+
 module.exports = {
   nodes: [
     // ============================
@@ -110,7 +140,15 @@ module.exports = {
         { key: 'apiKey', label: 'API Key', type: 'text', required: true, default: '{{ __config__["workfox.minimax"]["apiKey"] }}' },
         { key: 'model', label: '模型', type: 'select', default: 'MiniMax-M2.7', options: CHAT_MODELS },
         { key: 'systemPrompt', label: '系统提示词', type: 'textarea', tooltip: '系统角色的行为指令，定义 AI 的角色和约束' },
-        { key: 'messages', label: '消息列表', type: 'textarea', required: true, tooltip: 'JSON 数组格式的消息列表，如 [{"role":"user","content":"你好"}]。支持 role: system/user/assistant/tool，content 支持文本和图片' },
+        { key: 'messages', label: '消息列表', type: 'array', required: true, tooltip: '对话消息列表', fields: [
+          { key: 'role', label: '角色', type: 'select', options: [
+            { label: '用户', value: 'user' },
+            { label: '助手', value: 'assistant' },
+            { label: '系统', value: 'system' },
+            { label: '开发者', value: 'developer' },
+          ], default: 'user' },
+          { key: 'content', label: '内容', type: 'text', placeholder: '消息内容' },
+        ] },
         { key: 'temperature', label: '温度', type: 'number', default: 0.7, tooltip: '0-1，控制随机性，越高越随机，建议取值 0.7-1.0' },
         { key: 'topP', label: 'Top P', type: 'number', default: 0.95, tooltip: '0-1，核采样参数' },
         { key: 'maxCompletionTokens', label: '最大输出 Token', type: 'number', tooltip: '最大生成 token 数' },
@@ -131,16 +169,14 @@ module.exports = {
         const baseUrl = getBaseUrl(args)
         const headers = getHeaders(args)
 
-        let messages
-        try {
-          messages = typeof args.messages === 'string' ? JSON.parse(args.messages) : args.messages
-        } catch {
-          // 兜底：纯文本作为单条 user 消息
-          messages = [{ role: 'user', content: args.messages }]
-        }
-        if (!Array.isArray(messages) || messages.length === 0) {
-          throw new Error('消息列表不能为空')
-        }
+        const rawMessages = Array.isArray(args.messages) && args.messages.length > 0
+          ? args.messages
+          : [{ role: 'user', content: args.messages }]
+        // 清洗：去掉前端 id，补全 role 默认值
+        const messages = rawMessages.map(m => ({
+          role: m.role || 'user',
+          content: m.content ?? '',
+        }))
 
         // 如果有 systemPrompt，插入到 messages 最前面
         if (args.systemPrompt) {
@@ -160,7 +196,8 @@ module.exports = {
 
         const choice = result.choices?.[0]
         if (!choice) {
-          throw new Error(`文本合成失败: 无有效响应 (id: ${result.id})`)
+          const errMsg = result.error?.message || result.base_resp?.status_msg || JSON.stringify(result).slice(0, 200)
+          throw new Error(`文本合成失败: ${errMsg}`)
         }
 
         const output = choice.message
@@ -193,8 +230,21 @@ module.exports = {
         { key: 'systemPrompt', label: '角色人设', type: 'textarea', tooltip: '角色的系统设定，定义 AI 的性格、背景、说话风格' },
         { key: 'userSystem', label: '用户设定', type: 'textarea', tooltip: '用户角色的系统设定（user_system role）' },
         { key: 'group', label: '群组设定', type: 'textarea', tooltip: '世界观/场景设定（group role）' },
-        { key: 'sampleMessages', label: '示例对话', type: 'textarea', tooltip: 'JSON 数组，用 sample_message_user / sample_message_ai 角色提供对话示例' },
-        { key: 'messages', label: '消息列表', type: 'textarea', required: true, tooltip: 'JSON 数组，user/assistant 消息列表' },
+        { key: 'sampleMessages', label: '示例对话', type: 'array', tooltip: '用 sample_message_user / sample_message_ai 角色提供对话示例', fields: [
+          { key: 'role', label: '角色', type: 'select', options: [
+            { label: '示例用户', value: 'sample_message_user' },
+            { label: '示例AI', value: 'sample_message_ai' },
+          ], default: 'sample_message_user' },
+          { key: 'content', label: '内容', type: 'text', placeholder: '示例消息内容' },
+        ] },
+        { key: 'messages', label: '消息列表', type: 'array', required: true, tooltip: '对话消息列表', fields: [
+          { key: 'role', label: '角色', type: 'select', options: [
+            { label: '用户', value: 'user' },
+            { label: '助手', value: 'assistant' },
+            { label: '系统', value: 'system' },
+          ], default: 'user' },
+          { key: 'content', label: '内容', type: 'text', placeholder: '消息内容' },
+        ] },
         { key: 'temperature', label: '温度', type: 'number', default: 1.0, tooltip: '0-1，控制随机性，默认 1.0' },
         { key: 'topP', label: 'Top P', type: 'number', default: 0.95, tooltip: '0-1，核采样参数' },
         { key: 'maxCompletionTokens', label: '最大输出 Token', type: 'number', tooltip: '最大 2048' },
@@ -213,29 +263,19 @@ module.exports = {
         const baseUrl = getBaseUrl(args)
         const headers = getHeaders(args)
 
-        let messages = []
-        try {
-          messages = typeof args.messages === 'string' ? JSON.parse(args.messages) : (args.messages || [])
-        } catch {
-          messages = [{ role: 'user', content: args.messages }]
-        }
+        const messages = Array.isArray(args.messages) && args.messages.length > 0
+          ? cleanHerMessages(args.messages)
+          : cleanHerMessages(args.messages, 'user')
 
         // 按顺序构建消息列表：角色设定 -> 示例对话 -> 实际对话
         const builtMessages = []
-        if (args.systemPrompt) builtMessages.push({ role: 'system', content: args.systemPrompt })
-        if (args.userSystem) builtMessages.push({ role: 'user_system', content: args.userSystem })
-        if (args.group) builtMessages.push({ role: 'group', content: args.group })
+        if (args.systemPrompt) builtMessages.push(...cleanHerMessages([{ role: 'system', content: args.systemPrompt }]))
+        if (args.userSystem) builtMessages.push(...cleanHerMessages([{ role: 'user_system', content: args.userSystem }]))
+        if (args.group) builtMessages.push(...cleanHerMessages([{ role: 'group', content: args.group }]))
 
         // 示例对话
-        if (args.sampleMessages) {
-          try {
-            const samples = typeof args.sampleMessages === 'string'
-              ? JSON.parse(args.sampleMessages)
-              : args.sampleMessages
-            builtMessages.push(...samples)
-          } catch {
-            ctx.logger.warn('示例对话 JSON 解析失败，已跳过')
-          }
+        if (Array.isArray(args.sampleMessages) && args.sampleMessages.length > 0) {
+          builtMessages.push(...cleanHerMessages(args.sampleMessages, 'sample_message_user'))
         }
 
         builtMessages.push(...messages)
@@ -249,11 +289,12 @@ module.exports = {
         }
 
         ctx.logger.info(`角色对话: 消息数=${builtMessages.length}`)
-        const result = await ctx.api.postJson(`${baseUrl}/v1/text/chatcompletion_v2`, { headers, body, timeout: 120000 })
+        const result = await ctx.api.postJson(`${baseUrl}/v1/chat/completions`, { headers, body, timeout: 120000 })
 
         const choice = result.choices?.[0]
         if (!choice) {
-          throw new Error(`角色对话失败: 无有效响应 (id: ${result.id})`)
+          const errMsg = result.error?.message || result.base_resp?.status_msg || JSON.stringify(result).slice(0, 200)
+          throw new Error(`角色对话失败: ${errMsg}`)
         }
 
         ctx.logger.info(`角色对话完成: tokens=${result.usage?.total_tokens}, id=${result.id}`)
@@ -752,7 +793,7 @@ module.exports = {
         const headers = getHeaders(args)
 
         ctx.logger.info(`查询视频任务: taskId=${args.taskId}`)
-        const result = await ctx.api.getJson(`${baseUrl}/v1/query/video_generation?task_id=${encodeURIComponent(args.taskId)}`, { headers, timeout: 30000 })
+        const result = await ctx.api.fetchJson(`${baseUrl}/v1/query/video_generation?task_id=${encodeURIComponent(args.taskId)}`, { headers, timeout: 30000 })
 
         if (result.base_resp?.status_code !== 0) {
           throw new Error(`查询失败: ${result.base_resp?.status_msg || '未知错误'} (code: ${result.base_resp?.status_code})`)
@@ -802,7 +843,7 @@ module.exports = {
         const headers = getHeaders(args)
 
         ctx.logger.info(`获取视频下载链接: fileId=${args.fileId}`)
-        const result = await ctx.api.getJson(`${baseUrl}/v1/files/retrieve?file_id=${encodeURIComponent(args.fileId)}`, { headers, timeout: 30000 })
+        const result = await ctx.api.fetchJson(`${baseUrl}/v1/files/retrieve?file_id=${encodeURIComponent(args.fileId)}`, { headers, timeout: 30000 })
 
         if (result.base_resp?.status_code !== 0) {
           throw new Error(`获取下载链接失败: ${result.base_resp?.status_msg || '未知错误'} (code: ${result.base_resp?.status_code})`)

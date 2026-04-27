@@ -13,6 +13,36 @@ function getHeaders(args) {
   }
 }
 
+const HER_MESSAGE_NAMES = {
+  system: 'AI',
+  user_system: '用户',
+  group: '场景',
+  sample_message_user: '示例用户',
+  sample_message_ai: '示例AI',
+  user: '用户',
+  assistant: 'AI',
+}
+
+const HER_MESSAGE_ROLES = new Set(Object.keys(HER_MESSAGE_NAMES))
+
+function cleanHerMessages(raw, defaultRole = 'user') {
+  const items = Array.isArray(raw)
+    ? raw
+    : (raw != null ? [{ role: defaultRole, content: raw }] : [])
+
+  return items
+    .filter(m => m != null)
+    .map(m => {
+      const role = HER_MESSAGE_ROLES.has(m.role) ? m.role : defaultRole
+      const content = typeof m.content === 'string' ? m.content : String(m.content ?? '')
+      const message = { role, content }
+      if (m.name) message.name = String(m.name)
+      else if (HER_MESSAGE_NAMES[role]) message.name = HER_MESSAGE_NAMES[role]
+      return message
+    })
+    .filter(m => m.content.trim())
+}
+
 module.exports = {
   tools: [
     {
@@ -252,18 +282,19 @@ module.exports = {
         } catch {
           messages = [{ role: 'user', content: args.messages }]
         }
+        messages = cleanHerMessages(messages)
 
         const builtMessages = []
-        if (args.systemPrompt) builtMessages.push({ role: 'system', content: args.systemPrompt })
-        if (args.userSystem) builtMessages.push({ role: 'user_system', content: args.userSystem })
-        if (args.group) builtMessages.push({ role: 'group', content: args.group })
+        if (args.systemPrompt) builtMessages.push(...cleanHerMessages([{ role: 'system', content: args.systemPrompt }]))
+        if (args.userSystem) builtMessages.push(...cleanHerMessages([{ role: 'user_system', content: args.userSystem }]))
+        if (args.group) builtMessages.push(...cleanHerMessages([{ role: 'group', content: args.group }]))
 
         if (args.sampleMessages) {
           try {
             const samples = typeof args.sampleMessages === 'string'
               ? JSON.parse(args.sampleMessages)
               : args.sampleMessages
-            builtMessages.push(...samples)
+            builtMessages.push(...cleanHerMessages(samples, 'sample_message_user'))
           } catch { /* skip invalid samples */ }
         }
 
@@ -277,7 +308,7 @@ module.exports = {
           ...(args.maxCompletionTokens && { max_completion_tokens: Number(args.maxCompletionTokens) }),
         }
 
-        const result = await api.postJson(`${baseUrl}/v1/text/chatcompletion_v2`, { headers, body, timeout: 120000 })
+        const result = await api.postJson(`${baseUrl}/v1/chat/completions`, { headers, body, timeout: 120000 })
         const choice = result.choices?.[0]
         if (!choice) {
           return { success: false, message: `角色对话失败: 无有效响应` }
@@ -456,7 +487,7 @@ module.exports = {
       }
 
       case 'minimax_video_query': {
-        const result = await api.getJson(`${baseUrl}/v1/query/video_generation?task_id=${encodeURIComponent(args.taskId)}`, { headers, timeout: 30000 })
+        const result = await api.fetchJson(`${baseUrl}/v1/query/video_generation?task_id=${encodeURIComponent(args.taskId)}`, { headers, timeout: 30000 })
         if (result.base_resp?.status_code !== 0) {
           return { success: false, message: `查询失败: ${result.base_resp?.status_msg}` }
         }
@@ -474,7 +505,7 @@ module.exports = {
       }
 
       case 'minimax_video_download': {
-        const result = await api.getJson(`${baseUrl}/v1/files/retrieve?file_id=${encodeURIComponent(args.fileId)}`, { headers, timeout: 30000 })
+        const result = await api.fetchJson(`${baseUrl}/v1/files/retrieve?file_id=${encodeURIComponent(args.fileId)}`, { headers, timeout: 30000 })
         if (result.base_resp?.status_code !== 0) {
           return { success: false, message: `获取下载链接失败: ${result.base_resp?.status_msg}` }
         }

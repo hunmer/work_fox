@@ -574,6 +574,7 @@ function handleSelectDialogOpenChange(open: boolean) {
     ref="editorRef"
     class="embedded-workflow-editor relative h-full w-full nodrag nopan"
     data-embedded-workflow="true"
+    :data-host-node-id="hostNodeId"
     tabindex="0"
     @pointerdown="focusEditor"
     @dragover="onDragOver"

@@ -64,6 +64,7 @@ import { useEdgeInsert } from '@/composables/workflow/useEdgeInsert'
 import { useFlowCanvas } from '@/composables/workflow/useFlowCanvas'
 import { useWorkflowFileActions } from '@/composables/workflow/useWorkflowFileActions'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
+import type { WorkflowNode } from '@/lib/workflow/types'
 import { useClipboard } from '@/composables/workflow/useClipboard'
 import { useEditorShortcuts } from '@/composables/workflow/useEditorShortcuts'
 import { useAgentSettingsStore } from '@/stores/agent-settings'
@@ -90,6 +91,7 @@ const nodeSelectOpen = ref(false)
 const paneContextMenuPosition = ref<{ x: number; y: number } | null>(null)
 const nodeInfoDialogOpen = ref(false)
 const nodeInfoDialogNodeId = ref<string | null>(null)
+const nodeInfoDialogHostNodeId = ref<string | null>(null)
 const groupPickerDialogOpen = ref(false)
 const groupPickerDialogNodeId = ref<string | null>(null)
 const pluginsDialogOpen = ref(false)
@@ -355,8 +357,9 @@ function onNodeSelectFromPane(type: string) {
   paneContextMenuPosition.value = null
 }
 
-function openNodeInfoDialog(nodeId: string) {
+function openNodeInfoDialog(nodeId: string, options?: { hostNodeId?: string }) {
   nodeInfoDialogNodeId.value = nodeId
+  nodeInfoDialogHostNodeId.value = options?.hostNodeId ?? null
   nodeInfoDialogOpen.value = true
 }
 
@@ -371,15 +374,31 @@ function handleAddToGroup(groupId: string) {
   groupPickerDialogOpen.value = false
 }
 
-async function copyNodeInfo() {
-  if (!nodeInfoDialogNodeId.value) return
+function getNodeInfoTarget(): { node: WorkflowNode; hostNodeId: string | null } | null {
   const nodeId = nodeInfoDialogNodeId.value
+  if (!nodeId) return null
+
+  const hostNodeId = nodeInfoDialogHostNodeId.value
+  if (hostNodeId) {
+    const hostNode = store.currentWorkflow?.nodes.find((n) => n.id === hostNodeId)
+    const embeddedNode = hostNode?.data?.bodyWorkflow?.nodes?.find((n: WorkflowNode) => n.id === nodeId)
+    return embeddedNode ? { node: embeddedNode, hostNodeId } : null
+  }
+
   const node = store.currentWorkflow?.nodes.find((n) => n.id === nodeId)
-  if (!node) return
+  return node ? { node, hostNodeId: null } : null
+}
+
+function buildNodeInfoData() {
+  const target = getNodeInfoTarget()
+  if (!target) return {}
+  const { node, hostNodeId } = target
+  const nodeId = node.id
   const step = store.executionLog?.steps.find((s) => s.nodeId === nodeId)
   const definition = getNodeDefinition(node.type)
-  const data = {
+  return {
     id: nodeId,
+    embeddedInNodeId: hostNodeId,
     type: node.type,
     label: node.label || definition?.label || node.type,
     nodeState: node.nodeState || 'normal',
@@ -389,6 +408,11 @@ async function copyNodeInfo() {
       ? { status: step.status, startedAt: step.startedAt, finishedAt: step.finishedAt, input: step.input, output: step.output, error: step.error, logs: step.logs }
       : null,
   }
+}
+
+async function copyNodeInfo() {
+  if (!nodeInfoDialogNodeId.value) return
+  const data = buildNodeInfoData()
   await navigator.clipboard.writeText(JSON.stringify(data, null, 2))
 }
 
@@ -742,23 +766,7 @@ function onConnect(params: any) {
         <div class="flex-1 overflow-auto">
           <JsonEditor
             v-if="nodeInfoDialogNodeId"
-            :model-value="(() => {
-              const node = store.currentWorkflow?.nodes.find(n => n.id === nodeInfoDialogNodeId)
-              if (!node) return {}
-              const def = getNodeDefinition(node.type)
-              const step = store.executionLog?.steps.find(s => s.nodeId === nodeInfoDialogNodeId)
-              return {
-                id: node.id,
-                type: node.type,
-                label: node.label || def?.label || node.type,
-                nodeState: node.nodeState || 'normal',
-                definition: { type: def?.type, icon: def?.icon, category: def?.category },
-                data: node.data,
-                execution: step
-                  ? { status: step.status, startedAt: step.startedAt, finishedAt: step.finishedAt, input: step.input, output: step.output, error: step.error, logs: step.logs }
-                  : null,
-              }
-            })()"
+            :model-value="buildNodeInfoData()"
             :readonly="true"
             :height="400"
           />

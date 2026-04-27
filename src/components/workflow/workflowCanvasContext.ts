@@ -26,7 +26,7 @@ export interface WorkflowCanvasContext {
   onEdgeInsertNode: (edgeId: string, sourceId: string, targetId: string, sourceHandle: string | null) => void
   fitView: () => void
   openNodeSelectAtPosition: (event: MouseEvent) => void
-  openNodeInfoDialog: (nodeId: string) => void
+  openNodeInfoDialog: (nodeId: string, options?: { hostNodeId?: string }) => void
   openGroupPickerDialog: (nodeId: string) => void
 }
 

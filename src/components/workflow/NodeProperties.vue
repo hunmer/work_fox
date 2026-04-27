@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
-import { Bug, Loader2, CheckCircle2, XCircle, Import, FileDown, Plus, Trash2, Pencil, Check } from 'lucide-vue-next'
+import { Bug, Loader2, CheckCircle2, XCircle, Import, FileDown, Plus, Trash2, Pencil, Check, Copy } from 'lucide-vue-next'
 import { JsonEditor } from '@/components/ui/json-editor'
 import OutputFieldEditor from './OutputFieldEditor.vue'
 import NodePropertyForm from './NodePropertyForm.vue'
@@ -502,11 +502,15 @@ function confirmImport() {
           <!-- 错误信息 -->
           <div
             v-if="store.debugNodeResult!.error"
-            class="rounded bg-red-500/10 p-2 mb-2"
+            class="rounded bg-red-500/10 p-2 mb-2 flex items-start gap-2"
           >
-            <p class="text-[11px] text-red-500 font-mono break-all">
+            <p class="text-[11px] text-red-500 font-mono break-all flex-1 min-w-0">
               {{ store.debugNodeResult!.error }}
             </p>
+            <Copy
+              class="h-3.5 w-3.5 text-red-400 hover:text-red-300 cursor-pointer shrink-0 mt-0.5"
+              @click="navigator.clipboard.writeText(store.debugNodeResult!.error!)"
+            />
           </div>
           <!-- 输出结果 -->
           <div
