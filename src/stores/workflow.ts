@@ -26,6 +26,7 @@ import {
   LOOP_BODY_ROLE,
   LOOP_NODE_TYPE,
   LOOP_BODY_SOURCE_HANDLE,
+  LOOP_NEXT_SOURCE_HANDLE,
 } from '@shared/workflow-composite'
 
 export interface WorkflowChanges {
@@ -488,34 +489,62 @@ function createEditActions(
     return value
   }
 
+  function clearStartInputFieldValues(workflow: { nodes?: WorkflowNode[] }): void {
+    if (!Array.isArray(workflow.nodes)) return
+    for (const node of workflow.nodes) {
+      if (node.type === 'start' && Array.isArray(node.data?.inputFields)) {
+        node.data.inputFields = node.data.inputFields.map((field: OutputField) => {
+          const next = { ...field }
+          delete next.value
+          return next
+        })
+      }
+      const bodyWorkflow = node.data?.bodyWorkflow
+      if (bodyWorkflow && typeof bodyWorkflow === 'object') {
+        clearStartInputFieldValues(bodyWorkflow as { nodes?: WorkflowNode[] })
+      }
+    }
+  }
+
   function remapSelectedWorkflowNodes(
     nodes: WorkflowNode[],
     edges: Workflow['edges'],
     selectedIds: Set<string>,
+    selectedRootIds: Set<string>,
     startNodeId: string,
     endNodeId: string,
   ): { nodes: WorkflowNode[]; edges: Workflow['edges'] } {
     const selectedNodes = nodes.filter((node) => selectedIds.has(node.id)).map((node) => cloneData(node))
     const selectedEdges = edges.filter((edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target)).map((edge) => cloneData(edge))
-    const incomingNodes = new Set(edges.filter((edge) => !selectedIds.has(edge.source) && selectedIds.has(edge.target)).map((edge) => edge.target))
-    const outgoingNodes = new Set(edges.filter((edge) => selectedIds.has(edge.source) && !selectedIds.has(edge.target)).map((edge) => edge.source))
-    const targetNodes = incomingNodes.size > 0 ? incomingNodes : new Set(selectedNodes.map((node) => node.id))
-    const sourceNodes = outgoingNodes.size > 0 ? outgoingNodes : new Set(selectedNodes.map((node) => node.id))
+    const selectedRootNodes = nodes.filter((node) => selectedRootIds.has(node.id)).map((node) => cloneData(node))
+    const rootEdges = edges.filter((edge) => selectedRootIds.has(edge.source) && selectedRootIds.has(edge.target))
+    const firstNode = [...selectedRootNodes]
+      .filter((node) => !rootEdges.some((edge) => edge.target === node.id))
+      .sort((a, b) => a.position.x - b.position.x || a.position.y - b.position.y)[0]
+      ?? [...selectedRootNodes].sort((a, b) => a.position.x - b.position.x || a.position.y - b.position.y)[0]
+    const lastNode = [...selectedRootNodes]
+      .filter((node) => !rootEdges.some((edge) => edge.source === node.id))
+      .sort((a, b) => b.position.x - a.position.x || b.position.y - a.position.y)[0]
+      ?? [...selectedRootNodes].sort((a, b) => b.position.x - a.position.x || b.position.y - a.position.y)[0]
+    const firstTargetHandle = firstNode
+      ? rootEdges.find((edge) => edge.target === firstNode.id)?.targetHandle ?? null
+      : null
 
-    const entryEdges = [...targetNodes].map((target) => ({
-      id: `e-${startNodeId}-default-${target}-default`,
+    const entryEdges = firstNode ? [{
+      id: `e-${startNodeId}-default-${firstNode.id}-${firstTargetHandle ?? 'default'}`,
       source: startNodeId,
-      target,
+      target: firstNode.id,
       sourceHandle: null,
-      targetHandle: null,
-    }))
-    const exitEdges = [...sourceNodes].map((source) => ({
-      id: `e-${source}-default-${endNodeId}-default`,
-      source,
+      targetHandle: firstTargetHandle,
+    }] : []
+    const exitSourceHandle = lastNode?.type === LOOP_NODE_TYPE ? LOOP_NEXT_SOURCE_HANDLE : null
+    const exitEdges = lastNode ? [{
+      id: `e-${lastNode.id}-${exitSourceHandle ?? 'default'}-${endNodeId}-default`,
+      source: lastNode.id,
       target: endNodeId,
-      sourceHandle: null,
+      sourceHandle: exitSourceHandle,
       targetHandle: null,
-    }))
+    }] : []
 
     return {
       nodes: selectedNodes,
@@ -937,13 +966,21 @@ function createEditActions(
     const workflow = currentWorkflow.value
     if (!workflow) return null
 
-    const selectedIds = new Set(nodeIds.filter((id) => canDeleteNode(id)))
-    if (selectedIds.size < 2) return null
-    if ([...selectedIds].some((id) => {
+    const rootIds = new Set(nodeIds.filter((id) => canDeleteNode(id)))
+    if (rootIds.size < 2) return null
+    if ([...rootIds].some((id) => {
       const type = getNode(id)?.type
       return type === 'start' || type === 'end'
     })) {
       return null
+    }
+
+    const selectedIds = new Set<string>()
+    for (const node of workflow.nodes) {
+      const rootId = getCompositeRootId(node)
+      if (rootIds.has(rootId)) {
+        selectedIds.add(node.id)
+      }
     }
 
     const nodes = workflow.nodes.filter((node) => selectedIds.has(node.id))
@@ -970,12 +1007,12 @@ function createEditActions(
       const originalReference = refItem.source === '__inputs__'
         ? makeInputReference(refItem.nodeId, refItem.fieldPath)
         : makeDataReference(refItem.nodeId, refItem.fieldPath)
-      startInputFields.push({ key: inputKey, type: 'any', value: originalReference })
+      startInputFields.push({ key: inputKey, type: 'any' })
       subNodeInputFields.push({ key: inputKey, type: 'any', value: originalReference })
       replacements.set(refItem.raw, makeInputReference(startNodeId, inputKey))
     }
 
-    const selectedSnapshot = remapSelectedWorkflowNodes(workflow.nodes, workflow.edges, selectedIds, startNodeId, endNodeId)
+    const selectedSnapshot = remapSelectedWorkflowNodes(workflow.nodes, workflow.edges, selectedIds, rootIds, startNodeId, endNodeId)
     const extractedNodes = selectedSnapshot.nodes.map((node) => ({
       ...node,
       data: replaceReferences(node.data, replacements) as Record<string, any>,
@@ -984,6 +1021,7 @@ function createEditActions(
         y: node.position.y - bounds.minY + 120,
       },
     }))
+    clearStartInputFieldValues({ nodes: extractedNodes })
     const now = Date.now()
     const newWorkflow: Workflow = {
       id: crypto.randomUUID(),
