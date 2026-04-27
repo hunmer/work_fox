@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick, unref, watch } from 'v
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import type { NodeProps } from '@vue-flow/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
-import { X, CircleSlash, SkipForward, FileText, CircleCheck, CircleX, ChevronRight, ChevronDown, Play, Loader2, Square, Flag } from 'lucide-vue-next'
+import { X, CircleSlash, SkipForward, FileText, CircleCheck, CircleX, ChevronRight, ChevronDown, Play, Loader2, Square, Flag, Bookmark } from 'lucide-vue-next'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
 import JsonEditor from '@/components/ui/json-editor/JsonEditor.vue'
@@ -196,6 +196,15 @@ const breakpointBadge = computed(() => {
     default:
       return ''
   }
+})
+
+/** 当前节点使用的预设 */
+const activeJsonPreset = computed<{ name: string; id: string; data: Record<string, any>; inputs: Record<string, any>; outputs: Record<string, any> } | null>(() => {
+  const presets = props.data?.__jsonPresets
+  const selectedId = props.data?.__selectedJsonPresetId
+  if (!Array.isArray(presets) || typeof selectedId !== 'string' || !selectedId) return null
+  const found = (presets as Array<{ id: string; name: string; data: Record<string, any>; inputs: Record<string, any>; outputs: Record<string, any> }>).find((p) => p.id === selectedId)
+  return found ?? null
 })
 
 function startEdit() {
@@ -402,13 +411,7 @@ const customViewProps = computed(() => {
         : undefined,
     }
   }
-  if (definition.value?.type === LOOP_BODY_NODE_TYPE) {
-    return {
-      nodeId: props.id,
-      bodyWorkflow: props.data?.bodyWorkflow,
-      outputLabel: props.data?.outputLabel,
-    }
-  }
+  if (definition.value?.type === LOOP_BODY_NODE_TYPE) return { nodeId: props.id, outputLabel: props.data?.outputLabel }
   if (definition.value?.type === 'sub_workflow') {
     return {
       nodeId: props.id,
@@ -673,6 +676,31 @@ async function handleStopAtBreakpoint() {
           >
             {{ displayLabel }}
           </div>
+          <Popover v-if="activeJsonPreset">
+            <PopoverTrigger as-child>
+              <span class="shrink-0 inline-flex items-center gap-0.5 rounded bg-primary/10 text-primary px-1 py-0 text-[9px] font-medium cursor-pointer hover:bg-primary/20">
+                <Bookmark class="w-2.5 h-2.5" />
+                {{ activeJsonPreset.name }}
+              </span>
+            </PopoverTrigger>
+            <PopoverContent side="top" :side-offset="4" class="w-72 p-2" @click.stop>
+              <div class="text-xs space-y-2">
+                <div class="font-medium">{{ activeJsonPreset.name }}</div>
+                <template v-if="Object.keys(activeJsonPreset.data ?? {}).length">
+                  <div class="text-muted-foreground text-[10px]">data:</div>
+                  <JsonEditor :model-value="activeJsonPreset.data" :readonly="true" :height="100" />
+                </template>
+                <template v-if="Object.keys(activeJsonPreset.inputs ?? {}).length">
+                  <div class="text-muted-foreground text-[10px]">inputs:</div>
+                  <JsonEditor :model-value="activeJsonPreset.inputs" :readonly="true" :height="100" />
+                </template>
+                <template v-if="Object.keys(activeJsonPreset.outputs ?? {}).length">
+                  <div class="text-muted-foreground text-[10px]">outputs:</div>
+                  <JsonEditor :model-value="activeJsonPreset.outputs" :readonly="true" :height="100" />
+                </template>
+              </div>
+            </PopoverContent>
+          </Popover>
           <button
             v-if="isFirstConnectedNode && !isBoundaryNode && !store.isPreview"
             class="nodrag nopan shrink-0 inline-flex items-center gap-1 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"

@@ -52,7 +52,7 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     const scopeNode = workflow.nodes.find((node) => node.id === scopeNodeId)
     if (!scopeNode || !isScopeBoundaryWorkflowNode(scopeNode)) return
 
-    const children = workflow.nodes.filter((node) => getCompositeParentId(node) === scopeNodeId)
+    const children = workflow.nodes.filter((node) => getCompositeParentId(node) === scopeNodeId && !isHiddenWorkflowNode(node))
     if (!children.length) return
 
     const minX = Math.min(...children.map((node) => node.position.x))
