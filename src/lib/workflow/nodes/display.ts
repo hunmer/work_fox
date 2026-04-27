@@ -143,20 +143,7 @@ export const displayNodes: NodeTypeDefinition[] = [
     customView: StickyNoteView,
     customViewMinSize: { width: 180, height: 120 },
     properties: [
-      { key: 'content', label: '内容', type: 'textarea', tooltip: '便签文本内容' },
-      {
-        key: 'color',
-        label: '颜色',
-        type: 'select',
-        default: 'yellow',
-        options: [
-          { label: '黄色', value: 'yellow' },
-          { label: '蓝色', value: 'blue' },
-          { label: '绿色', value: 'green' },
-          { label: '粉色', value: 'pink' },
-          { label: '紫色', value: 'purple' },
-        ],
-      },
+      { key: 'content', label: '内容', type: 'textarea', tooltip: '便签文本内容' }
     ],
     handles: { source: false, target: false },
     debuggable: false,

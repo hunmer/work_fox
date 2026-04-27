@@ -61,12 +61,17 @@ const fullscreenSnapshot = ref<{
   hostNode: WorkflowNode
 } | null>(null)
 const isFullscreen = computed(() => !!fullscreenSnapshot.value)
+const flowFrameStyle = computed(() => ({
+  width: '100%',
+  height: '100%',
+}))
 const flowStyle = computed(() => ({
-  width: outerZoom.value === 1 ? '100%' : `${outerZoom.value * 100}%`,
-  height: outerZoom.value === 1 ? '100%' : `${outerZoom.value * 100}%`,
+  width: '100%',
+  height: '100%',
   transform: outerZoom.value === 1 ? undefined : `scale(${1 / outerZoom.value})`,
   transformOrigin: 'top left',
 }))
+let outerViewportObserver: MutationObserver | null = null
 
 function cloneWorkflow(): EmbeddedWorkflow {
   return JSON.parse(JSON.stringify(props.modelValue)) as EmbeddedWorkflow
@@ -341,11 +346,16 @@ function getOuterCanvasState() {
 }
 
 function getOuterViewport() {
-  const flowElement = editorRef.value?.closest('.vue-flow') as HTMLElement | null
-  const viewportElement = flowElement?.querySelector('.vue-flow__transformationpane') as HTMLElement | null
+  const viewportElement = getOuterViewportElement()
   if (!viewportElement) return null
   const matrix = new DOMMatrixReadOnly(getComputedStyle(viewportElement).transform)
   return { x: matrix.e, y: matrix.f, zoom: matrix.a || 1 }
+}
+
+function getOuterViewportElement() {
+  const hostElement = editorRef.value?.closest('.vue-flow__node') as HTMLElement | null
+  const flowElement = hostElement?.closest('.vue-flow') as HTMLElement | null
+  return flowElement?.querySelector('.vue-flow__transformationpane') as HTMLElement | null
 }
 
 function setOuterViewport(nextViewport: { x: number; y: number; zoom: number }) {
@@ -355,6 +365,22 @@ function setOuterViewport(nextViewport: { x: number; y: number; zoom: number }) 
 function syncOuterZoom() {
   const zoom = getOuterViewport()?.zoom || 1
   outerZoom.value = Number.isFinite(zoom) && zoom > 0 ? zoom : 1
+}
+
+function scheduleSyncOuterZoom() {
+  requestAnimationFrame(syncOuterZoom)
+}
+
+function observeOuterViewport() {
+  outerViewportObserver?.disconnect()
+  outerViewportObserver = null
+  const viewportElement = getOuterViewportElement()
+  if (!viewportElement) return
+  outerViewportObserver = new MutationObserver(scheduleSyncOuterZoom)
+  outerViewportObserver.observe(viewportElement, {
+    attributes: true,
+    attributeFilter: ['style', 'class'],
+  })
 }
 
 function toggleFullscreen() {
@@ -400,6 +426,10 @@ watch(
   () => {
     fullscreenSnapshot.value = null
     outerZoom.value = 1
+    requestAnimationFrame(() => {
+      observeOuterViewport()
+      syncOuterZoom()
+    })
   },
 )
 
@@ -415,19 +445,22 @@ watch(outerZoom, refreshEmbeddedNodeInternals)
 
 onMounted(() => {
   syncOuterZoom()
+  observeOuterViewport()
   window.addEventListener('workflow:zoom-in', onWorkflowZoomIn)
   window.addEventListener('workflow:zoom-out', onWorkflowZoomOut)
   window.addEventListener('workflow:zoom-reset', onWorkflowZoomReset)
-  window.addEventListener('wheel', syncOuterZoom, true)
-  window.addEventListener('pointerup', syncOuterZoom, true)
+  window.addEventListener('wheel', scheduleSyncOuterZoom, true)
+  window.addEventListener('pointerup', scheduleSyncOuterZoom, true)
 })
 
 onUnmounted(() => {
+  outerViewportObserver?.disconnect()
+  outerViewportObserver = null
   window.removeEventListener('workflow:zoom-in', onWorkflowZoomIn)
   window.removeEventListener('workflow:zoom-out', onWorkflowZoomOut)
   window.removeEventListener('workflow:zoom-reset', onWorkflowZoomReset)
-  window.removeEventListener('wheel', syncOuterZoom, true)
-  window.removeEventListener('pointerup', syncOuterZoom, true)
+  window.removeEventListener('wheel', scheduleSyncOuterZoom, true)
+  window.removeEventListener('pointerup', scheduleSyncOuterZoom, true)
 })
 
 function onConnect(params: { source?: string | null; target?: string | null; sourceHandle?: string | null; targetHandle?: string | null }) {
@@ -663,41 +696,43 @@ function handleSelectDialogOpenChange(open: boolean) {
     @drop="onDrop"
     @keydown="handleKeyDown"
   >
-    <VueFlow
-      :id="flowId"
-      :nodes="flowNodes"
-      :edges="flowEdges"
-      :node-types="nodeTypes"
-      :edge-types="edgeTypes"
-      :min-zoom="0.4"
-      :max-zoom="1.8"
-      :fit-view-on-init="true"
-      :connection-mode="ConnectionMode.Loose"
-      class="h-full w-full"
-      :style="flowStyle"
-      :nodes-draggable="true"
-      :nodes-connectable="true"
-      :pan-on-drag="true"
-      no-pan-class-name="embedded-workflow-nopan"
-      :select-nodes-on-drag="false"
-      :elements-selectable="true"
-      @connect="onConnect"
-      @connect-start="onConnectStart"
-      @connect-end="onConnectEnd"
-      @node-click="onNodeClick"
-      @pane-click="onPaneClick"
-      @nodes-change="onNodesChange"
-      @edges-change="onEdgesChange"
-    >
-      <Background :gap="20" :size="1" pattern-color="rgba(148, 163, 184, 0.18)" />
+    <div class="embedded-workflow-frame" :style="flowFrameStyle">
+      <VueFlow
+        :id="flowId"
+        :nodes="flowNodes"
+        :edges="flowEdges"
+        :node-types="nodeTypes"
+        :edge-types="edgeTypes"
+        :min-zoom="0.4"
+        :max-zoom="1.8"
+        :fit-view-on-init="true"
+        :connection-mode="ConnectionMode.Loose"
+        class="h-full w-full"
+        :style="flowStyle"
+        :nodes-draggable="true"
+        :nodes-connectable="true"
+        :pan-on-drag="true"
+        no-pan-class-name="embedded-workflow-nopan"
+        :select-nodes-on-drag="false"
+        :elements-selectable="true"
+        @connect="onConnect"
+        @connect-start="onConnectStart"
+        @connect-end="onConnectEnd"
+        @node-click="onNodeClick"
+        @pane-click="onPaneClick"
+        @nodes-change="onNodesChange"
+        @edges-change="onEdgesChange"
+      >
+        <Background :gap="20" :size="1" pattern-color="rgba(148, 163, 184, 0.18)" />
 
-      <template #edge-embedded="edgeProps">
-        <EmbeddedWorkflowEdge
-          v-bind="edgeProps"
-          @insert-node="onEdgeInsertNode"
-        />
-      </template>
-    </VueFlow>
+        <template #edge-embedded="edgeProps">
+          <EmbeddedWorkflowEdge
+            v-bind="edgeProps"
+            @insert-node="onEdgeInsertNode"
+          />
+        </template>
+      </VueFlow>
+    </div>
 
     <button
       v-if="hostNodeId"
@@ -721,6 +756,12 @@ function handleSelectDialogOpenChange(open: boolean) {
 <style scoped>
 .embedded-workflow-editor {
   overflow: hidden;
+}
+
+.embedded-workflow-frame {
+  position: absolute;
+  inset: 0;
+  transform-origin: top left;
 }
 
 .embedded-workflow-fullscreen-button {

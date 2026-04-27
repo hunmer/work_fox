@@ -37,6 +37,7 @@ const { updateNodeInternals } = useVueFlow()
 const nodeRootRef = ref<HTMLElement | null>(null)
 const measuredNodeSize = ref({ width: 0, height: 0 })
 const controlBarRect = ref({ left: 0, top: 0, width: 180 })
+const isNodeHovered = ref(false)
 const isEditing = ref(false)
 const editLabel = ref('')
 const inputRef = ref<HTMLInputElement | null>(null)
@@ -564,9 +565,11 @@ async function handleStopAtBreakpoint() {
 
   <div
     ref="nodeRootRef"
-    class="group/node border-2 rounded-lg shadow-sm w-full h-full cursor-pointer transition-colors relative flex flex-col"
+    class="border-2 rounded-lg shadow-sm w-full h-full cursor-pointer transition-colors relative flex flex-col"
     :class="[statusColor, stateBackground, props.selected ? 'ring-2 ring-primary' : '', { 'loop-body-node': isLoopBodyContainer }]"
     :style="nodeColorStyle"
+    @mouseenter="isNodeHovered = true"
+    @mouseleave="isNodeHovered = false"
   >
         <!-- 输入连接点 -->
         <Handle
@@ -581,7 +584,8 @@ async function handleStopAtBreakpoint() {
         <!-- 悬浮测试按钮（开结束节点隐藏，预览模式下隐藏-->
         <button
           v-if="!isBoundaryNode && !store.isPreview"
-          class="absolute -top-2 -left-2 w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-opacity hover:bg-green-600 z-10"
+          class="absolute -top-2 -left-2 w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center transition-opacity hover:bg-green-600 z-10"
+          :class="isNodeHovered ? 'opacity-100' : 'opacity-0'"
           @click.stop="handleTestNode"
         >
           <Loader2 v-if="isCurrentNodeDebugging" class="w-3 h-3 animate-spin" />
@@ -591,7 +595,8 @@ async function handleStopAtBreakpoint() {
         <!-- 悬浮删除按钮（开结束节点隐藏，预览模式下隐藏-->
         <button
           v-if="!isBoundaryNode && !store.isPreview && (isEmbeddedNode || store.canDeleteNode(String(props.id)))"
-          class="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover/node:opacity-100 transition-opacity hover:bg-destructive/80 z-10"
+          class="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center transition-opacity hover:bg-destructive/80 z-10"
+          :class="isNodeHovered ? 'opacity-100' : 'opacity-0'"
           @click.stop="handleDelete"
         >
           <X class="w-3 h-3" />

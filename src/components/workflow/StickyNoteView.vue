@@ -26,7 +26,7 @@ function onInput() {
 
 <template>
   <div
-    class="rounded border p-2 text-sm leading-relaxed w-full h-full nodrag nopan bg-yellow-100 dark:bg-yellow-900/40 border-yellow-300 dark:border-yellow-700"
+    class="rounded border p-2 text-sm leading-relaxed w-full h-full nodrag nopan"
     @click.stop
     @mousedown.stop
   >
