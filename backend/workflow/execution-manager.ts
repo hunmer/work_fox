@@ -1076,6 +1076,8 @@ if (typeof main === 'function') return main({ params, context })`)
       case 'ends_with': return String(variable).endsWith(String(value))
       case 'is_empty': return variable === '' || variable === null || variable === undefined
       case 'is_not_empty': return variable !== '' && variable !== null && variable !== undefined
+      case 'is_true': return variable === true || variable === 'true' || variable === 1
+      case 'is_false': return variable === false || variable === 'false' || variable === 0
       default: return false
     }
   }

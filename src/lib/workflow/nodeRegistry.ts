@@ -134,10 +134,12 @@ export const CONDITION_OPERATORS = [
   { value: 'ends_with', label: '结尾是' },
   { value: 'is_empty', label: '为空' },
   { value: 'is_not_empty', label: '不为空' },
+  { value: 'is_true', label: '为真' },
+  { value: 'is_false', label: '为假' },
 ] as const
 
 /** 不需要比较值的操作符 */
-export const NO_VALUE_OPERATORS = new Set(['is_empty', 'is_not_empty'])
+export const NO_VALUE_OPERATORS = new Set(['is_empty', 'is_not_empty', 'is_true', 'is_false'])
 
 
 /** 所有节点定义（合并） */

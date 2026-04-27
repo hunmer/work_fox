@@ -301,8 +301,6 @@ function toOutputFields(data: any): OutputField[] {
     const field: OutputField = { key, type }
     if (type === 'object' && value !== null) {
       field.children = toOutputFields(value)
-    } else {
-      field.value = value !== undefined ? String(value) : ''
     }
     return field
   })

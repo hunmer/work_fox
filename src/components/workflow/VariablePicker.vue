@@ -4,7 +4,7 @@ import { useWorkflowStore } from '@/stores/workflow'
 import { usePluginStore } from '@/stores/plugin'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
-import type { OutputField } from '@/lib/workflow/types'
+import type { EmbeddedWorkflow, OutputField } from '@/lib/workflow/types'
 import { Braces } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import {
@@ -62,6 +62,26 @@ const currentNode = computed(() => {
   return store.currentWorkflow?.nodes.find((node) => node.id === props.excludeNodeId) ?? null
 })
 
+const pickerWorkflow = computed<EmbeddedWorkflow | null>(() => {
+  if (!store.currentWorkflow) return null
+
+  if (store.selectedEmbeddedNode) {
+    const hostNode = store.currentWorkflow.nodes.find((node) => node.id === store.selectedEmbeddedNode?.hostNodeId)
+    const bodyWorkflow = hostNode?.data?.bodyWorkflow
+    if (
+      bodyWorkflow
+      && typeof bodyWorkflow === 'object'
+      && Array.isArray(bodyWorkflow.nodes)
+      && Array.isArray(bodyWorkflow.edges)
+    ) {
+      return bodyWorkflow as EmbeddedWorkflow
+    }
+    return null
+  }
+
+  return store.currentWorkflow
+})
+
 const loopParentNode = computed(() => {
   if (!store.currentWorkflow || !currentNode.value) return null
 
@@ -89,16 +109,23 @@ const loopBodyNodes = computed(() => {
   if (!isInLoopBody.value || !store.selectedEmbeddedNode || !store.currentWorkflow) return []
 
   const hostNode = store.currentWorkflow.nodes.find((node) => node.id === store.selectedEmbeddedNode?.hostNodeId)
-  const bodyNodes = Array.isArray(hostNode?.data?.bodyWorkflow?.nodes)
-    ? hostNode.data.bodyWorkflow.nodes
+  const bodyWorkflow = hostNode?.data?.bodyWorkflow
+  const bodyNodes = Array.isArray(bodyWorkflow?.nodes)
+    ? bodyWorkflow.nodes
     : []
+  const bodyEdges = Array.isArray(bodyWorkflow?.edges)
+    ? bodyWorkflow.edges
+    : []
+  const connectedNodeIds = getConnectedNodeIds(bodyEdges, props.excludeNodeId)
 
-  return bodyNodes.filter((node: any) => node.id !== props.excludeNodeId && node.type !== 'start')
+  return bodyNodes.filter((node: any) =>
+    connectedNodeIds.has(node.id) && node.id !== props.excludeNodeId && node.type !== 'start',
+  )
 })
 
-/** 获取画布上除当前节点外的可用节点 */
+/** 获取与当前节点直接连线的可用节点 */
 const otherNodes = computed(() => {
-  if (!store.currentWorkflow) return []
+  if (!pickerWorkflow.value) return []
   const hiddenNodeIds = new Set([props.excludeNodeId])
   if (store.selectedEmbeddedNode?.hostNodeId) hiddenNodeIds.add(store.selectedEmbeddedNode.hostNodeId)
   if (isInLoopBody.value) {
@@ -111,8 +138,21 @@ const otherNodes = computed(() => {
     }
   }
 
-  return store.currentWorkflow.nodes.filter((node) => !hiddenNodeIds.has(node.id))
+  const connectedNodeIds = getConnectedNodeIds(pickerWorkflow.value.edges, props.excludeNodeId)
+
+  return pickerWorkflow.value.nodes.filter((node) =>
+    connectedNodeIds.has(node.id) && !hiddenNodeIds.has(node.id),
+  )
 })
+
+function getConnectedNodeIds(edges: EmbeddedWorkflow['edges'], nodeId: string): Set<string> {
+  const connectedNodeIds = new Set<string>()
+  for (const edge of edges) {
+    if (edge.source === nodeId) connectedNodeIds.add(edge.target)
+    if (edge.target === nodeId) connectedNodeIds.add(edge.source)
+  }
+  return connectedNodeIds
+}
 
 const loopVariableFields = computed<LoopVariableField[]>(() => {
   if (!isInLoopBody.value || !loopParentNode.value) return []
@@ -224,7 +264,7 @@ function handleSelectLoopField(_nodeId: string, fieldPath: string) {
         <DropdownMenuSubContent class="w-56">
           <template v-if="otherNodes.length === 0">
             <div class="px-2 py-1.5 text-xs text-muted-foreground">
-              画布上没有其他节点
+              没有直接相连的节点
             </div>
           </template>
           <template v-for="node in otherNodes" :key="node.id">
@@ -262,7 +302,7 @@ function handleSelectLoopField(_nodeId: string, fieldPath: string) {
         <DropdownMenuSubContent class="w-56">
           <template v-if="otherNodes.length === 0">
             <div class="px-2 py-1.5 text-xs text-muted-foreground">
-              画布上没有其他节点
+              没有直接相连的节点
             </div>
           </template>
           <template v-for="node in otherNodes" :key="node.id">
