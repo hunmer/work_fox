@@ -16,6 +16,44 @@ function getHeaders(args) {
 module.exports = {
   tools: [
     {
+      name: 'minimax_chat',
+      description: 'MiniMax 文本合成：调用 MiniMax-M2.x 大语言模型进行文本生成。支持多轮对话、系统提示词、图片理解、思维链推理。模型包括 MiniMax-M2.7/M2.5/M2.1/M2 及其高速版。',
+      input_schema: {
+        type: 'object',
+        properties: {
+          apiKey: { type: 'string', description: 'MiniMax API Key' },
+          model: { type: 'string', description: '模型: MiniMax-M2.7(默认)/MiniMax-M2.7-highspeed/MiniMax-M2.5/MiniMax-M2.5-highspeed/MiniMax-M2.1/MiniMax-M2.1-highspeed/MiniMax-M2' },
+          systemPrompt: { type: 'string', description: '系统提示词，定义 AI 的角色和行为约束' },
+          messages: { type: 'string', description: 'JSON 数组格式的消息列表，如 [{"role":"user","content":"你好"}]。role: system/user/assistant/tool；content 支持文本和图片(image_url)' },
+          temperature: { type: 'number', description: '温度 0-1，控制随机性，默认 0.7' },
+          topP: { type: 'number', description: 'Top P 0-1，核采样参数，默认 0.95' },
+          maxCompletionTokens: { type: 'number', description: '最大输出 token 数' },
+          baseUrl: { type: 'string', description: 'API地址，默认 https://api.minimaxi.com' },
+        },
+        required: ['apiKey', 'messages'],
+      },
+    },
+    {
+      name: 'minimax_chat_her',
+      description: 'MiniMax 角色对话（M2-her 模型）：支持角色扮演和沉浸式对话。可定义角色人设、用户设定、世界观和示例对话。',
+      input_schema: {
+        type: 'object',
+        properties: {
+          apiKey: { type: 'string', description: 'MiniMax API Key' },
+          systemPrompt: { type: 'string', description: '角色人设：定义 AI 的性格、背景、说话风格' },
+          userSystem: { type: 'string', description: '用户角色设定（user_system role）' },
+          group: { type: 'string', description: '世界观/场景设定（group role）' },
+          sampleMessages: { type: 'string', description: 'JSON 数组格式的示例对话，使用 sample_message_user / sample_message_ai 角色' },
+          messages: { type: 'string', description: 'JSON 数组格式的 user/assistant 消息列表' },
+          temperature: { type: 'number', description: '温度 0-1，默认 1.0' },
+          topP: { type: 'number', description: 'Top P 0-1，默认 0.95' },
+          maxCompletionTokens: { type: 'number', description: '最大输出 token（上限 2048）' },
+          baseUrl: { type: 'string', description: 'API地址，默认 https://api.minimaxi.com' },
+        },
+        required: ['apiKey', 'messages'],
+      },
+    },
+    {
       name: 'minimax_tts',
       description: 'MiniMax 语音合成(TTS)：将文字转为语音。支持多种模型(speech-2.8-hd等)、音色、情绪(happy/sad/calm等)、语速(0.5-2.0)。输出音频URL（有效期24小时）或hex编码。',
       input_schema: {
@@ -169,6 +207,92 @@ module.exports = {
     const headers = getHeaders(args)
 
     switch (name) {
+      case 'minimax_chat': {
+        let messages
+        try {
+          messages = typeof args.messages === 'string' ? JSON.parse(args.messages) : args.messages
+        } catch {
+          messages = [{ role: 'user', content: args.messages }]
+        }
+
+        if (args.systemPrompt) {
+          messages = [{ role: 'system', content: args.systemPrompt }, ...messages]
+        }
+
+        const body = {
+          model: args.model || 'MiniMax-M2.7',
+          messages,
+          ...(args.temperature != null && { temperature: Number(args.temperature) }),
+          ...(args.topP != null && { top_p: Number(args.topP) }),
+          ...(args.maxCompletionTokens && { max_completion_tokens: Number(args.maxCompletionTokens) }),
+        }
+
+        const result = await api.postJson(`${baseUrl}/v1/text/chatcompletion_v2`, { headers, body, timeout: 120000 })
+        const choice = result.choices?.[0]
+        if (!choice) {
+          return { success: false, message: `文本合成失败: 无有效响应` }
+        }
+        return {
+          success: true,
+          message: '文本合成完成',
+          data: {
+            content: choice.message?.content || '',
+            reasoningContent: choice.message?.reasoning_content || '',
+            toolCalls: choice.message?.tool_calls || null,
+            totalTokens: result.usage?.total_tokens,
+            id: result.id,
+          },
+        }
+      }
+
+      case 'minimax_chat_her': {
+        let messages = []
+        try {
+          messages = typeof args.messages === 'string' ? JSON.parse(args.messages) : (args.messages || [])
+        } catch {
+          messages = [{ role: 'user', content: args.messages }]
+        }
+
+        const builtMessages = []
+        if (args.systemPrompt) builtMessages.push({ role: 'system', content: args.systemPrompt })
+        if (args.userSystem) builtMessages.push({ role: 'user_system', content: args.userSystem })
+        if (args.group) builtMessages.push({ role: 'group', content: args.group })
+
+        if (args.sampleMessages) {
+          try {
+            const samples = typeof args.sampleMessages === 'string'
+              ? JSON.parse(args.sampleMessages)
+              : args.sampleMessages
+            builtMessages.push(...samples)
+          } catch { /* skip invalid samples */ }
+        }
+
+        builtMessages.push(...messages)
+
+        const body = {
+          model: 'M2-her',
+          messages: builtMessages,
+          ...(args.temperature != null && { temperature: Number(args.temperature) }),
+          ...(args.topP != null && { top_p: Number(args.topP) }),
+          ...(args.maxCompletionTokens && { max_completion_tokens: Number(args.maxCompletionTokens) }),
+        }
+
+        const result = await api.postJson(`${baseUrl}/v1/text/chatcompletion_v2`, { headers, body, timeout: 120000 })
+        const choice = result.choices?.[0]
+        if (!choice) {
+          return { success: false, message: `角色对话失败: 无有效响应` }
+        }
+        return {
+          success: true,
+          message: '角色对话完成',
+          data: {
+            content: choice.message?.content || '',
+            totalTokens: result.usage?.total_tokens,
+            id: result.id,
+          },
+        }
+      }
+
       case 'minimax_tts': {
         const voiceSetting = {
           voice_id: args.voiceId || 'Chinese (Mandarin)_Lyrical_Voice',

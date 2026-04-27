@@ -71,6 +71,17 @@ const VIDEO_DURATIONS = [
   { label: '10秒', value: 10 },
 ]
 
+// --- Chat 模型 ---
+const CHAT_MODELS = [
+  { label: 'MiniMax-M2.7 (推荐)', value: 'MiniMax-M2.7' },
+  { label: 'MiniMax-M2.7-highspeed (极速)', value: 'MiniMax-M2.7-highspeed' },
+  { label: 'MiniMax-M2.5', value: 'MiniMax-M2.5' },
+  { label: 'MiniMax-M2.5-highspeed (极速)', value: 'MiniMax-M2.5-highspeed' },
+  { label: 'MiniMax-M2.1', value: 'MiniMax-M2.1' },
+  { label: 'MiniMax-M2.1-highspeed (极速)', value: 'MiniMax-M2.1-highspeed' },
+  { label: 'MiniMax-M2', value: 'MiniMax-M2' },
+]
+
 // --- 音乐模型 ---
 const MUSIC_MODELS = [
   { label: 'music-2.6 (推荐)', value: 'music-2.6' },
@@ -86,6 +97,178 @@ const MUSIC_FORMATS = [
 
 module.exports = {
   nodes: [
+    // ============================
+    // 文本合成（Chat Completion）
+    // ============================
+    {
+      type: 'minimax_chat',
+      label: '文本合成',
+      category: 'MiniMax AI',
+      icon: 'MessageSquare',
+      description: 'MiniMax 文本合成：支持多轮对话、工具调用(Function Calling)、图片理解、思维链推理',
+      properties: [
+        { key: 'apiKey', label: 'API Key', type: 'text', required: true, default: '{{ __config__["workfox.minimax"]["apiKey"] }}' },
+        { key: 'model', label: '模型', type: 'select', default: 'MiniMax-M2.7', options: CHAT_MODELS },
+        { key: 'systemPrompt', label: '系统提示词', type: 'textarea', tooltip: '系统角色的行为指令，定义 AI 的角色和约束' },
+        { key: 'messages', label: '消息列表', type: 'textarea', required: true, tooltip: 'JSON 数组格式的消息列表，如 [{"role":"user","content":"你好"}]。支持 role: system/user/assistant/tool，content 支持文本和图片' },
+        { key: 'temperature', label: '温度', type: 'number', default: 0.7, tooltip: '0-1，控制随机性，越高越随机，建议取值 0.7-1.0' },
+        { key: 'topP', label: 'Top P', type: 'number', default: 0.95, tooltip: '0-1，核采样参数' },
+        { key: 'maxCompletionTokens', label: '最大输出 Token', type: 'number', tooltip: '最大生成 token 数' },
+        { key: 'baseUrl', label: 'API地址', type: 'text', default: '{{ __config__["workfox.minimax"]["baseUrl"] }}' },
+      ],
+      outputs: [
+        { key: 'success', type: 'boolean' },
+        { key: 'message', type: 'string' },
+        { key: 'data', type: 'object', children: [
+          { key: 'content', type: 'string' },
+          { key: 'reasoningContent', type: 'string' },
+          { key: 'toolCalls', type: 'string' },
+          { key: 'totalTokens', type: 'number' },
+          { key: 'id', type: 'string' },
+        ] },
+      ],
+      handler: async (ctx, args) => {
+        const baseUrl = getBaseUrl(args)
+        const headers = getHeaders(args)
+
+        let messages
+        try {
+          messages = typeof args.messages === 'string' ? JSON.parse(args.messages) : args.messages
+        } catch {
+          // 兜底：纯文本作为单条 user 消息
+          messages = [{ role: 'user', content: args.messages }]
+        }
+        if (!Array.isArray(messages) || messages.length === 0) {
+          throw new Error('消息列表不能为空')
+        }
+
+        // 如果有 systemPrompt，插入到 messages 最前面
+        if (args.systemPrompt) {
+          messages = [{ role: 'system', content: args.systemPrompt }, ...messages]
+        }
+
+        const body = {
+          model: args.model || 'MiniMax-M2.7',
+          messages,
+          ...(args.temperature != null && { temperature: Number(args.temperature) }),
+          ...(args.topP != null && { top_p: Number(args.topP) }),
+          ...(args.maxCompletionTokens && { max_completion_tokens: Number(args.maxCompletionTokens) }),
+        }
+
+        ctx.logger.info(`文本合成: 模型=${body.model}, 消息数=${messages.length}`)
+        const result = await ctx.api.postJson(`${baseUrl}/v1/text/chatcompletion_v2`, { headers, body, timeout: 120000 })
+
+        const choice = result.choices?.[0]
+        if (!choice) {
+          throw new Error(`文本合成失败: 无有效响应 (id: ${result.id})`)
+        }
+
+        const output = choice.message
+        ctx.logger.info(`文本合成完成: tokens=${result.usage?.total_tokens}, id=${result.id}`)
+        return {
+          success: true,
+          message: '文本合成完成',
+          data: {
+            content: output?.content || '',
+            reasoningContent: output?.reasoning_content || '',
+            toolCalls: output?.tool_calls ? JSON.stringify(output.tool_calls) : '',
+            totalTokens: result.usage?.total_tokens,
+            id: result.id,
+          },
+        }
+      },
+    },
+
+    // ============================
+    // 角色对话（M2-her）
+    // ============================
+    {
+      type: 'minimax_chat_her',
+      label: '角色对话',
+      category: 'MiniMax AI',
+      icon: 'User',
+      description: 'MiniMax 角色对话（M2-her）：支持角色扮演、多轮对话，可定义角色人设和世界观',
+      properties: [
+        { key: 'apiKey', label: 'API Key', type: 'text', required: true, default: '{{ __config__["workfox.minimax"]["apiKey"] }}' },
+        { key: 'systemPrompt', label: '角色人设', type: 'textarea', tooltip: '角色的系统设定，定义 AI 的性格、背景、说话风格' },
+        { key: 'userSystem', label: '用户设定', type: 'textarea', tooltip: '用户角色的系统设定（user_system role）' },
+        { key: 'group', label: '群组设定', type: 'textarea', tooltip: '世界观/场景设定（group role）' },
+        { key: 'sampleMessages', label: '示例对话', type: 'textarea', tooltip: 'JSON 数组，用 sample_message_user / sample_message_ai 角色提供对话示例' },
+        { key: 'messages', label: '消息列表', type: 'textarea', required: true, tooltip: 'JSON 数组，user/assistant 消息列表' },
+        { key: 'temperature', label: '温度', type: 'number', default: 1.0, tooltip: '0-1，控制随机性，默认 1.0' },
+        { key: 'topP', label: 'Top P', type: 'number', default: 0.95, tooltip: '0-1，核采样参数' },
+        { key: 'maxCompletionTokens', label: '最大输出 Token', type: 'number', tooltip: '最大 2048' },
+        { key: 'baseUrl', label: 'API地址', type: 'text', default: '{{ __config__["workfox.minimax"]["baseUrl"] }}' },
+      ],
+      outputs: [
+        { key: 'success', type: 'boolean' },
+        { key: 'message', type: 'string' },
+        { key: 'data', type: 'object', children: [
+          { key: 'content', type: 'string' },
+          { key: 'totalTokens', type: 'number' },
+          { key: 'id', type: 'string' },
+        ] },
+      ],
+      handler: async (ctx, args) => {
+        const baseUrl = getBaseUrl(args)
+        const headers = getHeaders(args)
+
+        let messages = []
+        try {
+          messages = typeof args.messages === 'string' ? JSON.parse(args.messages) : (args.messages || [])
+        } catch {
+          messages = [{ role: 'user', content: args.messages }]
+        }
+
+        // 按顺序构建消息列表：角色设定 -> 示例对话 -> 实际对话
+        const builtMessages = []
+        if (args.systemPrompt) builtMessages.push({ role: 'system', content: args.systemPrompt })
+        if (args.userSystem) builtMessages.push({ role: 'user_system', content: args.userSystem })
+        if (args.group) builtMessages.push({ role: 'group', content: args.group })
+
+        // 示例对话
+        if (args.sampleMessages) {
+          try {
+            const samples = typeof args.sampleMessages === 'string'
+              ? JSON.parse(args.sampleMessages)
+              : args.sampleMessages
+            builtMessages.push(...samples)
+          } catch {
+            ctx.logger.warn('示例对话 JSON 解析失败，已跳过')
+          }
+        }
+
+        builtMessages.push(...messages)
+
+        const body = {
+          model: 'M2-her',
+          messages: builtMessages,
+          ...(args.temperature != null && { temperature: Number(args.temperature) }),
+          ...(args.topP != null && { top_p: Number(args.topP) }),
+          ...(args.maxCompletionTokens && { max_completion_tokens: Number(args.maxCompletionTokens) }),
+        }
+
+        ctx.logger.info(`角色对话: 消息数=${builtMessages.length}`)
+        const result = await ctx.api.postJson(`${baseUrl}/v1/text/chatcompletion_v2`, { headers, body, timeout: 120000 })
+
+        const choice = result.choices?.[0]
+        if (!choice) {
+          throw new Error(`角色对话失败: 无有效响应 (id: ${result.id})`)
+        }
+
+        ctx.logger.info(`角色对话完成: tokens=${result.usage?.total_tokens}, id=${result.id}`)
+        return {
+          success: true,
+          message: '角色对话完成',
+          data: {
+            content: choice.message?.content || '',
+            totalTokens: result.usage?.total_tokens,
+            id: result.id,
+          },
+        }
+      },
+    },
+
     // ============================
     // 语音合成（同步 TTS）
     // ============================

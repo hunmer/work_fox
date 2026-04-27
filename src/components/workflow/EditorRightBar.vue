@@ -46,7 +46,7 @@ function toggleWsMonitor() {
   </div>
 
   <Dialog :open="dashboardOpen" @update:open="dashboardOpen = $event">
-    <DialogContent class="max-w-[90vw] w-[1200px] h-[80vh] flex flex-col p-0 gap-0 overflow-hidden">
+    <DialogContent class="!max-w-[80vw] w-[80vw] h-[80vh] flex flex-col p-0 gap-0 overflow-hidden">
       <DialogHeader class="px-4 py-3 border-b shrink-0">
         <DialogTitle>统计面板</DialogTitle>
       </DialogHeader>

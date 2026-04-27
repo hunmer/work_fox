@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import {
   Sidebar,
   SidebarContent,
@@ -11,42 +10,21 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { ChevronRight } from 'lucide-vue-next'
-import type { Workflow, WorkflowFolder } from '@shared/workflow-types'
+import { LayoutDashboard, List } from 'lucide-vue-next'
+import type { DashboardView } from '@/stores/dashboard'
 
-const props = defineProps<{
-  folders: WorkflowFolder[]
-  workflows: Workflow[]
-  selectedWorkflowId: string | null
+defineProps<{
+  activeView: DashboardView
 }>()
 
 const emit = defineEmits<{
-  select: [workflowId: string | null]
+  navigate: [view: DashboardView]
 }>()
 
-const groupedWorkflows = computed(() => {
-  const groups = new Map<string | null, Workflow[]>()
-  groups.set(null, [])
-  for (const folder of props.folders) {
-    groups.set(folder.id, [])
-  }
-  for (const wf of props.workflows) {
-    const key = wf.folderId ?? null
-    const group = groups.get(key)
-    if (group) group.push(wf)
-    else groups.set(key, [wf])
-  }
-  return groups
-})
-
-const foldersWithWorkflows = computed(() =>
-  props.folders.filter(f => (groupedWorkflows.value.get(f.id)?.length ?? 0) > 0)
-)
-
-const uncategorizedWorkflows = computed(() =>
-  groupedWorkflows.value.get(null) ?? []
-)
+const menuItems: { view: DashboardView; label: string; icon: any }[] = [
+  { view: 'overview', label: '全部概览', icon: LayoutDashboard },
+  { view: 'workflow-list', label: '工作流列表', icon: List },
+]
 </script>
 
 <template>
@@ -56,55 +34,16 @@ const uncategorizedWorkflows = computed(() =>
     </SidebarHeader>
     <SidebarContent>
       <SidebarGroup>
+        <SidebarGroupLabel>导航</SidebarGroupLabel>
         <SidebarGroupContent>
           <SidebarMenu>
-            <SidebarMenuItem>
+            <SidebarMenuItem v-for="item in menuItems" :key="item.view">
               <SidebarMenuButton
-                :is-active="selectedWorkflowId === null"
-                @click="emit('select', null)"
+                :is-active="activeView === item.view"
+                @click="emit('navigate', item.view)"
               >
-                全部概览
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroupContent>
-      </SidebarGroup>
-
-      <SidebarGroup v-for="folder in foldersWithWorkflows" :key="folder.id">
-        <Collapsible default-open>
-          <SidebarGroupLabel as-child>
-            <CollapsibleTrigger class="flex w-full items-center justify-between">
-              {{ folder.name }}
-              <ChevronRight class="h-4 w-4 transition-transform group-data-[state=open]:rotate-90" />
-            </CollapsibleTrigger>
-          </SidebarGroupLabel>
-          <CollapsibleContent>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem v-for="wf in groupedWorkflows.get(folder.id)" :key="wf.id">
-                  <SidebarMenuButton
-                    :is-active="selectedWorkflowId === wf.id"
-                    @click="emit('select', wf.id)"
-                  >
-                    {{ wf.name }}
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </CollapsibleContent>
-        </Collapsible>
-      </SidebarGroup>
-
-      <SidebarGroup v-if="uncategorizedWorkflows.length">
-        <SidebarGroupLabel>未分类</SidebarGroupLabel>
-        <SidebarGroupContent>
-          <SidebarMenu>
-            <SidebarMenuItem v-for="wf in uncategorizedWorkflows" :key="wf.id">
-              <SidebarMenuButton
-                :is-active="selectedWorkflowId === wf.id"
-                @click="emit('select', wf.id)"
-              >
-                {{ wf.name }}
+                <component :is="item.icon" class="h-4 w-4" />
+                {{ item.label }}
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>

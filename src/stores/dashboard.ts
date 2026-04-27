@@ -11,8 +11,20 @@ import type {
 import type { Workflow, WorkflowFolder } from '@shared/workflow-types'
 
 export type DashboardExecutionsRange = 'today' | 'week' | 'all'
+export type DashboardView = 'overview' | 'workflow-list'
 
 export const useDashboardStore = defineStore('dashboard', () => {
+  // ---- View ----
+  const activeView = ref<DashboardView>('overview')
+
+  function setView(view: DashboardView) {
+    activeView.value = view
+    if (view === 'overview') {
+      selectedWorkflowId.value = null
+      workflowDetail.value = null
+    }
+  }
+
   // ---- Stats ----
   const stats = ref<DashboardStatsResponse | null>(null)
   const statsLoading = ref(false)
@@ -52,7 +64,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const workflowDetail = ref<DashboardWorkflowDetailResponse | null>(null)
   const workflowDetailLoading = ref(false)
 
-  const isOverviewMode = computed(() => selectedWorkflowId.value === null)
+  const isOverviewMode = computed(() => activeView.value === 'overview')
 
   async function selectWorkflow(workflowId: string | null) {
     selectedWorkflowId.value = workflowId
@@ -109,6 +121,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   }
 
   return {
+    activeView, setView,
     stats, statsLoading, fetchStats,
     executions, executionsLoading, executionsRange, fetchExecutions,
     selectedWorkflowId, workflowDetail, workflowDetailLoading, isOverviewMode, selectWorkflow,
