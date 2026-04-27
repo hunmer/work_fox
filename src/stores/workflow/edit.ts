@@ -39,14 +39,6 @@ export function createEditActions(
     return JSON.parse(JSON.stringify(value)) as T
   }
 
-  function normalizeScopedPosition(position: { x: number; y: number }, scopeNode: WorkflowNode | null): { x: number; y: number } {
-    if (!scopeNode) return position
-    return {
-      x: position.x - scopeNode.position.x,
-      y: position.y - scopeNode.position.y,
-    }
-  }
-
   function makeInputReference(nodeId: string, fieldPath: string): string {
     return `{{ __inputs__["${nodeId}"].${fieldPath} }}`
   }
@@ -322,12 +314,11 @@ export function createEditActions(
     const def = getNodeDefinition(type)
     if (!def?.compound) {
       const scopeNode = getInsertScopeNode(options?.sourceNodeId, options?.sourceHandle, options?.scopeNodeId)
-      const nextPosition = normalizeScopedPosition(position, scopeNode)
       const node: WorkflowNode = {
         id: crypto.randomUUID(),
         type,
         label: def?.label || type,
-        position: nextPosition,
+        position,
         data: createNodeData(type),
         composite: scopeNode
           ? {
@@ -399,7 +390,6 @@ export function createEditActions(
     const scopeNode = getInsertScopeNode(options?.sourceNodeId, options?.sourceHandle, options?.scopeNodeId)
     if (scopeNode) {
       for (const node of roleMap.values()) {
-        node.position = normalizeScopedPosition(node.position, scopeNode)
         node.composite = {
           ...(node.composite || {}),
           rootId: scopeNode.composite?.rootId || scopeNode.id,

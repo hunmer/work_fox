@@ -60,27 +60,20 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     const maxX = Math.max(...children.map((node) => node.position.x + Number(node.data?.width || 220)))
     const maxY = Math.max(...children.map((node) => node.position.y + Number(node.data?.height || 120)))
 
-    const nextX = Math.max(0, scopeNode.position.x + minX - CONTAINER_PADDING.left)
-    const nextY = Math.max(0, scopeNode.position.y + minY - CONTAINER_PADDING.top)
+    const nextX = minX - CONTAINER_PADDING.left
+    const nextY = minY - CONTAINER_PADDING.top
     const nextWidth = Math.max(MIN_CONTAINER_SIZE.width, maxX - minX + CONTAINER_PADDING.left + CONTAINER_PADDING.right)
     const nextHeight = Math.max(MIN_CONTAINER_SIZE.height, maxY - minY + CONTAINER_PADDING.top + CONTAINER_PADDING.bottom)
 
-    const offsetX = scopeNode.position.x - nextX
-    const offsetY = scopeNode.position.y - nextY
-    if (offsetX !== 0 || offsetY !== 0) {
-      for (const child of children) {
-        store.updateNodePosition(child.id, {
-          x: child.position.x + offsetX,
-          y: child.position.y + offsetY,
-        })
-      }
+    if (scopeNode.position.x !== nextX || scopeNode.position.y !== nextY) {
       store.updateNodePosition(scopeNode.id, { x: nextX, y: nextY })
     }
 
-    store.updateNodeData(scopeNode.id, {
+    scopeNode.data = {
+      ...scopeNode.data,
       width: nextWidth,
       height: nextHeight,
-    })
+    }
   }
 
   function migrateEmbeddedLoopBodyNodes(): void {
@@ -99,6 +92,10 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
         .filter((node) => node.type !== 'start' && node.type !== 'end')
         .map((node): WorkflowNode => ({
           ...JSON.parse(JSON.stringify(node)),
+          position: {
+            x: bodyNode.position.x + node.position.x,
+            y: bodyNode.position.y + node.position.y,
+          },
           composite: {
             ...(node.composite ? JSON.parse(JSON.stringify(node.composite)) : {}),
             rootId: bodyNode.composite?.rootId || bodyNode.id,
@@ -277,11 +274,9 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     const node = store.currentWorkflow?.nodes.find(n => n.id === nodeId)
     if (!node) return null
     const size = getRenderedNodeSize(node.id, node.data)
-    const parentId = getCompositeParentId(node)
-    const parent = parentId ? store.currentWorkflow?.nodes.find(n => n.id === parentId) : null
     return {
-      x: position.x + (parent?.position.x ?? 0),
-      y: position.y + (parent?.position.y ?? 0),
+      x: position.x,
+      y: position.y,
       width: size.width,
       height: size.height,
     }
@@ -333,17 +328,6 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
         width: childBounds.width,
         height: childBounds.height,
       })
-    }
-  }
-
-  function toWorkflowPosition(node: WorkflowNode, position: { x: number; y: number }): { x: number; y: number } {
-    const parentId = getCompositeParentId(node)
-    if (!parentId) return position
-    const parent = store.currentWorkflow?.nodes.find(n => n.id === parentId)
-    if (!parent) return position
-    return {
-      x: position.x - parent.position.x,
-      y: position.y - parent.position.y,
     }
   }
 
@@ -401,13 +385,27 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
         }
 
         const currentNode = store.currentWorkflow?.nodes.find((node) => node.id === change.id)
-        const nextPosition = currentNode ? toWorkflowPosition(currentNode, change.position) : change.position
         const previousPosition = currentNode ? { ...currentNode.position } : null
+        if (currentNode && isScopeBoundaryWorkflowNode(currentNode)) {
+          const dx = change.position.x - currentNode.position.x
+          const dy = change.position.y - currentNode.position.y
+          store.updateNodePosition(currentNode.id, change.position)
+          if (dx !== 0 || dy !== 0) {
+            const children = store.currentWorkflow?.nodes.filter((node) => getCompositeParentId(node) === currentNode.id) || []
+            for (const child of children) {
+              store.updateNodePosition(child.id, {
+                x: child.position.x + dx,
+                y: child.position.y + dy,
+              })
+            }
+          }
+          continue
+        }
         const groupId = findGroupOfNode(change.id)
         const group = groupId ? store.currentWorkflow?.groups?.find(g => g.id === groupId) : null
         const currentGroupBounds = group ? computeGroupBoundingBox(group) : null
         const nextGroupBounds = groupId
-          ? expandGroupToContent(groupId, { id: change.id, position: nextPosition })
+          ? expandGroupToContent(groupId, { id: change.id, position: change.position })
           : null
 
         if (
@@ -423,11 +421,7 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
           continue
         }
 
-        if (currentNode) {
-          store.updateNodePosition(change.id, nextPosition)
-        } else {
-          store.updateNodePosition(change.id, change.position)
-        }
+        store.updateNodePosition(change.id, change.position)
         if (groupId && nextGroupBounds) {
           store.updateGroupBounds(groupId, nextGroupBounds)
         }
@@ -516,26 +510,27 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
       .filter((n) => !isHiddenWorkflowNode(n))
       .map((n) => {
       const parentId = getCompositeParentId(n)
-      const isChild = !!parentId && !isScopeBoundaryWorkflowNode(n)
       const width = typeof n.data?.width === 'number' ? n.data.width : undefined
       const height = typeof n.data?.height === 'number' ? n.data.height : undefined
+      const isLoopBody = n.type === LOOP_BODY_NODE_TYPE
+      const isScopedChild = !!parentId && !isScopeBoundaryWorkflowNode(n)
 
       return {
         id: n.id,
         type: 'custom',
         position: n.position,
         selected: store.selectedNodeIds.includes(n.id),
-        parentNode: isChild ? parentId : undefined,
-        extent: isChild ? 'parent' : undefined,
         expandParent: false,
         draggable: true,
         dragHandle: n.type === LOOP_BODY_NODE_TYPE ? '.loop-body-header' : undefined,
+        zIndex: isLoopBody ? 0 : (isScopedChild ? 2 : 1),
         width,
         height,
         style: width || height ? {
           width: width ? `${width}px` : undefined,
           height: height ? `${height}px` : undefined,
-        } : undefined,
+          ...(isLoopBody ? { zIndex: 0 } : {}),
+        } : (isLoopBody ? { zIndex: 0 } : undefined),
         data: { ...n.data, label: n.label, nodeType: n.type }
       }
       })
