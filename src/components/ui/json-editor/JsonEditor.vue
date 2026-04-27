@@ -60,7 +60,7 @@ async function handleCopy() {
 </script>
 
 <template>
-  <div class="json-editor-wrapper rounded-md border border-border overflow-auto w-full relative"
+  <div class="json-editor-wrapper rounded-md border border-border overflow-hidden w-full relative"
     :class="{ 'jse-theme-dark': isDark, 'jse-readonly': isReadonly }"
     :style="{ height: typeof height === 'number' ? `${height}px` : height }">
     <div class="json-editor-host">

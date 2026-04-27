@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useWorkflowStore } from '@/stores/workflow'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import type { OutputField } from '@/lib/workflow/types'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -44,6 +43,7 @@ const canDebugSelectedNode = computed(() => definition.value?.debuggable !== fal
 const outputExpanded = ref(true)
 const inputsExpanded = ref(true)
 const outputsExpanded = ref(true)
+const jsonPresetPopoverOpen = ref(false)
 
 type JsonPreset = {
   id: string
@@ -64,6 +64,12 @@ const presetEditingId = ref<string | null>(null)
 const presetName = ref('')
 const presetJson = ref('')
 const presetError = ref('')
+
+onBeforeUnmount(() => {
+  jsonPresetPopoverOpen.value = false
+  importDialogOpen.value = false
+  presetDialogOpen.value = false
+})
 
 function getFieldValue(key: string): any {
   return store.selectedNode?.data[key] ?? ''
@@ -311,7 +317,10 @@ function confirmImport() {
             {{ definition.description }}
           </div>
         </div>
-        <Popover>
+        <Popover
+          :open="jsonPresetPopoverOpen"
+          @update:open="jsonPresetPopoverOpen = $event"
+        >
           <PopoverTrigger as-child>
             <Badge
               as="button"
@@ -461,11 +470,11 @@ function confirmImport() {
         </div>
       </div>
 
-      <ScrollArea class="flex-1 min-h-0">
+      <div class="flex-1 min-h-0 overflow-y-auto">
         <div class="p-3">
           <NodePropertyForm />
         </div>
-      </ScrollArea>
+      </div>
 
       <!-- 输入字段编辑区（可选，按节点定义开启） -->
       <div

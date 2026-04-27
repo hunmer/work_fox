@@ -33,6 +33,7 @@ watch(activeTab, async (tab) => {
     <Tabs
       v-model="activeTab"
       default-value="properties"
+      :unmount-on-hide="false"
       class="flex flex-col h-full"
     >
       <div class="px-2 pt-2">

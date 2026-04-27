@@ -46,6 +46,10 @@ const visibleProperties = computed(() => {
   })
 })
 
+function getSelectOptions(options?: Array<{ label: string, value: string }>) {
+  return (options || []).filter((option) => option.value !== '')
+}
+
 function isTextType(type: string): boolean {
   return type === 'text'
 }
@@ -252,7 +256,7 @@ function insertArrayVariable(propKey: string, index: number, fieldKey: string, v
           </SelectTrigger>
           <SelectContent>
             <SelectItem
-              v-for="opt in (prop.options || [])"
+              v-for="opt in getSelectOptions(prop.options)"
               :key="opt.value"
               :value="opt.value"
               class="text-xs"
@@ -365,7 +369,7 @@ function insertArrayVariable(propKey: string, index: number, fieldKey: string, v
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem
-                    v-for="opt in (field.options || [])"
+                    v-for="opt in getSelectOptions(field.options)"
                     :key="opt.value"
                     :value="opt.value"
                     class="text-[11px]"

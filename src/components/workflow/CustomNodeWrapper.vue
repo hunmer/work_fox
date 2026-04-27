@@ -249,21 +249,29 @@ const customViewProps = computed(() => {
   if (!CustomViewComponent.value) return {}
   if (definition.value?.type === 'gallery_preview') {
     const items = props.data?.items
+    const outputItems = executionStep.value?.output?.items
+    if (Array.isArray(outputItems)) {
+      return { items: outputItems }
+    }
     // items 是真正的数组，直接用
     if (Array.isArray(items)) {
       return { items: nodeStatus.value === 'completed' ? items : [] }
     }
     // items 是变量表达式，从执行结果取解析后的数
-    const outputItems = executionStep.value?.output?.items
-    if (Array.isArray(outputItems)) {
-      return { items: outputItems }
-    }
     return { items: [] }
   }
   if (definition.value?.type === 'music_player') {
     const tracks = props.data?.tracks
     const volume = props.data?.volume ?? 80
     const loop = props.data?.loop ?? false
+    const output = executionStep.value?.output
+    if (output) {
+      return {
+        tracks: Array.isArray(output.tracks) ? output.tracks : [],
+        volume: output.volume ?? volume,
+        loop: output.loop ?? loop,
+      }
+    }
     // 静态数组：执行完成后才显示，与 gallery_preview 行为一
     if (Array.isArray(tracks)) {
       return {
@@ -273,14 +281,6 @@ const customViewProps = computed(() => {
       }
     }
     // 变量表达式：从执行结果取解析后的数据
-    const output = executionStep.value?.output
-    if (output) {
-      return {
-        tracks: Array.isArray(output.tracks) ? output.tracks : [],
-        volume: output.volume ?? volume,
-        loop: output.loop ?? loop,
-      }
-    }
     return { tracks: [], volume, loop }
   }
   if (definition.value?.type === 'table_display') {
