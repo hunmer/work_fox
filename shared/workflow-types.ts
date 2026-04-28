@@ -89,6 +89,24 @@ export interface WorkflowGroup {
   savedNodeStates: Record<string, NodeRunState>  // 禁用前记忆每个节点的状态
 }
 
+/** 工作流触发器基础字段 */
+export interface WorkflowTriggerBase {
+  id: string
+  enabled: boolean
+}
+
+/** 工作流触发器 — discriminated union */
+export type WorkflowTrigger =
+  | (WorkflowTriggerBase & {
+      type: 'cron'
+      cron: string
+      timezone?: string
+    })
+  | (WorkflowTriggerBase & {
+      type: 'hook'
+      hookName: string
+    })
+
 export interface Workflow {
   id: string
   name: string
@@ -103,6 +121,7 @@ export interface Workflow {
   pluginConfigSchemes?: Record<string, string>
   layoutSnapshot?: Record<string, unknown>  // golden-layout 布局快照
   groups?: WorkflowGroup[]                   // 所有分组，可选字段保持向后兼容
+  triggers?: WorkflowTrigger[]
 }
 
 export interface OutputField {

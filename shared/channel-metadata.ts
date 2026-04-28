@@ -153,6 +153,10 @@ export const backendChannelMetadata: Record<BackendChannel, ChannelMetadata> = {
   'dashboard:stats': crud('dashboard:stats', 'Get dashboard statistics overview'),
   'dashboard:executions': crud('dashboard:executions', 'List dashboard execution records'),
   'dashboard:workflow-detail': crud('dashboard:workflow-detail', 'Get dashboard workflow detail'),
+
+  // --- Trigger ---
+  'trigger:validate-cron': crud('trigger:validate-cron', 'Validate cron expression'),
+  'trigger:check-hook-name': crud('trigger:check-hook-name', 'Check hook name bindings'),
 }
 
 function crud(channel: BackendChannel, description: string): ChannelMetadata {

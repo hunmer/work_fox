@@ -385,6 +385,16 @@ export interface BackendChannelMap {
   'dashboard:stats': ChannelContract<EmptyRequest, DashboardStatsResponse>
   'dashboard:executions': ChannelContract<DashboardExecutionsRequest, DashboardExecutionsResponse>
   'dashboard:workflow-detail': ChannelContract<DashboardWorkflowDetailRequest, DashboardWorkflowDetailResponse>
+
+  // --- Trigger ---
+  'trigger:validate-cron': ChannelContract<
+    { cron: string },
+    { valid: boolean; nextRuns: string[]; error?: string }
+  >
+  'trigger:check-hook-name': ChannelContract<
+    { hookName: string; excludeWorkflowId?: string },
+    { conflictWorkflowIds: string[]; hookUrl: string }
+  >
 }
 
 export type BackendChannel = keyof BackendChannelMap
