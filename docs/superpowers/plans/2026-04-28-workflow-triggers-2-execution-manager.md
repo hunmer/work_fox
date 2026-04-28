@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans.
 
-**Goal:** 为 ExecutionSession 添加可选 eventSink，使触发器执行事件可路由到 SSE 或静默丢弃，而非 WS 广播。
+**Goal:** 为 ExecutionSession 添加可选 eventSink，扩展 execute/createSession 方法签名，使触发器执行事件可路由到 SSE 或静默丢弃。
 
-**Architecture:** Session-scoped eventSink 可选回调。emitEvent 方法优先使用 eventSink，不存在时走原有 WS emit。
+**Architecture:** Session-scoped eventSink 可选回调。emitEvent 方法中 session 参数携带 eventSink 时替换 WS emit，但保留 recentEvents 记录。
 
 **Tech Stack:** TypeScript, backend/workflow/
 
@@ -12,7 +12,7 @@
 
 ---
 
-### Task 4: 修改 ExecutionSession 接口
+### Task 4: 修改 ExecutionSession 和 emitEvent
 
 **Files:**
 - Modify: `backend/workflow/execution-manager.ts`
@@ -25,36 +25,70 @@
 eventSink?: (channel: string, payload: unknown) => void
 ```
 
-- [ ] **Step 2: 修改 emitEvent 方法**
+- [ ] **Step 2: 修改 execute() 方法签名**
 
-找到 `emitEvent` 私有方法（约 L1503-1518），在 `this.deps.emit(channel, payload)` 调用前插入 eventSink 检查：
+找到 `execute()` 方法（约 L141），添加可选第三参数：
 
 ```typescript
-private emitEvent(channel: ExecutionEventChannel, payload: ExecutionEventMap[ExecutionEventChannel]): void {
-  // --- 新增: session-scoped eventSink 优先 ---
-  if (this.currentSession?.eventSink) {
-    this.currentSession.eventSink(channel, payload)
-    return
-  }
-  // --- 原有逻辑 ---
-  this.eventSequence++
-  const event = { ...payload, _seq: this.eventSequence } as any
-  this.currentSession?.recentEvents.push(event)
-  if (this.currentSession && this.currentSession.recentEvents.length > 100) {
-    this.currentSession.recentEvents.shift()
-  }
-  this.deps.emit(channel, payload)
+async execute(
+  request: WorkflowExecuteRequest,
+  ownerClientId: string,
+  eventSink?: (channel: string, payload: unknown) => void
+): Promise<WorkflowExecuteResponse> {
+```
+
+将 eventSink 传递到 `createSession()` 调用中。
+
+- [ ] **Step 3: 修改 createSession() 方法签名**
+
+找到 `createSession()` 私有方法（约 L217-254），添加可选参数：
+
+```typescript
+private createSession(
+  executionId: string,
+  workflow: Workflow,
+  ownerClientId: string,
+  input?: Record<string, any>,
+  snapshot?: ExecutionSnapshot,
+  context?: Record<string, any>,
+  eventSink?: (channel: string, payload: unknown) => void
+): ExecutionSession {
+```
+
+在返回的对象中添加 `eventSink` 字段。
+
+- [ ] **Step 4: 修改 emitEvent 方法**
+
+找到 `emitEvent` 私有方法（约 L1503-1518）。实际签名是 `emitEvent<Channel>(session, channel, payload)` — session 是第一个参数。
+
+在方法末尾的 `this.emit(channel, payload)` 调用处，替换为条件分支：
+
+```typescript
+// 原有 recentEvents/序列号逻辑保持不变（eventSink session 也需要）
+session.lastUpdatedAt = Date.now()
+session.eventSequence += 1
+const event = { ...payload, _seq: session.eventSequence } as any
+session.recentEvents.push(event)
+if (session.recentEvents.length > 100) {
+  session.recentEvents.shift()
+}
+
+// 新增: eventSink 替换 WS emit
+if (session.eventSink) {
+  session.eventSink(channel as string, payload)
+} else {
+  this.emit(channel, payload)
 }
 ```
 
-> **注意:** `emitEvent` 方法签名和 `this.currentSession` 引用需要对照实际代码确认。关键是 eventSink 分支必须在 `this.deps.emit` 之前 return。
+> **关键:** eventSink 分支保留 recentEvents 记录和序列号递增（执行恢复依赖），仅替换最终的 emit 目标。
 
-- [ ] **Step 3: 验证编译**
+- [ ] **Step 5: 验证编译**
 
 Run: `pnpm build:backend 2>&1 | tail -5`
-Expected: 编译成功，无错误
+Expected: 编译成功
 
-- [ ] **Step 4: 提交**
+- [ ] **Step 6: 提交**
 
 ```bash
 git add backend/workflow/execution-manager.ts

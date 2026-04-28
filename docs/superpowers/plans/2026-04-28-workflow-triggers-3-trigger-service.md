@@ -18,7 +18,7 @@
 
 - [ ] **Step 1: 安装**
 
-Run: `pnpm add node-cron && pnpm add -D @types/node-cron`
+Run: `pnpm add node-cron cron-parser && pnpm add -D @types/node-cron`
 
 - [ ] **Step 2: 提交**
 
@@ -38,6 +38,7 @@ git commit -m "chore(triggers): add node-cron dependency"
 
 ```typescript
 import cron, { CronJob } from 'node-cron'
+import { parseExpression } from 'cron-parser'
 import type { BackendWorkflowStore } from '../storage/workflow-store'
 import type { ExecutionManager } from './execution-manager'
 import type { BackendConfig } from '../app/config'
@@ -101,12 +102,10 @@ export class WorkflowTriggerService {
       return { valid: false, nextRuns: [], error: 'Invalid cron expression' }
     }
     try {
-      const now = new Date()
+      const interval = parseExpression(cronExpr)
       const nextRuns: string[] = []
-      // 使用 cron parser 获取下次运行时间
       for (let i = 0; i < 5; i++) {
-        // node-cron 不直接支持 next runs，用 setInterval 模拟或使用 cron-parser
-        // 简化：用 cron.validate 确认有效即可，nextRuns 由前端库计算
+        nextRuns.push(interval.next().toISOString())
       }
       return { valid: true, nextRuns }
     } catch (err: any) {

@@ -29,8 +29,13 @@ import { triggerApi } from '@/lib/backend-api/trigger-domain'
 import type { WorkflowTrigger } from '@shared/workflow-types'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
-  Button, Input, Switch, Badge, Separator
-} from '@/components/ui'
+  DialogFooter
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 
 const props = defineProps<{
   workflowId: string
@@ -117,7 +122,9 @@ function removeTrigger(id: string) {
 }
 
 async function save() {
-  await workflowStore.updateWorkflow({ triggers: triggers.value })
+  if (!workflowStore.currentWorkflow) return
+  const updated = { ...workflowStore.currentWorkflow, triggers: triggers.value }
+  await workflowStore.saveWorkflow(updated)
   emit('saved')
   emit('update:open', false)
 }

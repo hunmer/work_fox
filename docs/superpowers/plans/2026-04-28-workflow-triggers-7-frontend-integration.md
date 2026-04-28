@@ -139,11 +139,12 @@ git commit -m "feat(triggers): add trigger info to workflow detail panel"
 
 - [ ] **Step 1: 添加触发器按钮**
 
-在右侧按钮区域（`hasCustomLayout` 按钮之前）添加：
+在右侧按钮区域（`hasCustomLayout` 按钮之前）添加。通过 props 传入 `hasTriggers`：
 
 ```html
 <!-- 触发器设置 -->
 <button
+  v-if="hasTriggers !== undefined"
   class="relative p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
   title="触发器设置"
   @click="emit('open-triggers')"
@@ -156,33 +157,48 @@ git commit -m "feat(triggers): add trigger info to workflow detail panel"
 </button>
 ```
 
-> **注意:** `Zap` 图标来自 lucide-vue-next。`hasTriggers` 是计算属性。
-
-- [ ] **Step 2: 添加 emit 和计算属性**
-
-在 emits 中添加 `'open-triggers'`。在 script 中添加：
+在 EditorToolbar 的 props 中添加：
 
 ```typescript
-const hasTriggers = computed(() => {
-  return workflowStore.currentWorkflow?.triggers?.some(t => t.enabled) ?? false
-})
+hasTriggers?: boolean
 ```
 
-- [ ] **Step 3: 在父组件中连接 TriggerSettingsDialog**
+在 emits 中添加 `'open-triggers'`。
 
-在 `EditorPage.vue`（使用 EditorToolbar 的页面）中：
+> **注意:** `Zap` 图标来自 lucide-vue-next。hasTriggers 由父组件计算传入，EditorToolbar 不直接引用 workflowStore。
+
+- [ ] **Step 2: 在父组件 WorkflowEditor.vue 中连接**
+
+找到 `WorkflowEditor.vue`（持有 workflowStore 的组件），添加：
+
+```typescript
+import TriggerSettingsDialog from '@/components/workflow/TriggerSettingsDialog.vue'
+
+const triggerDialogOpen = ref(false)
+const hasTriggers = computed(() =>
+  workflowStore.currentWorkflow?.triggers?.some(t => t.enabled) ?? false
+)
+```
+
+在模板中：
 
 ```html
+<EditorToolbar
+  ...
+  :has-triggers="hasTriggers"
+  @open-triggers="triggerDialogOpen = true"
+/>
+
 <TriggerSettingsDialog
-  v-if="workflowStore.currentWorkflowId"
-  :workflow-id="workflowStore.currentWorkflowId"
+  v-if="workflowStore.currentWorkflow?.id"
+  :workflow-id="workflowStore.currentWorkflow.id"
   :open="triggerDialogOpen"
   @update:open="triggerDialogOpen = $event"
-  @saved="() => {}"
+  @saved="/* refresh workflow data */"
 />
 ```
 
-- [ ] **Step 4: 验证编译**
+- [ ] **Step 3: 验证编译**
 
 Run: `pnpm exec tsc -p tsconfig.web.json --noEmit 2>&1 | head -10`
 Expected: PASS
@@ -190,9 +206,11 @@ Expected: PASS
 - [ ] **Step 5: 提交**
 
 ```bash
-git add src/components/workflow/EditorToolbar.vue src/views/EditorPage.vue
+git add src/components/workflow/EditorToolbar.vue src/components/workflow/WorkflowEditor.vue
 git commit -m "feat(triggers): add trigger button to EditorToolbar"
 ```
+
+> **注意:** 如果 WorkflowEditor.vue 不存在，查找实际使用 EditorToolbar 的组件文件名，可能是 `EditorPage.vue` 或其他。需要对照实际目录结构确认。
 
 ---
 
