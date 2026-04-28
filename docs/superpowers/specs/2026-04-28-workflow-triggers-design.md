@@ -85,7 +85,8 @@ class WorkflowTriggerService {
 | `reloadWorkflow(workflowId)` | Called on workflow update — clear old triggers, register new ones |
 | `removeWorkflow(workflowId)` | Called on workflow delete — clear associated triggers |
 | `getHookBindings(hookName)` | Return workflow IDs bound to a hookName |
-| `isHookNameAvailable(hookName, excludeWorkflowId?)` | Check hook name availability |
+| `getHookConflicts(hookName, excludeWorkflowId?)` | Return list of workflows using same hookName (informational, not a conflict error) |
+| `validateCron(cron)` | Validate cron expression, return next 5 run times or error |
 
 ### Cron scheduling flow
 
@@ -93,13 +94,14 @@ class WorkflowTriggerService {
 start()
   -> workflowStore.listWorkflows()
   -> filter triggers where type='cron' && enabled=true
-  -> create node-cron CronJob for each
+  -> for each: try { create node-cron CronJob } catch { log error, skip }
   -> on fire -> executionManager.execute({ workflowId, input: {} }, '__scheduler__')
   -> results written to executionLog only, no WS push
 ```
 
 - Uses `__scheduler__` as virtual clientId
-- ExecutionManager needs minor adaptation: skip WS emit when clientId starts with `__`
+- Invalid cron expressions are caught with try-catch during registration — logged as errors but do not block workflow save
+- `validateCron()` exposed via WS channel for frontend validation before save
 
 ### Hook reverse index
 
@@ -111,18 +113,75 @@ hookIndex: {
 }
 ```
 
+### Hook concurrency
+
+Default behavior: `allow` — multiple concurrent requests may trigger the same workflow simultaneously. Each execution gets a unique `executionId`. SSE events use `executionId` to distinguish concurrent runs.
+
+Future extension point: add `concurrency: 'allow' | 'skip' | 'queue'` to `WorkflowTriggerBase` if needed.
+
+### ExecutionManager adaptation — session-scoped event sink
+
+The current `ExecutionManagerDeps.emit` broadcasts to all WS clients and has no clientId parameter. Instead of modifying the global emit signature, we use a **session-scoped event sink**:
+
+```typescript
+interface ExecutionSession {
+  // ... existing fields ...
+  eventSink?: (channel: string, payload: unknown) => void  // new optional
+}
+```
+
+- When `TriggerService` calls `execute()`, it creates a session-specific `eventSink`
+- `ExecutionManager.emitEvent()` checks `session.eventSink` first — if present, routes to it instead of WS
+- For `__scheduler__` sessions: `eventSink` is a no-op (results only in executionLog)
+- For `__hook_*` sessions: `eventSink` writes to the SSE `res` object
+- Normal WS sessions: `eventSink` is undefined, existing WS emit behavior unchanged
+
+This avoids changing the global `ExecutionManagerDeps.emit` signature and keeps the adaptation minimal.
+
+### Integration with workflow CRUD
+
+TriggerService integrates with existing storage channels via dependency injection, following the same pattern as `registerExecutionChannels(router, executionManager)`:
+
+```typescript
+// In backend/main.ts
+const triggerService = new WorkflowTriggerService(...)
+// Pass triggerService to storage channel registration
+registerStorageChannels(router, storageServices, triggerService)
+```
+
+```typescript
+// In backend/ws/storage-channels.ts (modified)
+export function registerStorageChannels(
+  router: WSRouter,
+  services: StorageServices,
+  triggerService?: WorkflowTriggerService  // new optional param
+): void {
+  router.register('workflow:update', ({ id, data }) => {
+    workflowStore.updateWorkflow(id, data)
+    triggerService?.reloadWorkflow(id)  // notify trigger service
+    return undefined
+  })
+  router.register('workflow:delete', ({ id }) => {
+    workflowStore.deleteWorkflow(id)
+    triggerService?.removeWorkflow(id)
+    return undefined
+  })
+  router.register('workflow:create', ({ data }) => {
+    const wf = workflowStore.createWorkflow(data)
+    triggerService?.reloadWorkflow(wf.id)
+    return wf
+  })
+}
+```
+
 ### Initialization in `backend/main.ts`
 
 ```
 ExecutionManager created
   -> TriggerService created
   -> triggerService.start()
+  -> registerStorageChannels(router, storageServices, triggerService)
 ```
-
-Workflow CRUD handlers must notify TriggerService:
-- `workflow:update` -> `triggerService.reloadWorkflow(id)`
-- `workflow:delete` -> `triggerService.removeWorkflow(id)`
-- `workflow:create` -> `triggerService.reloadWorkflow(id)`
 
 ---
 
@@ -172,28 +231,38 @@ res.writeHead(200, {
 })
 
 const sseClientId = `__hook_${uuid()}__`
-// Intercept ExecutionManager emit -> write to SSE
+// Session eventSink writes ExecutionEventMap payloads directly to SSE
 // On completion: send event: done, close connection
 ```
 
-**SSE event format**:
+**SSE event format — direct passthrough of existing `ExecutionEventMap`**:
+
+SSE events reuse the exact same payload structure as `shared/execution-events.ts`. Each event already contains `executionId`, enabling clients to distinguish concurrent executions.
 
 ```
 event: workflow:started
-data: {"executionId":"exec1","workflowId":"wf1","status":"running"}
+data: <JSON of WorkflowStartedEvent from ExecutionEventMap>
 
 event: node:start
-data: {"nodeId":"n1","workflowId":"wf1","label":"Start"}
+data: <JSON of NodeStartEvent from ExecutionEventMap>
 
 event: node:complete
-data: {"nodeId":"n1","workflowId":"wf1","output":{...}}
+data: <JSON of NodeCompleteEvent from ExecutionEventMap>
 
 event: workflow:completed
-data: {"executionId":"exec1","workflowId":"wf1","status":"completed"}
+data: <JSON of WorkflowCompletedEvent from ExecutionEventMap>
 
 event: done
 data: {}
 ```
+
+No simplified schema — the `eventSink` directly serializes the `ExecutionEventMap[channel]` payload.
+
+### SSE connection lifecycle
+
+- `res.on('close')` handler: removes the SSE eventSink from the session, but **does not stop** the running workflow. Execution continues in the background, results persisted to executionLog.
+- SSE timeout: if execution exceeds 5 minutes, send `event: timeout` and close SSE connection (workflow continues).
+- Client disconnect is a transport concern, not an execution concern.
 
 ### Broadcast logic
 
@@ -202,19 +271,9 @@ handleHookRequest(hookName, params)
   -> lookup hookIndex for bound workflows
   -> if params.workflowId exists, filter to that workflow only
   -> execute all target workflows in parallel
-  -> SSE streams events from all workflows (tagged with workflowId)
+  -> each execution gets unique executionId (already guaranteed by ExecutionManager)
+  -> SSE streams all events (distinguishable by executionId in payload)
   -> send done event when all complete
-```
-
-### ExecutionManager adaptation
-
-Minimal change — inject a custom `emit` function via deps:
-
-```typescript
-// When clientId starts with '__hook_' or '__scheduler__'
-// The emit callback injected by TriggerService handles routing
-// (SSE for hook, no-op for scheduler)
-// No WS emit occurs for system client IDs
 ```
 
 ---
@@ -224,18 +283,22 @@ Minimal change — inject a custom `emit` function via deps:
 ### New channels (`shared/channel-contracts.ts`)
 
 ```typescript
-'trigger:check-hook-name': ChannelContract<
-  { hookName: string; excludeWorkflowId?: string },
-  { available: boolean; conflictWorkflowIds: string[] }
+'trigger:validate-cron': ChannelContract<
+  { cron: string },
+  { valid: boolean; nextRuns: string[]; error?: string }
 >
 
-'trigger:test': ChannelContract<
-  { workflowId: string; triggerId: string; input?: Record<string, unknown> },
-  { executionId: string; status: EngineStatus }
+'trigger:check-hook-name': ChannelContract<
+  { hookName: string; excludeWorkflowId?: string },
+  { conflictWorkflowIds: string[]; hookUrl: string }
 >
 ```
 
-**Rationale**: Trigger CRUD uses existing `workflow:update` channel (triggers field). Only validation and testing need dedicated channels.
+**Rationale**:
+- Trigger CRUD uses existing `workflow:update` channel (triggers field)
+- `trigger:validate-cron` validates cron expression and returns next 5 execution times for preview
+- `trigger:check-hook-name` returns conflict list (workflows using same hookName) as **informational** — not an error, since hook broadcast is one-to-many by design. Also returns the full hook URL for convenience.
+- No `trigger:test` channel — frontend can reuse existing `workflow:execute` channel and execution event subscriptions for testing
 
 ### Channel registration (`backend/ws/trigger-channels.ts`)
 
@@ -243,17 +306,19 @@ New handler file registering both channels, depends on TriggerService.
 
 ### Channel metadata (`shared/channel-metadata.ts`)
 
+Follows existing pattern using helper functions:
+
 ```typescript
-'trigger:check-hook-name': { timeout: 5000 },
-'trigger:test': { timeout: 120_000, stream: true }
+'trigger:validate-cron': crud('trigger:validate-cron', 'Validate cron expression'),
+'trigger:check-hook-name': crud('trigger:check-hook-name', 'Check hook name bindings'),
 ```
 
 ### Frontend API adapter (`src/lib/backend-api/trigger-domain.ts`)
 
 ```typescript
 export const triggerApi = {
-  checkHookName(hookName: string, excludeWorkflowId?: string),
-  testTrigger(workflowId: string, triggerId: string, input?: Record<string, unknown>)
+  validateCron(cron: string): Promise<{ valid: boolean; nextRuns: string[]; error?: string }>,
+  checkHookName(hookName: string, excludeWorkflowId?: string): Promise<{ conflictWorkflowIds: string[]; hookUrl: string }>
 }
 ```
 
@@ -297,9 +362,9 @@ export const triggerApi = {
 
 **Features**:
 - List all triggers with enable/disable toggle and delete button per row
-- Add Cron: input expression, show next execution time preview
-- Add Hook: input hookName, check availability button, display full hook URL
-- Test button: calls `trigger:test` for a dry run
+- Add Cron: input expression, real-time validation via `trigger:validate-cron`, show next 5 execution times preview
+- Add Hook: input hookName, click "Check" to see conflicts (other workflows using same name, shown as info not error) and full hook URL
+- Test button: triggers `workflow:execute` for a dry run (reuses existing execution infrastructure)
 - Save: updates workflow via `workflow:update` with modified triggers array
 
 ### 5.2 WorkflowListPage Badge
@@ -345,15 +410,16 @@ Add a trigger icon button in the right area, before the layout reset button:
 | File | Change |
 |------|--------|
 | `shared/workflow-types.ts` | Add `WorkflowTrigger` type, extend `Workflow` with `triggers` field |
-| `shared/channel-contracts.ts` | Add `trigger:check-hook-name` and `trigger:test` channels |
-| `shared/channel-metadata.ts` | Add metadata for new channels |
+| `shared/channel-contracts.ts` | Add `trigger:validate-cron` and `trigger:check-hook-name` channels |
+| `shared/channel-metadata.ts` | Add metadata for new channels using existing helper patterns |
 | `shared/execution-events.ts` | No change — reuse existing event types for SSE |
 | `backend/app/config.ts` | Add `hookSecret` config field |
 | `backend/app/create-server.ts` | Register `POST /hook/:hookName` route |
 | `backend/main.ts` | Initialize TriggerService after ExecutionManager |
 | `backend/workflow/trigger-service.ts` | **New** — cron scheduler + hook index + SSE handler |
-| `backend/workflow/execution-manager.ts` | Minor adaptation for system client IDs |
-| `backend/ws/trigger-channels.ts` | **New** — WS handler for trigger validation and testing |
+| `backend/workflow/execution-manager.ts` | Add optional `eventSink` to ExecutionSession, use it when present |
+| `backend/ws/trigger-channels.ts` | **New** — WS handler for trigger validation |
+| `backend/ws/storage-channels.ts` | Inject TriggerService, call reload/remove on workflow CRUD |
 | `backend/ws/index.ts` (or router) | Register trigger channels |
 | `src/lib/backend-api/trigger-domain.ts` | **New** — frontend trigger API adapter |
 | `src/components/workflow/TriggerSettingsDialog.vue` | **New** — trigger settings dialog |
@@ -370,4 +436,5 @@ Add a trigger icon button in the right area, before the layout reset button:
 - HTTP Hook auth via Bearer token against `WORKFOX_HOOK_SECRET` env var
 - No auth when secret not configured (dev mode only)
 - Cron triggers run with system-level permissions (no user context)
-- SSE connections auto-close on execution completion or client disconnect
+- SSE connections auto-close on execution completion, timeout (5 min), or client disconnect
+- SSE disconnect does not stop running workflows — execution continues, results persisted to log
