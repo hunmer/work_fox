@@ -80,6 +80,7 @@ interface ExecutionSession {
   recentEvents: ExecutionBacklogEvent[]
   loopStack: LoopExecutionFrame[]
   breakpointBypassKeys: Set<string>
+  eventSink?: (channel: string, payload: unknown) => void
 }
 
 interface JsonPreset {
@@ -138,14 +139,14 @@ export class BackendWorkflowExecutionManager {
     return count
   }
 
-  async execute(request: WorkflowExecuteRequest, ownerClientId: string): Promise<WorkflowExecuteResponse> {
+  async execute(request: WorkflowExecuteRequest, ownerClientId: string, eventSink?: (channel: string, payload: unknown) => void): Promise<WorkflowExecuteResponse> {
     const workflow = this.deps.workflowStore.getWorkflow(request.workflowId)
     if (!workflow) {
       throw createErrorShape('NOT_FOUND', `工作流不存在: ${request.workflowId}`)
     }
 
     const executionId = randomUUID()
-    const session = this.createSession(executionId, workflow, ownerClientId, request.input || {}, request.snapshot)
+    const session = this.createSession(executionId, workflow, ownerClientId, request.input || {}, request.snapshot, undefined, eventSink)
 
     this.sessions.set(executionId, session)
     void this.run(session)
@@ -221,6 +222,7 @@ export class BackendWorkflowExecutionManager {
     input: Record<string, unknown>,
     snapshot?: { nodes: WorkflowNode[]; edges: WorkflowEdge[] },
     context?: Record<string, unknown>,
+    eventSink?: (channel: string, payload: unknown) => void,
   ): ExecutionSession {
     return {
       id: executionId,
@@ -250,6 +252,7 @@ export class BackendWorkflowExecutionManager {
       recentEvents: [],
       loopStack: [],
       breakpointBypassKeys: new Set(),
+      eventSink,
     }
   }
 
@@ -1515,7 +1518,11 @@ if (typeof main === 'function') return main({ params, context })`)
     if (session.recentEvents.length > MAX_RECENT_EVENTS) {
       session.recentEvents.splice(0, session.recentEvents.length - MAX_RECENT_EVENTS)
     }
-    this.emit(channel, payload)
+    if (session.eventSink) {
+      session.eventSink(channel as string, payload)
+    } else {
+      this.emit(channel, payload)
+    }
   }
 
   private emitLog(session: ExecutionSession): void {

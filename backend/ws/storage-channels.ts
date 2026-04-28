@@ -11,18 +11,24 @@ export interface StorageServices {
   operationHistoryStore: BackendOperationHistoryStore
 }
 
-export function registerStorageChannels(router: WSRouter, services: StorageServices): void {
+export function registerStorageChannels(router: WSRouter, services: StorageServices, triggerService?: import('../workflow/trigger-service').WorkflowTriggerService): void {
   const { workflowStore, workflowVersionStore, executionLogStore, operationHistoryStore } = services
 
   router.register('workflow:list', ({ folderId }) => workflowStore.listWorkflows(folderId))
   router.register('workflow:get', ({ id }) => workflowStore.getWorkflow(id))
-  router.register('workflow:create', ({ data }) => workflowStore.createWorkflow(data))
+  router.register('workflow:create', ({ data }) => {
+    const wf = workflowStore.createWorkflow(data)
+    triggerService?.reloadWorkflow(wf.id)
+    return wf
+  })
   router.register('workflow:update', ({ id, data }) => {
     workflowStore.updateWorkflow(id, data)
+    triggerService?.reloadWorkflow(id)
     return undefined
   })
   router.register('workflow:delete', ({ id }) => {
     workflowStore.deleteWorkflow(id)
+    triggerService?.removeWorkflow(id)
     return undefined
   })
   router.register('workflow:list-plugin-schemes', ({ workflowId, pluginId }) => workflowStore.listPluginSchemes(workflowId, pluginId))
