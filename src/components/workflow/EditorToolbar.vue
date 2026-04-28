@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, type Ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Minus, Square, X, Maximize2, Plus, Save, LayoutDashboard, SaveAll, RotateCcw, Trash2, Pencil } from 'lucide-vue-next'
+import { Minus, Square, X, Maximize2, Plus, Save, LayoutDashboard, SaveAll, RotateCcw, Trash2, Pencil, Zap } from 'lucide-vue-next'
 import {
   Menubar,
   MenubarMenu,
@@ -34,6 +34,7 @@ const props = defineProps<{
   hideTabSwitcher?: boolean
   isDirty?: boolean
   hasCustomLayout?: boolean
+  hasTriggers?: boolean
   layoutPresets: LayoutPreset[]
   recentWorkflows: { id: string; name: string; updatedAt: number }[]
 }>()
@@ -54,6 +55,7 @@ const emit = defineEmits<{
   'save-preset': []
   'apply-preset': [id: string]
   'delete-preset': [id: string]
+  'open-triggers': []
 }>()
 
 const isMaximized = ref(false)
@@ -245,6 +247,17 @@ refreshMaximized()
     <div class="flex-1" />
 
     <div class="flex items-center no-drag">
+      <button
+        class="relative inline-flex items-center justify-center w-7 h-7 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+        title="触发器设置"
+        @click="emit('open-triggers')"
+      >
+        <Zap class="w-4 h-4" />
+        <span
+          v-if="hasTriggers"
+          class="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-primary"
+        />
+      </button>
       <button
         v-if="hasCustomLayout"
         class="inline-flex items-center justify-center w-7 h-7 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"

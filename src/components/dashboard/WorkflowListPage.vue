@@ -1,10 +1,16 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import WorkflowDetailPanel from './WorkflowDetailPanel.vue'
+import TriggerSettingsDialog from '@/components/workflow/TriggerSettingsDialog.vue'
 import { useDashboardStore } from '@/stores/dashboard'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { ChevronRight } from 'lucide-vue-next'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Switch } from '@/components/ui/switch'
+import { Separator } from '@/components/ui/separator'
+import { ChevronRight, Clock, Webhook, Zap } from 'lucide-vue-next'
 import type { Workflow } from '@shared/workflow-types'
 
 const store = useDashboardStore()
@@ -35,6 +41,25 @@ const uncategorizedWorkflows = computed(() =>
 function handleSelectWorkflow(wfId: string) {
   store.selectWorkflow(wfId)
 }
+
+function hasEnabledCronTrigger(wf: Workflow): boolean {
+  return wf.triggers?.some(t => t.type === 'cron' && t.enabled) ?? false
+}
+
+function hasEnabledHookTrigger(wf: Workflow): boolean {
+  return wf.triggers?.some(t => t.type === 'hook' && t.enabled) ?? false
+}
+
+// TriggerSettingsDialog 状态
+const triggerDialogOpen = ref(false)
+
+const selectedWorkflow = computed(() =>
+  store.workflows.find(wf => wf.id === store.selectedWorkflowId) ?? null
+)
+
+function openTriggerDialog() {
+  triggerDialogOpen.value = true
+}
 </script>
 
 <template>
@@ -57,13 +82,15 @@ function handleSelectWorkflow(wfId: string) {
                   <button
                     v-for="wf in groupedWorkflows.get(folder.id)"
                     :key="wf.id"
-                    class="w-full rounded-md px-3 py-1.5 text-sm text-left transition-colors"
+                    class="w-full rounded-md px-3 py-1.5 text-sm text-left transition-colors flex items-center gap-1.5"
                     :class="store.selectedWorkflowId === wf.id
                       ? 'bg-primary text-primary-foreground'
                       : 'hover:bg-muted'"
                     @click="handleSelectWorkflow(wf.id)"
                   >
-                    {{ wf.name }}
+                    <span class="truncate flex-1 min-w-0">{{ wf.name }}</span>
+                    <span v-if="hasEnabledCronTrigger(wf)" class="shrink-0 text-xs" title="Cron 触发器">&#x23F0;</span>
+                    <span v-if="hasEnabledHookTrigger(wf)" class="shrink-0 text-xs" title="Hook 触发器">&#x1F517;</span>
                   </button>
                 </div>
               </CollapsibleContent>
@@ -76,13 +103,15 @@ function handleSelectWorkflow(wfId: string) {
               <button
                 v-for="wf in uncategorizedWorkflows"
                 :key="wf.id"
-                class="w-full rounded-md px-3 py-1.5 text-sm text-left transition-colors"
+                class="w-full rounded-md px-3 py-1.5 text-sm text-left transition-colors flex items-center gap-1.5"
                 :class="store.selectedWorkflowId === wf.id
                   ? 'bg-primary text-primary-foreground'
                   : 'hover:bg-muted'"
                 @click="handleSelectWorkflow(wf.id)"
               >
-                {{ wf.name }}
+                <span class="truncate flex-1 min-w-0">{{ wf.name }}</span>
+                <span v-if="hasEnabledCronTrigger(wf)" class="shrink-0 text-xs" title="Cron 触发器">&#x23F0;</span>
+                <span v-if="hasEnabledHookTrigger(wf)" class="shrink-0 text-xs" title="Hook 触发器">&#x1F517;</span>
               </button>
             </div>
           </div>
@@ -105,6 +134,39 @@ function handleSelectWorkflow(wfId: string) {
             :detail="store.workflowDetail"
             :loading="store.workflowDetailLoading"
           />
+
+          <!-- 触发器信息区块 -->
+          <Card v-if="selectedWorkflow && selectedWorkflow.triggers?.length" class="mt-4">
+            <CardHeader class="flex flex-row items-center justify-between pb-2">
+              <CardTitle class="text-sm font-medium">触发器</CardTitle>
+              <Button variant="ghost" size="sm" class="h-7 gap-1 text-xs" @click="openTriggerDialog">
+                <Zap class="w-3.5 h-3.5" />
+                编辑触发器
+              </Button>
+            </CardHeader>
+            <CardContent class="space-y-2">
+              <div
+                v-for="trigger in selectedWorkflow.triggers"
+                :key="trigger.id"
+                class="flex items-center gap-3 px-3 py-2 rounded-md border border-border bg-muted/30"
+              >
+                <component :is="trigger.type === 'cron' ? Clock : Webhook" class="w-4 h-4 shrink-0 text-muted-foreground" />
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2">
+                    <Badge variant="secondary" class="text-[10px] px-1.5 py-0">
+                      {{ trigger.type === 'cron' ? 'Cron' : 'Hook' }}
+                    </Badge>
+                    <span class="text-sm truncate">
+                      {{ trigger.type === 'cron' ? trigger.cron : trigger.hookName }}
+                    </span>
+                  </div>
+                </div>
+                <Badge :variant="trigger.enabled ? 'default' : 'outline'" class="text-[10px]">
+                  {{ trigger.enabled ? '已启用' : '已禁用' }}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </template>
       <div v-else class="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -112,4 +174,12 @@ function handleSelectWorkflow(wfId: string) {
       </div>
     </div>
   </div>
+
+  <TriggerSettingsDialog
+    v-if="selectedWorkflow"
+    :workflow-id="selectedWorkflow.id"
+    :open="triggerDialogOpen"
+    @update:open="triggerDialogOpen = $event"
+    @saved="store.selectWorkflow(selectedWorkflow.id)"
+  />
 </template>
