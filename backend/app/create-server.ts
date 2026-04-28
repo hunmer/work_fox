@@ -6,11 +6,14 @@ import type { Logger } from './logger'
 import { WSRouter } from '../ws/router'
 import { registerSystemChannels } from '../ws/channels'
 import { ConnectionManager } from '../ws/connection-manager'
+import { handleHookRequest } from '../workflow/hook-handler'
+import type { WorkflowTriggerService } from '../workflow/trigger-service'
 
 export interface BackendServer {
   server: http.Server
   router: WSRouter
   connections: ConnectionManager
+  registerHookHandler(triggerService: WorkflowTriggerService): void
   start(): Promise<{ port: number }>
   stop(): Promise<void>
 }
@@ -22,6 +25,8 @@ export function createBackendServer(config: BackendConfig, logger: Logger): Back
   const router = new WSRouter(logger)
   registerSystemChannels(router)
   const connections = new ConnectionManager(wss, router, logger, config)
+
+  app.use(express.json())
 
   app.get('/health', (_req, res) => {
     res.json({
@@ -43,6 +48,11 @@ export function createBackendServer(config: BackendConfig, logger: Logger): Back
     server,
     router,
     connections,
+    registerHookHandler(triggerService) {
+      app.post('/hook/:hookName', (req, res) => {
+        handleHookRequest(req, res, triggerService, config, logger)
+      })
+    },
     start() {
       return new Promise((resolve, reject) => {
         connections.start()
