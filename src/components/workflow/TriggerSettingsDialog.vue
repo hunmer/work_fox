@@ -226,16 +226,27 @@ function cronHumanLabel(cron: string): string {
   return cron
 }
 
+let savePromise: Promise<void> | null = null
+
 async function syncSave() {
   if (!workflowStore.currentWorkflow) return
+  if (savePromise) await savePromise
   saving.value = true
-  try {
-    const updated = { ...workflowStore.currentWorkflow, triggers: triggers.value }
-    await workflowStore.saveWorkflow(updated)
-    emit('saved')
-  } finally {
-    saving.value = false
-  }
+  savePromise = (async () => {
+    try {
+      const updated = { ...workflowStore.currentWorkflow, triggers: JSON.parse(JSON.stringify(triggers.value)) }
+      await workflowStore.saveWorkflow(updated)
+      // 同步 currentWorkflow 上的 triggers
+      if (workflowStore.currentWorkflow) {
+        workflowStore.currentWorkflow.triggers = JSON.parse(JSON.stringify(triggers.value))
+      }
+      emit('saved')
+    } finally {
+      saving.value = false
+      savePromise = null
+    }
+  })()
+  await savePromise
 }
 </script>
 
