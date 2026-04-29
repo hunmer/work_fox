@@ -94,8 +94,7 @@ function setFieldValue(key: string, value: any) {
 }
 
 function insertVariable(propKey: string, variablePath: string) {
-  const current = getTextFieldValue(propKey)
-  setFieldValue(propKey, current + variablePath)
+  setFieldValue(propKey, variablePath)
 }
 
 function getArrayItems(key: string): Record<string, any>[] {

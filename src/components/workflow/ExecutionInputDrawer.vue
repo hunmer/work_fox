@@ -90,9 +90,6 @@ function handleSubmit() {
         </div>
       </ScrollArea>
       <SheetFooter class="flex-row gap-2 border-t pt-4">
-        <Button variant="outline" size="sm" class="flex-1" @click="emit('update:open', false)">
-          取消
-        </Button>
         <Button size="sm" class="flex-1" @click="handleSubmit">
           <Play class="w-3 h-3 mr-1" /> 开始执行
         </Button>
