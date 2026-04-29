@@ -492,14 +492,17 @@ export class BackendWorkflowExecutionManager {
     }
 
     const resolvedData = this.resolveContextVariables(session, this.applySelectedJsonPreset(node.data))
+    const stepInput = this.getStepInput(node, resolvedData)
     if (!session.context.__inputs__) session.context.__inputs__ = {}
-    session.context.__inputs__[node.id] = this.buildOutputObject(resolvedData.inputFields) ?? {}
+    session.context.__inputs__[node.id] = node.type === 'end'
+      ? {}
+      : this.buildOutputObject(resolvedData.inputFields) ?? {}
     const step: ExecutionStep = {
       nodeId: node.id,
       nodeLabel: node.label,
       startedAt: Date.now(),
       status: 'running',
-      input: resolvedData,
+      ...(stepInput === undefined ? {} : { input: stepInput }),
     }
     session.steps.push(step)
 
@@ -509,7 +512,7 @@ export class BackendWorkflowExecutionManager {
       timestamp: Date.now(),
       nodeId: node.id,
       nodeLabel: node.label,
-      input: resolvedData,
+      input: stepInput,
     })
     this.emitLog(session)
 
@@ -1336,6 +1339,12 @@ if (typeof main === 'function') return main({ params, context })`)
     }
 
     return this.buildOutputObject(resolvedData.outputs) ?? {}
+  }
+
+  private getStepInput(node: WorkflowNode, resolvedData: Record<string, any>): Record<string, any> | undefined {
+    if (node.type === 'start') return undefined
+    if (node.type === 'end') return undefined
+    return resolvedData
   }
 
   private objectToOutputFields(value: Record<string, any>): OutputField[] {

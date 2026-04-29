@@ -1,19 +1,18 @@
 <script setup lang="ts">
-import { computed, inject, ref, watch } from 'vue'
+import { computed, inject, ref } from 'vue'
 import { useWorkflowStore } from '@/stores/workflow'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import JsonEditor from '@/components/ui/json-editor/JsonEditor.vue'
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter, SheetDescription } from '@/components/ui/sheet'
 import { Play, Pause, Square, ChevronDown, ChevronUp, CheckCircle, XCircle, Loader2, Circle, Trash2, AlertTriangle, Info, AlertCircle as AlertCircleIcon, Copy, Check, MoreHorizontal, FolderOpen } from 'lucide-vue-next'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { executionLogBackendApi } from '@/lib/backend-api/execution-log'
 import type { ExecutionLog, ExecutionStep, WorkflowNode } from '@/lib/workflow/types'
 import type { OutputField } from '@shared/workflow-types'
 import { WORKFLOW_EXEC_BAR_LAYOUT_KEY } from './workflowLayoutContext'
+import ExecutionInputDrawer from './ExecutionInputDrawer.vue'
 
 // ====== 步骤分组：loop / sub_workflow 子节点包裹 ======
 
@@ -174,55 +173,27 @@ const expanded = computed(() => execBarLayout?.getExpanded() ?? false)
 
 // ====== 执行前输入表单 Drawer ======
 const inputDrawerOpen = ref(false)
-const inputFormValues = ref<Record<string, string>>({})
-
-const startNode = computed<WorkflowNode | null>(() => {
-  const nodes = store.currentWorkflow?.nodes
-  if (!nodes) return null
-  return nodes.find(n => n.type === 'start') ?? null
-})
 
 const startInputFields = computed<OutputField[]>(() => {
-  const fields = startNode.value?.data?.inputFields
+  const nodes = store.currentWorkflow?.nodes
+  if (!nodes) return []
+  const startNode = nodes.find(n => n.type === 'start')
+  const fields = startNode?.data?.inputFields
   return Array.isArray(fields) ? fields : []
 })
 
-const hasStartInputs = computed(() => startInputFields.value.length > 0)
-
-function openInputDrawer() {
-  const defaults: Record<string, string> = {}
-  for (const field of startInputFields.value) {
-    if (field.key) defaults[field.key] = field.value ?? ''
-  }
-  inputFormValues.value = defaults
-  inputDrawerOpen.value = true
-}
-
-function submitInputs() {
-  inputDrawerOpen.value = false
-  const inputs: Record<string, unknown> = {}
-  for (const field of startInputFields.value) {
-    if (!field.key) continue
-    const raw = inputFormValues.value[field.key] ?? ''
-    if (field.type === 'number') {
-      inputs[field.key] = raw === '' ? 0 : Number(raw)
-    } else if (field.type === 'boolean') {
-      inputs[field.key] = raw === 'true'
-    } else {
-      inputs[field.key] = raw
-    }
-  }
-  store.startExecution(inputs)
-  setExpanded(true)
-}
-
 function handleExecuteClick() {
-  if (hasStartInputs.value) {
-    openInputDrawer()
+  if (startInputFields.value.length > 0) {
+    inputDrawerOpen.value = true
   } else {
     store.startExecution()
     setExpanded(true)
   }
+}
+
+function handleInputSubmit(inputs: Record<string, unknown>) {
+  store.startExecution(inputs)
+  setExpanded(true)
 }
 
 const isRunning = computed(() => store.executionStatus === 'running')
@@ -672,58 +643,11 @@ function setExpanded(nextExpanded: boolean) {
     </div>
 
     <!-- 执行输入表单 Drawer -->
-    <Sheet v-model:open="inputDrawerOpen">
-      <SheetContent side="right" class="w-[360px] sm:w-[400px] flex flex-col">
-        <SheetHeader>
-          <SheetTitle>工作流输入</SheetTitle>
-          <SheetDescription>填写以下字段后开始执行</SheetDescription>
-        </SheetHeader>
-        <ScrollArea class="flex-1 -mx-6 px-6">
-          <div class="space-y-3 py-4">
-            <div
-              v-for="field in startInputFields"
-              :key="field.key"
-              class="space-y-1.5"
-            >
-              <label class="text-xs font-medium text-foreground">
-                {{ field.key }}
-                <span class="text-muted-foreground font-normal">({{ field.type }})</span>
-              </label>
-              <Input
-                v-if="field.type === 'boolean'"
-                :model-value="String(inputFormValues[field.key] ?? '')"
-                placeholder="true / false"
-                class="h-7 text-xs"
-                @update:model-value="inputFormValues[field.key] = $event"
-              />
-              <Input
-                v-else-if="field.type === 'number'"
-                :model-value="inputFormValues[field.key] ?? ''"
-                type="number"
-                :placeholder="field.key"
-                class="h-7 text-xs"
-                @update:model-value="inputFormValues[field.key] = $event"
-              />
-              <Input
-                v-else
-                :model-value="inputFormValues[field.key] ?? ''"
-                :placeholder="field.key"
-                class="h-7 text-xs"
-                @update:model-value="inputFormValues[field.key] = $event"
-              />
-            </div>
-          </div>
-        </ScrollArea>
-        <SheetFooter class="flex-row gap-2 pt-2 border-t">
-          <Button variant="outline" size="sm" class="flex-1" @click="inputDrawerOpen = false">
-            取消
-          </Button>
-          <Button size="sm" class="flex-1" @click="submitInputs">
-            <Play class="w-3 h-3 mr-1" /> 开始执行
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+    <ExecutionInputDrawer
+      v-model:open="inputDrawerOpen"
+      :fields="startInputFields"
+      @submit="handleInputSubmit"
+    />
   </div>
 </template>
 

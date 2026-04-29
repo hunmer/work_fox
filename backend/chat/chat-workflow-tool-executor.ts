@@ -427,6 +427,16 @@ export class ChatWorkflowToolExecutor {
         if (variableError) errors.push(`data.${key} ${variableError}`)
       }
 
+      if (node.type === 'start' && key === 'outputs' && value !== undefined) {
+        errors.push('开始节点不支持 data.outputs；请把入口参数写到 data.inputFields')
+        continue
+      }
+
+      if (node.type === 'end' && key === 'inputFields' && value !== undefined) {
+        errors.push('结束节点不支持 data.inputFields；请把返回值写到 data.outputs')
+        continue
+      }
+
       if ((key === 'outputs' || key === 'inputFields') && value !== undefined) {
         errors.push(...validateOutputFields(value, `data.${key}`))
         continue

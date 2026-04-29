@@ -145,6 +145,24 @@ const otherNodes = computed(() => {
   )
 })
 
+const inputMenuNodes = computed(() =>
+  otherNodes.value.filter((node) => node.type !== 'start' && node.type !== 'end'),
+)
+
+const outputMenuNodes = computed(() =>
+  otherNodes.value.filter((node) => node.type !== 'start' && node.type !== 'end'),
+)
+
+const workflowInputNode = computed(() => {
+  if (!pickerWorkflow.value) return null
+  return pickerWorkflow.value.nodes.find((node) => node.type === 'start') ?? null
+})
+
+const workflowInputFields = computed(() => {
+  if (!workflowInputNode.value) return []
+  return getNodeInputFields(workflowInputNode.value)
+})
+
 function getConnectedNodeIds(edges: EmbeddedWorkflow['edges'], nodeId: string): Set<string> {
   const connectedNodeIds = new Set<string>()
   for (const edge of edges) {
@@ -256,18 +274,37 @@ function handleSelectLoopField(_nodeId: string, fieldPath: string) {
       class="w-56"
     >
 
+      <!-- 工作流输入 sub-menu -->
+      <DropdownMenuSub v-if="workflowInputNode">
+        <DropdownMenuSubTrigger class="text-xs font-medium">
+          <span>工作流输入</span>
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent class="min-w-[180px]">
+          <template v-if="workflowInputFields.length > 0">
+            <VariableFieldMenu
+              :fields="workflowInputFields"
+              :node-id="workflowInputNode.id"
+              @select="handleSelectField"
+            />
+          </template>
+          <div v-else class="px-2 py-1.5 text-xs text-muted-foreground">
+            无输入字段
+          </div>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+
     <!-- 节点输入 sub-menu -->
       <DropdownMenuSub>
         <DropdownMenuSubTrigger class="text-xs font-medium">
           <span>节点输入</span>
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent class="w-56">
-          <template v-if="otherNodes.length === 0">
+          <template v-if="inputMenuNodes.length === 0">
             <div class="px-2 py-1.5 text-xs text-muted-foreground">
               没有直接相连的节点
             </div>
           </template>
-          <template v-for="node in otherNodes" :key="node.id">
+          <template v-for="node in inputMenuNodes" :key="node.id">
             <DropdownMenuSub>
               <DropdownMenuSubTrigger class="text-xs">
                 <component
@@ -300,12 +337,12 @@ function handleSelectLoopField(_nodeId: string, fieldPath: string) {
           <span>节点输出</span>
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent class="w-56">
-          <template v-if="otherNodes.length === 0">
+          <template v-if="outputMenuNodes.length === 0">
             <div class="px-2 py-1.5 text-xs text-muted-foreground">
               没有直接相连的节点
             </div>
           </template>
-          <template v-for="node in otherNodes" :key="node.id">
+          <template v-for="node in outputMenuNodes" :key="node.id">
             <DropdownMenuSub>
               <DropdownMenuSubTrigger class="text-xs">
                 <component

@@ -41,6 +41,8 @@ const isDebugging = computed(() => store.debugNodeStatus === 'running')
 const isLoopBodyNode = computed(() => store.selectedNode?.type === LOOP_BODY_NODE_TYPE)
 const canDebugSelectedNode = computed(() => definition.value?.debuggable !== false)
 const jsonPresetPopoverOpen = ref(false)
+const canEditInputFields = computed(() => !!definition.value?.allowInputFields && store.selectedNode?.type !== 'end')
+const canEditOutputFields = computed(() => store.selectedNode?.type !== 'start')
 
 /** 整页滚动容器引用 */
 const scrollContainer = ref<HTMLElement | null>(null)
@@ -55,10 +57,12 @@ const anchorSections = computed(() => {
   if (hasDebugOutput.value) {
     sections.unshift({ id: 'debug', label: '调试' })
   }
-  if (allowInputFields.value) {
+  if (canEditInputFields.value) {
     sections.push({ id: 'input-fields', label: '输入' })
   }
-  sections.push({ id: 'output-fields', label: '输出' })
+  if (canEditOutputFields.value) {
+    sections.push({ id: 'output-fields', label: '输出' })
+  }
   return sections
 })
 
@@ -260,7 +264,6 @@ const nodeInputFields = computed<OutputField[]>({
   },
 })
 
-const allowInputFields = computed(() => !!definition.value?.allowInputFields)
 const inputFieldsTitle = computed(() => store.selectedNode?.type === 'sub_workflow' ? '开始节点输入' : '输入字段')
 
 /** 是否有调试输出结果 */
@@ -543,7 +546,7 @@ function confirmImport() {
 
         <!-- 输入字段区块 -->
         <div
-          v-if="allowInputFields"
+          v-if="canEditInputFields"
           id="input-fields"
           class="px-3 pb-3 border-t border-border pt-3"
         >
@@ -558,6 +561,7 @@ function confirmImport() {
 
         <!-- 输出字段区块 -->
         <div
+          v-if="canEditOutputFields"
           id="output-fields"
           class="px-3 pb-3 border-t border-border pt-3"
         >
