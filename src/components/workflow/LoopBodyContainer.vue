@@ -48,7 +48,6 @@ function selectLoopBodyNode() {
   border-radius: 8px;
   background:
     linear-gradient(180deg, rgba(232, 245, 249, 0.72), rgba(248, 251, 252, 0.42));
-  border: 2px dashed rgba(23, 92, 112, 0.28);
   box-sizing: border-box;
   pointer-events: none;
 }
