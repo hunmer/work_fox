@@ -162,7 +162,7 @@ function handleUpdateMetadata(data: { name: string; icon: string; description: s
   wf.icon = data.icon || undefined
   wf.description = data.description || undefined
   wf.tags = data.tags.length ? data.tags : undefined
-  tabStore.renameTab(tabStore.activeTabId!, data.name)
+  tabStore.updateTabWorkflow(tabStore.activeTabId!, wf.id, data.name)
   saveWorkflow()
 }
 
