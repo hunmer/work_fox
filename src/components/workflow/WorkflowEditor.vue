@@ -56,6 +56,7 @@ import ActivityBar from './ActivityBar.vue'
 import PluginsDialog from '@/components/plugins/PluginsDialog.vue'
 import SettingsDialog from '@/components/settings/SettingsDialog.vue'
 import PluginPickerDialog from './PluginPickerDialog.vue'
+import TriggerSettingsDialog from './TriggerSettingsDialog.vue'
 import { WORKFLOW_NODE_DRAG_MIME } from './dragDrop'
 import EditorRightBar from './EditorRightBar.vue'
 import { LOOP_BODY_NODE_TYPE } from '@shared/workflow-composite'
@@ -100,6 +101,7 @@ const settingsDialogOpen = ref(false)
 const pluginPickerOpen = ref(false)
 const groupPanelVisible = ref(false)
 const groupPanelX = computed(() => (typeof window !== 'undefined' ? window.innerWidth - 400 : 520))
+const triggerDialogOpen = ref(false)
 const FLOW_ID = `workflow-editor-flow-${props.tab.id}`
 
 const {
@@ -533,6 +535,10 @@ const recentWorkflows = computed(() =>
     .map(wf => ({ id: wf.id, name: wf.name, updatedAt: wf.updatedAt })),
 )
 
+const hasTriggers = computed(() =>
+  (store.currentWorkflow?.triggers?.length ?? 0) > 0
+)
+
 const router = useRouter()
 
 function goHome() {
@@ -663,6 +669,7 @@ function onConnect(params: any) {
       :workflow-name="store.currentWorkflow?.name || ''"
       :hide-tab-switcher="!store.currentWorkflow"
       :is-dirty="store.isDirty"
+      :has-triggers="hasTriggers"
       :recent-workflows="recentWorkflows"
       :has-custom-layout="hasCustomLayout"
       :layout-presets="presets"
@@ -677,6 +684,7 @@ function onConnect(params: any) {
       @cancel-edit-name="cancelEditName"
       @open-settings="settingsDialogOpen = true"
       @open-recent="openRecentWorkflow"
+      @open-triggers="triggerDialogOpen = true"
       @reset-layout="handleResetLayout"
       @save-preset="handleSavePreset"
       @apply-preset="handleApplyPreset"
@@ -868,5 +876,13 @@ function onConnect(params: any) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <!-- 触发器设置 Dialog -->
+    <TriggerSettingsDialog
+      v-if="store.currentWorkflow"
+      :workflow-id="store.currentWorkflow.id"
+      :open="triggerDialogOpen"
+      @update:open="triggerDialogOpen = $event"
+    />
   </div>
 </template>

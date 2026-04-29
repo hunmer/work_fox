@@ -10,6 +10,7 @@ export interface BackendConfig {
   requestTimeoutMs: number
   interactionTimeoutMs: number
   heartbeatIntervalMs: number
+  hookSecret?: string
   appVersion: string
   sessionToken?: string
 }
@@ -34,6 +35,7 @@ export function loadBackendConfig(): BackendConfig {
     requestTimeoutMs: readNumber('WORKFOX_BACKEND_REQUEST_TIMEOUT_MS', 30_000),
     interactionTimeoutMs: readNumber('WORKFOX_BACKEND_INTERACTION_TIMEOUT_MS', 300_000),
     heartbeatIntervalMs: readNumber('WORKFOX_BACKEND_HEARTBEAT_MS', 15_000),
+    hookSecret: process.env.WORKFOX_HOOK_SECRET || undefined,
     appVersion: process.env.WORKFOX_APP_VERSION || '0.0.0',
     sessionToken: process.env.WORKFOX_BACKEND_TOKEN || undefined,
   }

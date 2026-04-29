@@ -10,6 +10,7 @@ import { registerStorageChannels } from './ws/storage-channels'
 import { BackendPluginRegistry } from './plugins/plugin-registry'
 import { registerPluginChannels } from './ws/plugin-channels'
 import { BackendWorkflowExecutionManager } from './workflow/execution-manager'
+import { WorkflowTriggerService } from './workflow/trigger-service'
 import { BackendInteractionManager } from './workflow/interaction-manager'
 import { registerExecutionChannels } from './ws/execution-channels'
 import { BackendAIProviderStore } from './storage/ai-provider-store'
@@ -22,6 +23,7 @@ import { registerChatChannels } from './ws/chat-channels'
 import { ClientNodeCache } from './chat/client-node-cache'
 import { DashboardStatsStore } from './dashboard/stats-store'
 import { registerDashboardChannels } from './ws/dashboard-channels'
+import { registerTriggerChannels } from './ws/trigger-channels'
 
 async function main(): Promise<void> {
   const config = loadBackendConfig()
@@ -54,12 +56,15 @@ async function main(): Promise<void> {
     emit: (channel, payload) => backend.connections.emit(channel, payload),
     logger,
   })
+  const triggerService = new WorkflowTriggerService(workflowStore, executionManager, config, logger)
+  await triggerService.start()
+  backend.registerHookHandler(triggerService)
   registerStorageChannels(backend.router, {
     workflowStore,
     workflowVersionStore,
     executionLogStore,
     operationHistoryStore,
-  })
+  }, triggerService)
   registerPluginChannels(backend.router, plugins)
   registerExecutionChannels(backend.router, executionManager)
   registerAppChannels(backend.router, {
@@ -81,6 +86,7 @@ async function main(): Promise<void> {
     () => plugins.list().length,
   )
   registerDashboardChannels(backend.router, { dashboardStatsStore })
+  registerTriggerChannels(backend.router, triggerService)
   backend.connections.onClientDisconnected((clientId) => {
     clientNodeCache.unregisterClient(clientId)
   })
