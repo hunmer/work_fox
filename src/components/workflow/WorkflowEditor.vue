@@ -155,6 +155,17 @@ const {
   onListSelect,
 } = useWorkflowFileActions(store, listDialogOpen)
 
+function handleUpdateMetadata(data: { name: string; icon: string; description: string; tags: string[] }) {
+  const wf = store.currentWorkflow
+  if (!wf) return
+  wf.name = data.name
+  wf.icon = data.icon || undefined
+  wf.description = data.description || undefined
+  wf.tags = data.tags.length ? data.tags : undefined
+  tabStore.renameTab(tabStore.activeTabId!, data.name)
+  saveWorkflow()
+}
+
 const {
   copySelectedNodes,
   pasteClipboardNodes,
@@ -667,6 +678,9 @@ function onConnect(params: any) {
       :is-editing-name="isEditingName"
       :editing-name="editingName"
       :workflow-name="store.currentWorkflow?.name || ''"
+      :workflow-icon="store.currentWorkflow?.icon"
+      :workflow-description="store.currentWorkflow?.description"
+      :workflow-tags="store.currentWorkflow?.tags"
       :hide-tab-switcher="!store.currentWorkflow"
       :is-dirty="store.isDirty"
       :has-triggers="hasTriggers"
@@ -689,6 +703,7 @@ function onConnect(params: any) {
       @save-preset="handleSavePreset"
       @apply-preset="handleApplyPreset"
       @delete-preset="handleDeletePreset"
+      @update-metadata="handleUpdateMetadata"
     />
 
     <div

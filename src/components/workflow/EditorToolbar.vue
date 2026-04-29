@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, type Ref } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Minus, Square, X, Maximize2, Plus, Save, LayoutDashboard, SaveAll, RotateCcw, Trash2, Pencil, Zap } from 'lucide-vue-next'
 import {
@@ -14,9 +14,9 @@ import {
   MenubarSeparator,
 } from '@/components/ui/menubar'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { useTabStore } from '@/stores/tab'
 import type { LayoutPreset } from '@/composables/workflow/useEditorLayout'
+import WorkflowMetadataDialog from './WorkflowMetadataDialog.vue'
 
 const router = useRouter()
 const tabStore = useTabStore()
@@ -31,6 +31,9 @@ const props = defineProps<{
   isEditingName: boolean
   editingName: string
   workflowName: string
+  workflowIcon?: string
+  workflowDescription?: string
+  workflowTags?: string[]
   hideTabSwitcher?: boolean
   isDirty?: boolean
   hasCustomLayout?: boolean
@@ -56,37 +59,21 @@ const emit = defineEmits<{
   'apply-preset': [id: string]
   'delete-preset': [id: string]
   'open-triggers': []
+  'update-metadata': [data: { name: string; icon: string; description: string; tags: string[] }]
 }>()
 
 const isMaximized = ref(false)
 const isElectron = navigator.userAgent.includes('Electron')
 
-// 重命名对话框
-const renameDialogOpen = ref(false)
-const renameTabId = ref<string | null>(null)
-const renameInput = ref('')
-const renameInputEl = ref<HTMLInputElement | null>(null)
+// 工作流元数据对话框
+const metadataDialogOpen = ref(false)
 
-watch(renameDialogOpen, (val) => {
-  if (val) nextTick(() => renameInputEl.value?.focus())
-})
-
-function openRenameDialog(tabId: string) {
-  const tab = tabStore.tabs.find(t => t.id === tabId)
-  if (!tab) return
-  renameTabId.value = tabId
-  renameInput.value = tab.name || ''
-  renameDialogOpen.value = true
+function openMetadataDialog() {
+  metadataDialogOpen.value = true
 }
 
-function confirmRename() {
-  if (!renameTabId.value) return
-  const trimmed = renameInput.value.trim()
-  if (trimmed && renameTabId.value === tabStore.activeTabId) {
-    emit('update:editingName', trimmed)
-    emit('finishEditName')
-  }
-  renameDialogOpen.value = false
+function handleMetadataConfirm(data: { name: string; icon: string; description: string; tags: string[] }) {
+  emit('update-metadata', data)
 }
 
 async function refreshMaximized() {
@@ -229,9 +216,9 @@ refreshMaximized()
           </button>
         </ContextMenuTrigger>
         <ContextMenuContent class="min-w-32">
-          <ContextMenuItem class="text-xs" @click="openRenameDialog(tab.id)">
+          <ContextMenuItem class="text-xs" @click="openMetadataDialog">
             <Pencil class="w-3 h-3 mr-2" />
-            重命名
+            编辑信息
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -300,34 +287,14 @@ refreshMaximized()
     </div>
   </div>
 
-  <!-- 重命名对话框 -->
-  <Dialog :open="renameDialogOpen" @update:open="renameDialogOpen = $event">
-    <DialogContent class="sm:max-w-sm">
-      <DialogHeader>
-        <DialogTitle>重命名工作流</DialogTitle>
-      </DialogHeader>
-      <input
-        ref="renameInputEl"
-        v-model="renameInput"
-        class="w-full text-sm bg-transparent border border-border rounded-md px-3 py-2 outline-none focus:border-primary"
-        placeholder="输入工作流名称"
-        @keydown.enter="confirmRename"
-        @keydown.escape="renameDialogOpen = false"
-      />
-      <DialogFooter class="gap-2">
-        <button
-          class="text-xs px-3 py-1.5 rounded-md border border-border hover:bg-muted transition-colors"
-          @click="renameDialogOpen = false"
-        >
-          取消
-        </button>
-        <button
-          class="text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-          @click="confirmRename"
-        >
-          确定
-        </button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
+  <!-- 工作流元数据编辑对话框 -->
+  <WorkflowMetadataDialog
+    :open="metadataDialogOpen"
+    :name="workflowName"
+    :icon="workflowIcon"
+    :description="workflowDescription"
+    :tags="workflowTags"
+    @update:open="metadataDialogOpen = $event"
+    @confirm="handleMetadataConfirm"
+  />
 </template>

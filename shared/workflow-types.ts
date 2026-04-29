@@ -111,7 +111,9 @@ export interface Workflow {
   id: string
   name: string
   folderId: string | null
+  icon?: string
   description?: string
+  tags?: string[]
   nodes: WorkflowNode[]
   edges: WorkflowEdge[]
   createdAt: number

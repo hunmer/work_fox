@@ -14,9 +14,9 @@ import {
   ResizableHandle,
 } from '@/components/ui/resizable'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import WorkflowFolderTree from './WorkflowFolderTree.vue'
 import WorkflowList from './WorkflowList.vue'
+import WorkflowMetadataDialog from './WorkflowMetadataDialog.vue'
 import type { Workflow } from '@/lib/workflow/types'
 
 const props = defineProps<{
@@ -33,8 +33,7 @@ const store = useWorkflowStore()
 const selectedFolderId = ref<string | null>(null)
 const hasSelectedLocation = ref(false)
 const selectedWorkflow = ref<Workflow | null>(null)
-const isCreating = ref(false)
-const newWorkflowName = ref('新工作流')
+const metadataDialogOpen = ref(false)
 
 onMounted(() => {
   store.loadData()
@@ -42,7 +41,6 @@ onMounted(() => {
 
 watch(() => props.open, (open) => {
   if (!open) return
-  isCreating.value = !!props.createMode
   selectedWorkflow.value = null
   if (selectedFolderId.value === null) {
     const first = store.workflowFolders.find((f) => f.parentId === null)
@@ -65,23 +63,23 @@ function cancel() {
   emit('update:open', false)
 }
 
-async function createNew() {
-  const name = newWorkflowName.value.trim()
-  if (!name || !hasSelectedLocation.value) return
-  store.newWorkflow(selectedFolderId.value, name)
+function startCreate() {
+  metadataDialogOpen.value = true
+}
+
+async function handleMetadataConfirm(data: { name: string; icon: string; description: string; tags: string[] }) {
+  if (!hasSelectedLocation.value) {
+    hasSelectedLocation.value = true
+  }
+  store.newWorkflow(selectedFolderId.value, data.name)
   const workflow = store.currentWorkflow
   if (!workflow) return
+  workflow.icon = data.icon || undefined
+  workflow.description = data.description || undefined
+  workflow.tags = data.tags.length ? data.tags : undefined
   await store.saveWorkflow(workflow)
   emit('select', workflow)
   emit('update:open', false)
-  isCreating.value = false
-  newWorkflowName.value = '新工作流'
-}
-
-function startCreate() {
-  isCreating.value = true
-  selectedWorkflow.value = null
-  hasSelectedLocation.value = true
 }
 
 function onSelectLocation() {
@@ -101,7 +99,7 @@ function onSelectLocation() {
     >
       <DialogHeader class="px-4 pt-4">
         <DialogTitle class="text-sm">
-          {{ isCreating ? '新建工作流' : '打开工作流' }}
+          打开工作流
         </DialogTitle>
       </DialogHeader>
 
@@ -129,24 +127,8 @@ function onSelectLocation() {
         </ResizablePanel>
       </ResizablePanelGroup>
 
-      <div
-        v-if="isCreating"
-        class="px-4 pb-3 space-y-2"
-      >
-        <Input
-          v-model="newWorkflowName"
-          class="h-8 text-xs"
-          placeholder="工作流名称"
-          @keydown.enter="createNew"
-        />
-        <p class="text-xs text-muted-foreground">
-          请选择左侧文件夹或“全部工作流”作为保存位置后再创建。
-        </p>
-      </div>
-
-      <DialogFooter class="px-4 pb-4 gap-2">
+      <DialogFooter class=”px-4 pb-4 gap-2”>
         <Button
-          v-if="!isCreating"
           variant="outline"
           size="sm"
           class="text-xs"
@@ -155,23 +137,20 @@ function onSelectLocation() {
           新建工作流
         </Button>
         <Button
-          v-else
-          variant="outline"
           size="sm"
           class="text-xs"
-          @click="isCreating = false"
+          :disabled="!selectedWorkflow"
+          @click="confirm()"
         >
-          取消新建
-        </Button>
-        <Button
-          size="sm"
-          class="text-xs"
-          :disabled="isCreating ? !newWorkflowName.trim() || !hasSelectedLocation : !selectedWorkflow"
-          @click="isCreating ? createNew() : confirm()"
-        >
-          {{ isCreating ? '创建并打开' : '打开' }}
+          打开
         </Button>
       </DialogFooter>
+
+      <WorkflowMetadataDialog
+        :open="metadataDialogOpen"
+        @update:open="metadataDialogOpen = $event"
+        @confirm="handleMetadataConfirm"
+      />
     </DialogContent>
   </Dialog>
 </template>

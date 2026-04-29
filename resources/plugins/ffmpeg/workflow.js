@@ -6,7 +6,7 @@ function setFfmpegPath(ffmpegPath) {
   if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath)
 }
 
-function runCommand(cmd, ctx) {
+function runCommand(cmd, outputPath, ctx) {
   return new Promise((resolve, reject) => {
     cmd
       .on('start', (line) => ctx.logger.info(`命令: ${line}`))
@@ -16,6 +16,7 @@ function runCommand(cmd, ctx) {
         reject(err)
       })
       .on('end', () => resolve())
+      .save(outputPath)
   })
 }
 
@@ -88,7 +89,7 @@ module.exports = {
         ctx.logger.info(`格式转换: ${inputPath} -> ${outputPath}`)
 
         try {
-          await runCommand(cmd.save.bind(cmd, outputPath), ctx)
+          await runCommand(cmd, outputPath, ctx)
           return { success: true, message: '格式转换完成', data: { outputPath } }
         } catch (err) {
           return { success: false, message: `转换失败: ${err.message}` }
@@ -153,7 +154,7 @@ module.exports = {
         ctx.logger.info(`音视频合并: video=${args.videoPath}, audio=${args.audioPath}`)
 
         try {
-          await runCommand(cmd.save.bind(cmd, args.outputPath), ctx)
+          await runCommand(cmd, args.outputPath, ctx)
           return { success: true, message: '音视频合并完成', data: { outputPath: args.outputPath } }
         } catch (err) {
           return { success: false, message: `合并失败: ${err.message}` }
@@ -211,7 +212,7 @@ module.exports = {
           ctx.logger.info(`提取音频: ${args.inputPath} -> ${audioOut}`)
           const audioCmd = ffmpeg(args.inputPath).noVideo().format(audioExt)
           tasks.push(
-            runCommand(audioCmd.save.bind(audioCmd, audioOut), ctx)
+            runCommand(audioCmd, audioOut, ctx)
               .then(() => ({ audioOut }))
           )
         }
@@ -220,7 +221,7 @@ module.exports = {
           ctx.logger.info(`去除音频: ${args.inputPath} -> ${videoOut}`)
           const videoCmd = ffmpeg(args.inputPath).noAudio().outputOptions('-c:v', 'copy')
           tasks.push(
-            runCommand(videoCmd.save.bind(videoCmd, videoOut), ctx)
+            runCommand(videoCmd, videoOut, ctx)
               .then(() => ({ videoOut }))
           )
         }
