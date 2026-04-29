@@ -127,9 +127,9 @@ function insertVariable(index: number, variablePath: string) {
           <ChevronRight class="w-3 h-3" />
         </Button>
         <Checkbox
-          :checked="field.required"
+          :model-value="field.required"
           class="shrink-0 [&_span]:h-3.5 [&_span]:w-3.5 [&_svg]:!w-2.5 [&_svg]:!h-2.5"
-          @update:checked="updateField(index, { required: $event || undefined })"
+          @update:model-value="updateField(index, { required: $event || undefined })"
         />
         <Input
           :model-value="field.key"
