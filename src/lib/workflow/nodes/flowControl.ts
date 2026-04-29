@@ -38,6 +38,7 @@ export const flowControlNodes: NodeTypeDefinition[] = [
     icon: 'LogIn',
     description: '工作流入口节点，仅支持输出连接',
     properties: [],
+    allowInputFields: true,
     handles: { source: true, target: false },
   },
   {

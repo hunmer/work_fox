@@ -594,7 +594,11 @@ export class BackendWorkflowExecutionManager {
     appendNodeLog: (level: ExecutionLogEntry['level'], message: string) => void,
   ): Promise<any> {
     switch (node.type) {
-      case 'start':
+      case 'start': {
+        const fieldOutput = this.buildOutputObject(resolvedData.inputFields) ?? {}
+        const runtimeInput = session.context.__input__ ?? {}
+        return { ...fieldOutput, ...runtimeInput }
+      }
       case LOOP_BODY_NODE_TYPE:
       case 'sticky_note':
         return null
