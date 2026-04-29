@@ -63,7 +63,7 @@ const cronDescription = computed(() => {
 
 function buildCronExpression(): string {
   const interval = Math.max(1, cronInterval.value)
-  const step = interval <= 1 ? '*' : `*/${interval}`
+  const step = `*/${interval}`
   switch (cronFrequency.value) {
     case 'minute': return `${step} * * * *`
     case 'hour': return `${cronMinute.value} ${step} * * *`
@@ -209,6 +209,10 @@ function cronHumanLabel(cron: string): string {
   if (hour.startsWith('*/')) {
     const n = hour.slice(2)
     return n === '1' ? `每小时 ${time('*', min)}` : `每${n}小时 ${min.padStart(2, '0')}分`
+  }
+  // 每分钟：*/1 * * * * 或 * * * * *
+  if (min === '*' && hour === '*' && dom === '*' && mon === '*' && dow === '*') {
+    return '每分钟'
   }
   // 按分钟间隔
   if (min.startsWith('*/')) {

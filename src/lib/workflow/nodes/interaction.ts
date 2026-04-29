@@ -1,6 +1,6 @@
-import type { PluginWorkflowNode } from '../plugin-types'
+import type { NodeTypeDefinition } from '../types'
 
-export const interactionNodes: PluginWorkflowNode[] = [
+export const interactionNodes: NodeTypeDefinition[] = [
   {
     type: 'alert',
     label: '消息弹窗',
@@ -11,10 +11,6 @@ export const interactionNodes: PluginWorkflowNode[] = [
       { key: 'title', label: '标题', type: 'text', default: '提示', tooltip: '弹窗标题' },
       { key: 'message', label: '消息内容', type: 'textarea', required: true, tooltip: '要展示的消息文本' },
     ],
-    handles: {
-      target: true,
-      source: true,
-    } as any,
     outputs: [{ key: 'confirmed', type: 'boolean' }],
   },
   {
@@ -29,10 +25,6 @@ export const interactionNodes: PluginWorkflowNode[] = [
       { key: 'placeholder', label: '占位文本', type: 'text', tooltip: '输入框占位文本' },
       { key: 'defaultValue', label: '默认值', type: 'text', tooltip: '输入框预填值' },
     ],
-    handles: {
-      target: true,
-      source: true,
-    } as any,
     outputs: [
       { key: 'value', type: 'string' },
       { key: 'confirmed', type: 'boolean' },
@@ -70,14 +62,10 @@ export const interactionNodes: PluginWorkflowNode[] = [
               { label: '密码', value: 'password' },
             ],
           },
-          { key: 'data', label: '字段配置', type: 'object', tooltip: '字段额外配置，如 value、placeholder、options 等' },
+          { key: 'data', label: '字段配置', type: 'object' },
         ],
       },
     ],
-    handles: {
-      target: true,
-      source: true,
-    } as any,
     outputs: [{ key: 'values', type: 'object' }, { key: 'confirmed', type: 'boolean' }],
   },
 ]

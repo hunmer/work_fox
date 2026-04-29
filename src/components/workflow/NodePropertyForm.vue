@@ -15,6 +15,7 @@ import { Braces, Info, Plus, Trash2, Timer, ChevronRight } from 'lucide-vue-next
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import OutputFieldEditor from './OutputFieldEditor.vue'
+import JsonEditor from '@/components/ui/json-editor/JsonEditor.vue'
 import ConditionEditor from './ConditionEditor.vue'
 import VariablePicker from './VariablePicker.vue'
 
@@ -419,6 +420,12 @@ function insertArrayVariable(propKey: string, index: number, fieldKey: string, v
                 :exclude-node-id="activeNodeId"
                 @update:model-value="updateArrayItemField(prop.key, idx, field.key, $event)"
               />
+              <JsonEditor
+                v-else-if="field.type === 'object'"
+                :model-value="item[field.key] || {}"
+                :height="100"
+                @update:model-value="updateArrayItemField(prop.key, idx, field.key, $event)"
+              />
             </div>
           </div>
           <Button
@@ -436,6 +443,13 @@ function insertArrayVariable(propKey: string, index: number, fieldKey: string, v
           v-else-if="prop.type === 'output_fields'"
           :model-value="getFieldValue(prop.key) || []"
           :exclude-node-id="activeNodeId"
+          @update:model-value="setFieldValue(prop.key, $event)"
+        />
+
+        <JsonEditor
+          v-else-if="prop.type === 'object'"
+          :model-value="getFieldValue(prop.key) || {}"
+          :height="prop.height || 140"
           @update:model-value="setFieldValue(prop.key, $event)"
         />
       </template>
