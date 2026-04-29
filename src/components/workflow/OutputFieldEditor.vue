@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { OutputField } from '@/lib/workflow/types'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Plus, Trash2 } from 'lucide-vue-next'
+import { InputGroup, InputGroupInput, InputGroupAddon } from '@/components/ui/input-group'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Plus, Trash2, ChevronRight } from 'lucide-vue-next'
 import VariablePicker from './VariablePicker.vue'
 
 const props = defineProps<{
@@ -29,6 +31,15 @@ const fields = computed({
 })
 
 const indent = computed(() => (props.depth ?? 0) * 16)
+
+const expandedFields = ref<Set<number>>(new Set())
+
+function toggleExpand(index: number) {
+  const next = new Set(expandedFields.value)
+  if (next.has(index)) next.delete(index)
+  else next.add(index)
+  expandedFields.value = next
+}
 
 const TYPE_OPTIONS = [
   { label: 'String', value: 'string' },
@@ -89,12 +100,10 @@ function insertVariable(index: number, variablePath: string) {
     <div
       v-if="depth === 0"
       class="grid gap-1 text-[10px] text-muted-foreground font-medium"
-      style="grid-template-columns: 1fr 80px 1fr 52px"
+      style="grid-template-columns: 1fr 80px"
     >
       <span>名称</span>
       <span>类型</span>
-      <span>值</span>
-      <span />
     </div>
 
     <!-- 字段行 -->
@@ -103,25 +112,36 @@ function insertVariable(index: number, variablePath: string) {
       :key="index"
       class="space-y-0.5"
     >
+      <!-- 主行：展开按钮 + 字段名 + 类型 + 删除 -->
       <div
-        class="grid gap-1 items-center"
-        style="grid-template-columns: 1fr 80px 1fr 52px"
+        class="flex items-center gap-1 group/field"
         :style="{ paddingLeft: `${indent}px` }"
       >
-        <!-- 名称 -->
+        <Button
+          variant="ghost"
+          size="sm"
+          class="h-5 w-5 p-0 shrink-0"
+          :class="expandedFields.has(index) ? '' : '-rotate-90'"
+          @click="toggleExpand(index)"
+        >
+          <ChevronRight class="w-3 h-3" />
+        </Button>
+        <Checkbox
+          :checked="field.required"
+          class="shrink-0 [&_span]:h-3.5 [&_span]:w-3.5 [&_svg]:!w-2.5 [&_svg]:!h-2.5"
+          @update:checked="updateField(index, { required: $event || undefined })"
+        />
         <Input
           :model-value="field.key"
           placeholder="字段名"
-          class="h-6 text-[11px]"
+          class="h-6 text-[11px] flex-1 min-w-0"
           @update:model-value="updateField(index, { key: $event })"
         />
-
-        <!-- 类型 -->
         <Select
           :model-value="field.type"
           @update:model-value="updateField(index, { type: $event as OutputField['type'] })"
         >
-          <SelectTrigger class="!h-6 !px-2 !py-0 w-full text-[11px] !gap-0.5 [&_svg]:!size-3">
+          <SelectTrigger class="!h-6 !px-2 !py-0 w-20 shrink-0 text-[11px] !gap-0.5 [&_svg]:!size-3">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -135,40 +155,46 @@ function insertVariable(index: number, variablePath: string) {
             </SelectItem>
           </SelectContent>
         </Select>
-
-        <!-- 值 -->
-        <div
-          v-if="field.type !== 'object'"
-          class="flex gap-1"
+        <Button
+          variant="ghost"
+          size="sm"
+          class="h-5 w-5 p-0 text-muted-foreground hover:text-destructive opacity-0 group-hover/field:opacity-100 transition-opacity shrink-0"
+          @click="removeField(index)"
         >
-          <Input
+          <Trash2 class="w-2.5 h-2.5" />
+        </Button>
+      </div>
+
+      <!-- 展开详情 -->
+      <div
+        v-if="expandedFields.has(index) && field.type !== 'object'"
+        class="space-y-0.5"
+        :style="{ paddingLeft: `${indent + 20}px` }"
+      >
+        <InputGroup class="h-6 !min-h-0">
+          <InputGroupInput
             :model-value="field.value ?? ''"
             placeholder="默认值"
-            class="h-6 text-[11px] flex-1"
+            class="!h-6 text-[11px]"
             @update:model-value="updateField(index, { value: $event })"
           />
-          <VariablePicker
+          <InputGroupAddon
             v-if="excludeNodeId"
-            :exclude-node-id="excludeNodeId"
-            @select="insertVariable(index, $event)"
-          />
-        </div>
-        <span
-          v-else
-          class="h-6"
-        />
-
-        <!-- 操作 -->
-        <div class="flex items-center gap-0.5">
-          <Button
-            variant="ghost"
-            size="sm"
-            class="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
-            @click="removeField(index)"
+            align="inline-end"
+            class="!py-0 !pr-0.5"
           >
-            <Trash2 class="w-2.5 h-2.5" />
-          </Button>
-        </div>
+            <VariablePicker
+              :exclude-node-id="excludeNodeId"
+              @select="insertVariable(index, $event)"
+            />
+          </InputGroupAddon>
+        </InputGroup>
+        <Input
+          :model-value="field.description ?? ''"
+          placeholder="描述（可选）"
+          class="h-6 text-[11px]"
+          @update:model-value="updateField(index, { description: $event || undefined })"
+        />
       </div>
 
       <!-- 递归子字段 -->

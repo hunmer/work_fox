@@ -122,6 +122,8 @@ export interface OutputField {
   key: string
   type: 'string' | 'number' | 'boolean' | 'object' | 'any'
   value?: string
+  description?: string
+  required?: boolean
   children?: OutputField[]
 }
 

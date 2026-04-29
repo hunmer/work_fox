@@ -646,6 +646,7 @@ function setExpanded(nextExpanded: boolean) {
     <ExecutionInputDrawer
       v-model:open="inputDrawerOpen"
       :fields="startInputFields"
+      :workflow-id="store.currentWorkflow?.id ?? ''"
       @submit="handleInputSubmit"
     />
   </div>

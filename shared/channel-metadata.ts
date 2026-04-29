@@ -154,6 +154,11 @@ export const backendChannelMetadata: Record<BackendChannel, ChannelMetadata> = {
   'dashboard:executions': crud('dashboard:executions', 'List dashboard execution records'),
   'dashboard:workflow-detail': crud('dashboard:workflow-detail', 'Get dashboard workflow detail'),
 
+  // --- Execution Input Presets ---
+  'executionPreset:list': crud('executionPreset:list', 'List execution input presets'),
+  'executionPreset:save': mutation('executionPreset:save', 'Save execution input preset'),
+  'executionPreset:delete': mutation('executionPreset:delete', 'Delete execution input preset'),
+
   // --- Trigger ---
   'trigger:validate-cron': crud('trigger:validate-cron', 'Validate cron expression'),
   'trigger:check-hook-name': crud('trigger:check-hook-name', 'Check hook name bindings'),

@@ -271,6 +271,13 @@ export interface PluginConfigSaveRequest {
   data: Record<string, string>
 }
 
+export interface ExecutionInputPreset {
+  id: string
+  name: string
+  values: Record<string, unknown>
+  createdAt: number
+}
+
 export interface BackendChannelMap {
   'system:ping': ChannelContract<SystemPingRequest, SystemPingResponse>
   'system:echo': ChannelContract<SystemEchoRequest, SystemEchoResponse>
@@ -385,6 +392,11 @@ export interface BackendChannelMap {
   'dashboard:stats': ChannelContract<EmptyRequest, DashboardStatsResponse>
   'dashboard:executions': ChannelContract<DashboardExecutionsRequest, DashboardExecutionsResponse>
   'dashboard:workflow-detail': ChannelContract<DashboardWorkflowDetailRequest, DashboardWorkflowDetailResponse>
+
+  // --- Execution Input Presets ---
+  'executionPreset:list': ChannelContract<{ workflowId: string }, ExecutionInputPreset[]>
+  'executionPreset:save': ChannelContract<{ workflowId: string; preset: ExecutionInputPreset }, EmptyResponse>
+  'executionPreset:delete': ChannelContract<{ workflowId: string; presetId: string }, EmptyResponse>
 
   // --- Trigger ---
   'trigger:validate-cron': ChannelContract<

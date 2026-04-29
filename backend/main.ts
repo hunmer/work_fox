@@ -37,6 +37,7 @@ async function main(): Promise<void> {
   const aiProviderStore = new BackendAIProviderStore(paths.userDataDir)
   const chatHistoryStore = new BackendChatHistoryStore(paths.userDataDir)
   const agentSettingsStore = new BackendSettingsStore(paths.userDataDir, 'agent-settings.json')
+  const executionPresetStore = new BackendSettingsStore(paths.userDataDir, 'execution-input-presets.json')
   const shortcutStore = new BackendSettingsStore(paths.userDataDir, 'shortcuts.json')
   const tabStore = new BackendSettingsStore(paths.userDataDir, 'tabs.json')
   const plugins = new BackendPluginRegistry(config, logger)
@@ -71,6 +72,7 @@ async function main(): Promise<void> {
     aiProviderStore,
     chatHistoryStore,
     agentSettingsStore,
+    executionPresetStore,
     shortcutStore,
     tabStore,
     pluginRegistry: plugins,

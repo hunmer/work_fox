@@ -14,6 +14,7 @@ export interface AppServices {
   aiProviderStore: BackendAIProviderStore
   chatHistoryStore: BackendChatHistoryStore
   agentSettingsStore: BackendSettingsStore
+  executionPresetStore: BackendSettingsStore
   shortcutStore: BackendSettingsStore
   tabStore: BackendSettingsStore
   pluginRegistry: BackendPluginRegistry
@@ -25,6 +26,7 @@ export function registerAppChannels(router: WSRouter, services: AppServices): vo
     aiProviderStore,
     chatHistoryStore,
     agentSettingsStore,
+    executionPresetStore,
     shortcutStore,
     tabStore,
     pluginRegistry,
@@ -112,6 +114,37 @@ export function registerAppChannels(router: WSRouter, services: AppServices): vo
   // --- Agent Settings ---
   router.register('agentSettings:get', () => agentSettingsStore.get())
   router.register('agentSettings:set', ({ settings }) => agentSettingsStore.set(settings))
+
+  // --- Execution Input Presets ---
+  async function getPresetMap(): Promise<Record<string, any[]>> {
+    const data: any = await executionPresetStore.get()
+    return data && typeof data === 'object' ? data : {}
+  }
+
+  router.register('executionPreset:list', async ({ workflowId }) => {
+    const map = await getPresetMap()
+    return map[workflowId] ?? []
+  })
+  router.register('executionPreset:save', async ({ workflowId, preset }) => {
+    const map = await getPresetMap()
+    const list = map[workflowId] ?? []
+    const idx = list.findIndex((p: any) => p.id === preset.id)
+    if (idx !== -1) {
+      list[idx] = preset
+    } else {
+      list.push(preset)
+    }
+    map[workflowId] = list
+    await executionPresetStore.set(map)
+    return undefined
+  })
+  router.register('executionPreset:delete', async ({ workflowId, presetId }) => {
+    const map = await getPresetMap()
+    const list = map[workflowId] ?? []
+    map[workflowId] = list.filter((p: any) => p.id !== presetId)
+    await executionPresetStore.set(map)
+    return undefined
+  })
 
   // --- Shortcuts ---
   async function getStoredBindings(): Promise<ShortcutBinding[]> {
