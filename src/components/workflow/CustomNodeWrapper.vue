@@ -44,8 +44,27 @@ const inputRef = ref<HTMLInputElement | null>(null)
 
 const definition = computed(() => getNodeDefinition(props.data?.nodeType || props.type))
 const IconComponent = computed(() => resolveLucideIcon(definition.value?.icon || 'Circle'))
+
+const HEADER_HEIGHT = 33
+const HANDLE_MARGIN = 12
+
 const nodeMinWidth = computed(() => definition.value?.customViewMinSize?.width || 140)
-const nodeMinHeight = computed(() => definition.value?.customViewMinSize?.height || 60)
+const sourceHandleCount = computed(() => {
+  const dynamic = definition.value?.handles?.dynamicSource
+  if (dynamic) {
+    const value = props.data?.[dynamic.dataKey]
+    const conditions: any[] = Array.isArray(value) ? value : []
+    return conditions.length + (dynamic.extraCount || 0)
+  }
+  const handles = definition.value?.handles?.sourceHandles || []
+  return handles.length || (definition.value?.handles?.source !== false ? 1 : 0)
+})
+const nodeMinHeight = computed(() => {
+  const base = definition.value?.customViewMinSize?.height || 60
+  if (isLoopBodyContainer.value || sourceHandleCount.value <= 1) return base
+  const lastHandleTop = HEADER_HEIGHT + sourceHandleCount.value * 24
+  return Math.max(base, lastHandleTop + 16)
+})
 const embeddedHostNodeId = computed(() => typeof props.data?.embeddedHostNodeId === 'string' ? props.data.embeddedHostNodeId : null)
 const isEmbeddedNode = computed(() => !!embeddedHostNodeId.value)
 const embeddedWorkflowNode = computed<WorkflowNode | null>(() => {
@@ -456,7 +475,13 @@ const dynamicHandles = computed(() => {
 })
 
 function getHandleTop(index: number, total: number): string {
-  return `${((index + 1) / (total + 1)) * 100}%`
+  if (isLoopBodyContainer.value) {
+    return `${((index + 1) / (total + 1)) * 100}%`
+  }
+  const nodeHeight = measuredNodeSize.value.height || 100
+  const available = nodeHeight - HEADER_HEIGHT - HANDLE_MARGIN * 2
+  const step = available / (total + 1)
+  return `${HEADER_HEIGHT + HANDLE_MARGIN + step * (index + 1)}px`
 }
 
 function getSourceHandleStyle(index: number, total: number) {
@@ -582,6 +607,7 @@ async function handleStopAtBreakpoint() {
           :position="Position.Left"
           :connectable="props.connectable"
           class="!z-10 !w-3 !h-3 !bg-blue-500 !border-2 !border-blue-300 handle-dot"
+          :style="!isLoopBodyContainer ? { top: getHandleTop(0, 1) } : undefined"
         />
 
         <!-- 悬浮测试按钮（开结束节点隐藏，预览模式下隐藏-->
@@ -804,6 +830,7 @@ async function handleStopAtBreakpoint() {
             :position="Position.Right"
             :connectable="props.connectable"
             class="!z-10 !w-3 !h-3 !bg-emerald-500 !border-2 !border-emerald-300 handle-dot"
+            :style="!isLoopBodyContainer ? { top: getHandleTop(0, 1) } : undefined"
           />
           <template v-else>
             <div

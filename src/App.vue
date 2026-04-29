@@ -7,6 +7,7 @@ import { createWorkflowProvider } from '@/components/command-palette/providers/w
 import WsMessageMonitor from '@/components/utils/WsMessageMonitor.vue'
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { Button } from '@/components/ui/button'
+import { Spinner } from '@/components/ui/spinner'
 import { useTabStore } from '@/stores/tab'
 import { usePluginStore } from '@/stores/plugin'
 import { useAIProviderStore } from '@/stores/ai-provider'
@@ -23,6 +24,7 @@ const commandPaletteOpen = ref(false)
 const wsError = ref<string | null>(null)
 const reconnecting = ref(false)
 const reconnectAttempt = ref(0)
+const appReady = ref(false)
 
 // 工作流信息卡片状态
 const workflowInfoOpen = ref(false)
@@ -62,8 +64,11 @@ function onWsError() {
   reconnecting.value = true
 }
 
-function onWsReconnecting(data: { attempt: number }) {
-  reconnectAttempt.value = data.attempt
+function onWsReconnecting(data: unknown) {
+  const attempt = typeof data === 'object' && data !== null && 'attempt' in data
+    ? Number((data as { attempt: unknown }).attempt)
+    : 0
+  reconnectAttempt.value = Number.isFinite(attempt) ? attempt : 0
   reconnecting.value = true
 }
 
@@ -77,6 +82,10 @@ function handleRetry() {
   wsBridge.reconnect()
 }
 
+function warnInitFailure(label: string, error: unknown) {
+  console.warn(`[app] ${label} 初始化失败:`, error)
+}
+
 onMounted(async () => {
   wsBridge.on('ws:disconnected', onWsDisconnected)
   wsBridge.on('ws:error', onWsError)
@@ -84,9 +93,16 @@ onMounted(async () => {
   wsBridge.on('ws:connected', onWsConnected)
   wsBridge.on('ws:reconnected', onWsConnected)
 
-  await pluginStore.init()
-  await providerStore.init()
-  await tabStore.restoreTabs()
+  try {
+    await tabStore.restoreTabs()
+  } catch (error) {
+    warnInitFailure('标签页', error)
+  } finally {
+    appReady.value = true
+  }
+
+  void pluginStore.init().catch((error) => warnInitFailure('插件', error))
+  void providerStore.init().catch((error) => warnInitFailure('AI Provider', error))
 })
 
 onUnmounted(() => {
@@ -100,7 +116,14 @@ onUnmounted(() => {
 
 <template>
   <div class="h-screen w-screen flex flex-col bg-background text-foreground" :class="{ 'light': true }">
-    <RouterView />
+    <RouterView v-if="appReady" />
+    <Empty v-else class="flex-1">
+      <EmptyMedia variant="icon">
+        <Spinner class="size-8" />
+      </EmptyMedia>
+      <EmptyTitle>正在恢复编辑器</EmptyTitle>
+      <EmptyDescription>正在读取上次打开的工作流...</EmptyDescription>
+    </Empty>
     <Toaster />
     <CommandPaletteDialog
       :open="commandPaletteOpen"

@@ -756,11 +756,22 @@ function onConnect(params: any) {
     <Empty v-else class="flex-1">
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <Spinner class="size-8" />
+          <AlertCircle class="size-8 text-muted-foreground" />
         </EmptyMedia>
-        <EmptyTitle>初始化中</EmptyTitle>
-        <EmptyDescription>正在准备编辑器...</EmptyDescription>
+        <EmptyTitle>未选择工作流</EmptyTitle>
+        <EmptyDescription>请选择已有工作流，或新建一个工作流开始编辑。</EmptyDescription>
       </EmptyHeader>
+      <EmptyContent class="flex gap-2">
+        <Button variant="outline" size="sm" @click="openWorkflowList(true)">
+          新建工作流
+        </Button>
+        <Button variant="outline" size="sm" @click="openWorkflowList(false)">
+          打开工作流
+        </Button>
+        <Button variant="ghost" size="sm" @click="goHome">
+          返回主页
+        </Button>
+      </EmptyContent>
     </Empty>
 
     <WorkflowListDialog
