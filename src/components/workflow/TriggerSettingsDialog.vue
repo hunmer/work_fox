@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
@@ -115,22 +115,21 @@ function resetCronForm() {
   cronValidation.value = null
 }
 
-const canSave = computed(() => {
-  if (saving.value) return false
-  return true
-})
-
 function generateId() {
   return `trigger_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 }
 
 function removeTrigger(id: string) {
   triggers.value = triggers.value.filter(t => t.id !== id)
+  syncSave()
 }
 
 function toggleTrigger(id: string, enabled: boolean) {
   const trigger = triggers.value.find(t => t.id === id)
-  if (trigger) trigger.enabled = enabled
+  if (trigger) {
+    trigger.enabled = enabled
+    syncSave()
+  }
 }
 
 async function validateCron() {
@@ -157,6 +156,7 @@ function addCron() {
   })
   resetCronForm()
   showCronForm.value = false
+  syncSave()
 }
 
 async function validateHookName() {
@@ -182,39 +182,53 @@ function addHook() {
   hookNameInput.value = ''
   hookValidation.value = null
   showHookForm.value = false
+  syncSave()
 }
 
 function cronHumanLabel(cron: string): string {
   const parts = cron.trim().split(/\s+/)
   if (parts.length !== 5) return cron
   const [min, hour, dom, mon, dow] = parts
-  if (dow !== '*' && hour !== '*' && min !== '*') {
+  const time = (h: string, m: string) => `${h}:${m.padStart(2, '0')}`
+
+  // 按周：dow 是具体数字
+  if (dow !== '*') {
     const day = weekdayOptions.find(o => o.value === Number(dow))
-    return `${day?.label ?? dow} ${hour}:${min.padStart(2, '0')}`
+    return `${day?.label ?? dow} ${time(hour, min)}`
   }
-  if (dom !== '*' && hour !== '*' && min !== '*') {
-    return `每月${dom}号 ${hour}:${min.padStart(2, '0')}`
+  // 按月：dom 是具体数字
+  if (dom !== '*') {
+    return `每月${dom}号 ${time(hour, min)}`
   }
-  if (dom.startsWith('*/') && hour !== '*') {
-    return `每${dom.slice(2)}天 ${hour}:${min.padStart(2, '0')}`
+  // 按天间隔
+  if (dom.startsWith('*/')) {
+    const n = dom.slice(2)
+    return n === '1' ? `每天 ${time(hour, min)}` : `每${n}天 ${time(hour, min)}`
   }
+  // 按小时间隔
   if (hour.startsWith('*/')) {
-    return `每${hour.slice(2)}小时 ${min.padStart(2, '0')}分`
+    const n = hour.slice(2)
+    return n === '1' ? `每小时 ${time('*', min)}` : `每${n}小时 ${min.padStart(2, '0')}分`
   }
+  // 按分钟间隔
   if (min.startsWith('*/')) {
-    return `每${min.slice(2)}分钟`
+    const n = min.slice(2)
+    return n === '1' ? '每分钟' : `每${n}分钟`
+  }
+  // 每天固定时间：* * * * 不走这里，但 0 9 * * * 会
+  if (hour !== '*' && dom === '*') {
+    return `每天 ${time(hour, min)}`
   }
   return cron
 }
 
-async function handleSave() {
+async function syncSave() {
   if (!workflowStore.currentWorkflow) return
   saving.value = true
   try {
     const updated = { ...workflowStore.currentWorkflow, triggers: triggers.value }
     await workflowStore.saveWorkflow(updated)
     emit('saved')
-    emit('update:open', false)
   } finally {
     saving.value = false
   }
@@ -247,8 +261,8 @@ async function handleSave() {
             </div>
           </div>
           <Switch
-            :checked="trigger.enabled"
-            @update:checked="toggleTrigger(trigger.id, $event)"
+            :model-value="trigger.enabled"
+            @update:model-value="toggleTrigger(trigger.id, $event)"
           />
           <button
             class="shrink-0 p-1 rounded hover:bg-destructive/20 hover:text-destructive transition-colors"
@@ -426,15 +440,6 @@ async function handleSave() {
           </Button>
         </div>
       </div>
-
-      <DialogFooter class="gap-2">
-        <Button variant="outline" size="sm" @click="emit('update:open', false)">
-          取消
-        </Button>
-        <Button size="sm" :disabled="!canSave" @click="handleSave">
-          {{ saving ? '保存中...' : '保存' }}
-        </Button>
-      </DialogFooter>
     </DialogContent>
   </Dialog>
 </template>

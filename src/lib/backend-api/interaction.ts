@@ -10,6 +10,7 @@ import type {
 import { wsBridge } from '../ws-bridge'
 import { executeAgentRunTask } from '../workflow/agent-run'
 import { executeRendererWorkflowTool } from '../agent/workflow-renderer-tools'
+import { dialog } from '../dialog'
 
 let initialized = false
 
@@ -42,6 +43,27 @@ async function handleWorkflowInteraction(request: InteractionRequest): Promise<{
       return {
         data: await executeChatTool(request.schema as ChatToolInteractionSchema),
       }
+    case 'dialog_alert':
+      await dialog.alert(request.schema as any)
+      return { data: { confirmed: true } }
+    case 'dialog_prompt': {
+      const promptSchema = request.schema as any
+      const value = await dialog.prompt({
+        title: promptSchema.title,
+        message: promptSchema.message,
+        placeholder: promptSchema.placeholder,
+        defaultValue: promptSchema.defaultValue,
+      })
+      return { data: value !== null ? { value, confirmed: true } : { value: '', confirmed: false } }
+    }
+    case 'dialog_form': {
+      const formSchema = request.schema as any
+      const values = await dialog.form({
+        title: formSchema.title,
+        items: formSchema.items,
+      })
+      return { data: values }
+    }
     default:
       if (UI_INTERACTION_TYPES.has(request.interactionType)) {
         return { data: await delegateToUI(request) }

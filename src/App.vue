@@ -6,6 +6,7 @@ import WorkflowInfoCardDialog from '@/components/command-palette/WorkflowInfoCar
 import { createWorkflowProvider } from '@/components/command-palette/providers/workflowProvider'
 import WsMessageMonitor from '@/components/utils/WsMessageMonitor.vue'
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
+import { DialogHost } from '@/lib/dialog'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { useTabStore } from '@/stores/tab'
@@ -137,6 +138,7 @@ onUnmounted(() => {
       @open-in-editor="handleOpenInEditor"
     />
     <WsMessageMonitor />
+    <DialogHost />
 
     <!-- WebSocket 连接错误覆盖层 -->
     <Transition name="fade">

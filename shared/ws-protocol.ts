@@ -44,6 +44,9 @@ export type InteractionType =
   | 'chat_tool'
   | 'node_execution'
   | 'table_confirm'
+  | 'dialog_alert'
+  | 'dialog_prompt'
+  | 'dialog_form'
   | 'custom'
 
 export interface AgentChatInteractionSchema {

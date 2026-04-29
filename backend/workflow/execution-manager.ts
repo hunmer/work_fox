@@ -633,6 +633,12 @@ export class BackendWorkflowExecutionManager {
         return this.executeLoopNode(session, node, resolvedData, appendNodeLog)
       case 'agent_run':
         return this.executeAgentRun(session, node, resolvedData, appendNodeLog)
+      case 'alert':
+        return this.executeAlertDialog(session, node, resolvedData, appendNodeLog)
+      case 'prompt':
+        return this.executePromptDialog(session, node, resolvedData, appendNodeLog)
+      case 'form':
+        return this.executeFormDialog(session, node, resolvedData, appendNodeLog)
       default:
         if (isLocalBridgeWorkflowNode(node.type)) {
           return this.executeMainProcessNode(session, node, resolvedData, appendNodeLog)
@@ -791,6 +797,78 @@ export class BackendWorkflowExecutionManager {
     })
 
     return result
+  }
+
+  private async executeAlertDialog(
+    session: ExecutionSession,
+    node: WorkflowNode,
+    resolvedData: Record<string, any>,
+    appendNodeLog: (level: ExecutionLogEntry['level'], message: string) => void,
+  ): Promise<any> {
+    appendNodeLog('info', '等待用户确认弹窗')
+    const result = await this.deps.interactionManager.request({
+      clientId: session.ownerClientId,
+      executionId: session.id,
+      workflowId: session.workflow.id,
+      nodeId: node.id,
+      interactionType: 'dialog_alert' as any,
+      schema: {
+        title: String(resolvedData.title || '提示'),
+        message: String(resolvedData.message || ''),
+      },
+    })
+    appendNodeLog('info', '用户已确认弹窗')
+    return { confirmed: true }
+  }
+
+  private async executePromptDialog(
+    session: ExecutionSession,
+    node: WorkflowNode,
+    resolvedData: Record<string, any>,
+    appendNodeLog: (level: ExecutionLogEntry['level'], message: string) => void,
+  ): Promise<any> {
+    appendNodeLog('info', '等待用户输入')
+    const result = await this.deps.interactionManager.request({
+      clientId: session.ownerClientId,
+      executionId: session.id,
+      workflowId: session.workflow.id,
+      nodeId: node.id,
+      interactionType: 'dialog_prompt' as any,
+      schema: {
+        title: String(resolvedData.title || '请输入'),
+        message: String(resolvedData.message || ''),
+        placeholder: String(resolvedData.placeholder || ''),
+        defaultValue: String(resolvedData.defaultValue || ''),
+      },
+    })
+    appendNodeLog('info', '用户输入完成')
+    if (result && typeof result === 'object' && 'value' in result) {
+      return { value: (result as any).value, confirmed: true }
+    }
+    return { value: result as string, confirmed: result !== null }
+  }
+
+  private async executeFormDialog(
+    session: ExecutionSession,
+    node: WorkflowNode,
+    resolvedData: Record<string, any>,
+    appendNodeLog: (level: ExecutionLogEntry['level'], message: string) => void,
+  ): Promise<any> {
+    const items = Array.isArray(resolvedData.items) ? resolvedData.items : []
+    appendNodeLog('info', `等待用户填写表单 (${items.length} 项)`)
+    const result = await this.deps.interactionManager.request({
+      clientId: session.ownerClientId,
+      executionId: session.id,
+      workflowId: session.workflow.id,
+      nodeId: node.id,
+      interactionType: 'dialog_form' as any,
+      schema: {
+        title: String(resolvedData.title || '表单'),
+        items,
+      },
+    })
+    appendNodeLog('info', '用户表单填写完成')
+    return { values: result, confirmed: result !== null }
   }
 
   private executeCode(context: Record<string, any>, code: string, params: Record<string, any>): any {
