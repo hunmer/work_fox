@@ -5,6 +5,8 @@ import CommandPaletteDialog from '@/components/command-palette/CommandPaletteDia
 import WorkflowInfoCardDialog from '@/components/command-palette/WorkflowInfoCardDialog.vue'
 import { createWorkflowProvider } from '@/components/command-palette/providers/workflowProvider'
 import WsMessageMonitor from '@/components/utils/WsMessageMonitor.vue'
+import FloatingPanel from '@/components/utils/FloatingPanel.vue'
+import ChatPanel from '@/components/chat/ChatPanel.vue'
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { DialogHost } from '@/lib/dialog'
 import { Button } from '@/components/ui/button'
@@ -14,18 +16,26 @@ import { usePluginStore } from '@/stores/plugin'
 import { useAIProviderStore } from '@/stores/ai-provider'
 import { useShortcutActions } from '@/composables/useShortcutActions'
 import { wsBridge } from '@/lib/ws-bridge'
+import { createChatStore } from '@/stores/chat'
 import type { CommandProvider } from '@/types/command'
 import type { Workflow } from '@shared/workflow-types'
 
 const tabStore = useTabStore()
 const pluginStore = usePluginStore()
 const providerStore = useAIProviderStore()
+const workflowAgentChat = createChatStore('workflow-agent')
 
 const commandPaletteOpen = ref(false)
 const wsError = ref<string | null>(null)
 const reconnecting = ref(false)
 const reconnectAttempt = ref(0)
 const appReady = ref(false)
+const workflowAgentVisible = ref(true)
+const workflowAgentX = ref(24)
+const workflowAgentY = ref(80)
+const workflowAgentWidth = ref(420)
+const workflowAgentHeight = ref(720)
+const workflowAgentZIndex = ref(5000)
 
 // 工作流信息卡片状态
 const workflowInfoOpen = ref(false)
@@ -88,6 +98,8 @@ function warnInitFailure(label: string, error: unknown) {
 }
 
 onMounted(async () => {
+  workflowAgentX.value = Math.max(window.innerWidth - workflowAgentWidth.value - 24, 24)
+  workflowAgentY.value = Math.max(window.innerHeight - workflowAgentHeight.value - 24, 80)
   wsBridge.on('ws:disconnected', onWsDisconnected)
   wsBridge.on('ws:error', onWsError)
   wsBridge.on('ws:reconnecting', onWsReconnecting)
@@ -96,6 +108,7 @@ onMounted(async () => {
 
   try {
     await tabStore.restoreTabs()
+    await workflowAgentChat.init()
   } catch (error) {
     warnInitFailure('标签页', error)
   } finally {
@@ -139,6 +152,19 @@ onUnmounted(() => {
     />
     <WsMessageMonitor />
     <DialogHost />
+    <FloatingPanel
+      v-model:visible="workflowAgentVisible"
+      v-model:x="workflowAgentX"
+      v-model:y="workflowAgentY"
+      v-model:width="workflowAgentWidth"
+      v-model:height="workflowAgentHeight"
+      v-model:zIndex="workflowAgentZIndex"
+      title="AI"
+    >
+      <div class="h-full min-h-0 -m-3">
+        <ChatPanel :chat="workflowAgentChat" />
+      </div>
+    </FloatingPanel>
 
     <!-- WebSocket 连接错误覆盖层 -->
     <Transition name="fade">

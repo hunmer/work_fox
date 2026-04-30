@@ -6,6 +6,7 @@ import {
   isBrowserBusinessToolName,
 } from '../../src/lib/agent/tools'
 import { WORKFLOW_TOOL_DEFINITIONS } from '../../src/lib/agent/workflow-tools'
+import { WORKFLOW_AGENT_TOOL_DEFINITIONS } from '../../src/lib/agent/workflow-agent-tools'
 import type { BackendInteractionManager } from '../workflow/interaction-manager'
 import type { BackendPluginRegistry } from '../plugins/plugin-registry'
 import type { ChatWorkflowToolExecutor } from './chat-workflow-tool-executor'
@@ -16,7 +17,7 @@ const BROWSER_TOOL_SERVER = 'workfox_browser'
 const PLUGIN_TOOL_SERVER = 'workfox_plugin'
 const MCP_TOOL_PREFIX = /^mcp__([^_][^ ]*?)__(.+)$/
 
-type RuntimeMode = 'browser' | 'workflow'
+type RuntimeMode = 'browser' | 'workflow' | 'workflow-agent'
 
 type CanUseTool = (toolName: string, input: unknown, options: { toolUseID: string }) => Promise<{ behavior: 'allow'; toolUseID: string }>
 type McpServerConfig = unknown
@@ -203,6 +204,18 @@ export async function createChatToolAdapter(
       })
     })
     mcpServers[WORKFLOW_TOOL_SERVER] = sdk.createSdkMcpServer({ name: WORKFLOW_TOOL_SERVER, tools: workflowTools })
+  }
+
+  if (context.mode === 'workflow-agent') {
+    const workflowAgentTools = WORKFLOW_AGENT_TOOL_DEFINITIONS.map((definition: any) => {
+      const mcpToolName = sanitizeToolName(definition.name)
+      registerMcpToolName(WORKFLOW_TOOL_SERVER, mcpToolName, definition.name)
+      return sdk.tool(mcpToolName, definition.description, toZodSchema(definition.input_schema), async (args) => {
+        const result = await deps.workflowToolExecutor.executeWorkflowAgentTool(definition.name, args, context.clientId)
+        return toToolResult(result)
+      })
+    })
+    mcpServers[WORKFLOW_TOOL_SERVER] = sdk.createSdkMcpServer({ name: WORKFLOW_TOOL_SERVER, tools: workflowAgentTools })
   }
 
   const serverPluginTools = context.enabledPlugins?.length ? deps.pluginRegistry.getAgentTools(context.enabledPlugins) : []

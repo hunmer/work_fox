@@ -27,6 +27,8 @@ import type { BackendWorkflowStore } from '../storage/workflow-store'
 import type { BackendPluginRegistry } from '../plugins/plugin-registry'
 import type { BackendInteractionManager } from '../workflow/interaction-manager'
 import type { ClientNodeCache } from './client-node-cache'
+import type { BackendExecutionLogStore } from '../storage/execution-log-store'
+import type { BackendWorkflowExecutionManager } from '../workflow/execution-manager'
 import { createChatToolAdapter } from './chat-tool-adapter'
 import { ChatWorkflowToolExecutor } from './chat-workflow-tool-executor'
 
@@ -269,6 +271,8 @@ export class ChatRuntime {
     private aiProviderStore: BackendAIProviderStore,
     private logger: Logger,
     workflowStore: BackendWorkflowStore,
+    executionManager: BackendWorkflowExecutionManager,
+    executionLogStore: BackendExecutionLogStore,
     pluginRegistry: BackendPluginRegistry,
     private interactionManager: BackendInteractionManager,
     clientNodeCache: ClientNodeCache,
@@ -278,6 +282,8 @@ export class ChatRuntime {
     this.clientNodeCache = clientNodeCache
     this.workflowToolExecutor = new ChatWorkflowToolExecutor(
       workflowStore,
+      executionManager,
+      executionLogStore,
       pluginRegistry,
       clientNodeCache,
       connectionManager,

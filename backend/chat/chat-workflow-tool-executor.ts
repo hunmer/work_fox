@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto'
 import dagre from '@dagrejs/dagre'
-import type { EmbeddedWorkflow, NodeTypeDefinition, Workflow, WorkflowEdge, WorkflowNode } from '../../shared/workflow-types'
+import type { EmbeddedWorkflow, ExecutionLog, NodeTypeDefinition, OutputField, Workflow, WorkflowEdge, WorkflowNode } from '../../shared/workflow-types'
 import { builtinNodeDefinitions } from '../../electron/services/builtin-nodes'
 import type { BackendWorkflowStore } from '../storage/workflow-store'
 import type { BackendPluginRegistry } from '../plugins/plugin-registry'
 import type { ConnectionManager } from '../ws/connection-manager'
 import type { ClientNodeCache } from './client-node-cache'
 import { normalizeEmbeddedWorkflow } from '../../shared/embedded-workflow'
+import type { BackendWorkflowExecutionManager } from '../workflow/execution-manager'
+import type { BackendExecutionLogStore } from '../storage/execution-log-store'
 
 export interface ToolResult {
   success: boolean
@@ -271,10 +273,185 @@ interface WorkflowTarget {
 export class ChatWorkflowToolExecutor {
   constructor(
     private workflowStore: BackendWorkflowStore,
+    private executionManager: BackendWorkflowExecutionManager,
+    private executionLogStore: BackendExecutionLogStore,
     private pluginRegistry: BackendPluginRegistry,
     private clientNodeCache: ClientNodeCache,
     private connections: ConnectionManager,
   ) {}
+
+  async executeWorkflowAgentTool(name: string, args: any, ownerClientId = 'chat'): Promise<ToolResult> {
+    switch (name) {
+      case 'search_workflow':
+        return this.executeSearchWorkflow(args)
+      case 'execute_workflow_sync':
+        return this.executeWorkflowByIdSync(args, ownerClientId)
+      case 'execute_workflow_async':
+        return this.executeWorkflowByIdAsync(args, ownerClientId)
+      case 'get_workflow_result':
+        return this.getWorkflowExecutionResult(args)
+      default:
+        return { success: false, message: `未知工作流执行工具: ${name}` }
+    }
+  }
+
+  private executeSearchWorkflow(args: any): ToolResult {
+    const keyword = typeof args?.keyword === 'string' ? args.keyword.trim().toLowerCase() : ''
+    if (!keyword) {
+      return { success: false, message: '缺少必填参数: keyword' }
+    }
+
+    const workflows = this.workflowStore.listWorkflows()
+    const matches = workflows
+      .filter((workflow) => {
+        const haystack = [workflow.name, workflow.description ?? '']
+          .join('\n')
+          .toLowerCase()
+        return haystack.includes(keyword)
+      })
+      .map((workflow) => {
+        const startNode = workflow.nodes.find((node) => node.type === 'start')
+        const inputFields = Array.isArray(startNode?.data?.inputFields)
+          ? cloneJson(startNode.data.inputFields as OutputField[])
+          : []
+        return {
+          workflow_id: workflow.id,
+          title: workflow.name,
+          description: workflow.description ?? '',
+          inputFields,
+          updatedAt: workflow.updatedAt,
+        }
+      })
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+
+    return {
+      success: true,
+      message: `找到 ${matches.length} 个匹配工作流`,
+      data: {
+        workflows: matches,
+      },
+    }
+  }
+
+  private async executeWorkflowByIdSync(args: any, ownerClientId: string): Promise<ToolResult> {
+    const workflowId = this.resolveWorkflowId(args)
+    if (!workflowId) {
+      return { success: false, message: '缺少必填参数: workflow_id' }
+    }
+    const workflow = this.workflowStore.getWorkflow(workflowId)
+    if (!workflow) {
+      return { success: false, message: `工作流不存在: ${workflowId}` }
+    }
+
+    const input = isRecord(args?.input) ? args.input : {}
+    const result = await this.executionManager.execute({ workflowId, input }, ownerClientId)
+    const recovery = this.executionManager.getExecutionRecovery({ workflowId, executionId: result.executionId }, ownerClientId)
+    const log = recovery.execution?.log ?? this.findExecutionLog(workflowId, result.executionId)
+
+    return {
+      success: true,
+      message: `工作流已执行完成，状态: ${log?.status ?? result.status}`,
+      data: {
+        workflow_id: workflowId,
+        executionId: result.executionId,
+        status: log?.status ?? result.status,
+        steps: log ? this.formatExecutionSteps(log) : [],
+      },
+    }
+  }
+
+  private async executeWorkflowByIdAsync(args: any, ownerClientId: string): Promise<ToolResult> {
+    const workflowId = this.resolveWorkflowId(args)
+    if (!workflowId) {
+      return { success: false, message: '缺少必填参数: workflow_id' }
+    }
+    const workflow = this.workflowStore.getWorkflow(workflowId)
+    if (!workflow) {
+      return { success: false, message: `工作流不存在: ${workflowId}` }
+    }
+
+    const input = isRecord(args?.input) ? args.input : {}
+    const result = await this.executionManager.execute({ workflowId, input }, ownerClientId)
+    return {
+      success: true,
+      message: '工作流已开始异步执行',
+      data: {
+        workflow_id: workflowId,
+        executionId: result.executionId,
+        status: result.status,
+      },
+    }
+  }
+
+  private async getWorkflowExecutionResult(args: any): Promise<ToolResult> {
+    const executionId = typeof args?.execution_id === 'string' ? args.execution_id : ''
+    if (!executionId) {
+      return { success: false, message: '缺少必填参数: execution_id' }
+    }
+
+    const workflowId = this.resolveWorkflowId(args)
+    if (workflowId) {
+      const log = this.findExecutionLog(workflowId, executionId)
+      if (log) {
+        const nodeId = typeof args?.node_id === 'string' ? args.node_id : undefined
+        return {
+          success: true,
+          message: `执行状态: ${log.status}`,
+          data: {
+            workflow_id: workflowId,
+            executionId,
+            status: log.status,
+            steps: this.formatExecutionSteps(log, nodeId),
+          },
+        }
+      }
+    }
+
+    const workflows = this.workflowStore.listWorkflows()
+    for (const workflow of workflows) {
+      const log = this.findExecutionLog(workflow.id, executionId)
+      if (!log) continue
+      const nodeId = typeof args?.node_id === 'string' ? args.node_id : undefined
+      return {
+        success: true,
+        message: `执行状态: ${log.status}`,
+        data: {
+          workflow_id: workflow.id,
+          executionId,
+          status: log.status,
+          steps: this.formatExecutionSteps(log, nodeId),
+        },
+      }
+    }
+
+    return { success: false, message: `未找到执行记录: ${executionId}` }
+  }
+
+  private resolveWorkflowId(args: any): string {
+    if (typeof args?.workflow_id === 'string') return args.workflow_id
+    if (typeof args?.workflowId === 'string') return args.workflowId
+    return ''
+  }
+
+  private findExecutionLog(workflowId: string, executionId: string): ExecutionLog | null {
+    return this.executionLogStore.list(workflowId).find((item) => item.id === executionId) ?? null
+  }
+
+  private formatExecutionSteps(log: ExecutionLog, nodeId?: string) {
+    return log.steps
+      .filter((step) => !nodeId || step.nodeId === nodeId)
+      .map((step) => ({
+        nodeId: step.nodeId,
+        nodeLabel: step.nodeLabel,
+        status: step.status,
+        startedAt: step.startedAt,
+        finishedAt: step.finishedAt,
+        duration: step.finishedAt ? step.finishedAt - step.startedAt : undefined,
+        input: step.input,
+        output: step.output,
+        error: step.error,
+      }))
+  }
 
   getAllNodeTypeDefinitions(): NodeTypeDefinition[] {
     const builtin = builtinNodeDefinitions as unknown as NodeTypeDefinition[]

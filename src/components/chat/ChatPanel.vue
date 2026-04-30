@@ -7,6 +7,7 @@ import { useTabStore } from '@/stores/tab'
 import { usePluginStore } from '@/stores/plugin'
 import { BROWSER_TOOL_LIST } from '@/lib/agent/tools'
 import { WORKFLOW_TOOL_DEFINITIONS } from '@/lib/agent/workflow-tools'
+import { WORKFLOW_AGENT_TOOL_DEFINITIONS } from '@/lib/agent/workflow-agent-tools'
 import type { ToolDisplayItem } from '@/types'
 import ChatMessageList from './ChatMessageList.vue'
 import ChatInput from './ChatInput.vue'
@@ -52,6 +53,13 @@ async function loadPluginTools(pluginIds: string[]) {
 watch(() => props.enabledPlugins, (ids) => loadPluginTools(ids || []), { immediate: true })
 
 const toolDisplayItems = computed<ToolDisplayItem[]>(() => {
+  if (props.chat.scope === 'workflow-agent') {
+    return WORKFLOW_AGENT_TOOL_DEFINITIONS.map((t) => ({
+      name: t.name,
+      description: t.description,
+      category: '工作流执行',
+    }))
+  }
   if (isWorkflowContext.value && uiStore.workflowEditMode) {
     return WORKFLOW_TOOL_DEFINITIONS.map((t) => ({
       name: t.name,

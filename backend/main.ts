@@ -100,6 +100,8 @@ async function main(): Promise<void> {
     aiProviderStore,
     logger,
     workflowStore,
+    executionManager,
+    executionLogStore,
     plugins,
     interactionManager,
     clientNodeCache,

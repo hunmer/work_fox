@@ -248,7 +248,7 @@ export interface ChatCompletionParams {
   stream: boolean
   maxTokens?: number
   thinking?: { type: 'enabled'; budgetTokens: number }
-  _mode?: 'workflow'
+  _mode?: 'workflow' | 'workflow-agent'
   _workflowId?: string
   targetTabId?: string
   enabledToolNames?: string[]

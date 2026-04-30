@@ -100,6 +100,16 @@ function buildWorkflowOptions(
   }
 }
 
+function buildWorkflowAgentOptions() {
+  const agentSettingsStore = useAgentSettingsStore()
+  return {
+    mode: 'workflow-agent' as const,
+    runtime: {
+      cwd: agentSettingsStore.globalSettings.workspaceDir || undefined,
+    },
+  }
+}
+
 // ====== 会话管理 ======
 
 function createSessionActions(
@@ -562,7 +572,11 @@ export function createChatStore(scope: string) {
         const result = await runAgentStream(
           history, content, images, callbacks,
           uiStore.targetTabId, uiStore.enabledToolNames,
-          buildWorkflowOptions(sessions, currentSessionId, uiStore.workflowEditMode, uiStore.nodeContextEnabled),
+          scope === 'workflow'
+            ? buildWorkflowOptions(sessions, currentSessionId, uiStore.workflowEditMode, uiStore.nodeContextEnabled)
+            : scope === 'workflow-agent'
+              ? buildWorkflowAgentOptions()
+              : undefined,
         )
         if (result) { currentRequestId = result.requestId; streamCleanup = result.cleanup }
       } catch (error) {
