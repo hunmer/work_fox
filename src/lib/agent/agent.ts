@@ -4,6 +4,7 @@ import { BROWSER_AGENT_SYSTEM_PROMPT } from './system-prompt'
 import { useAIProviderStore } from '@/stores/ai-provider'
 import { WORKFLOW_TOOL_DEFINITIONS } from './workflow-tools'
 import { buildWorkflowSystemPrompt } from './workflow-prompt'
+import { WORKFLOW_AGENT_SYSTEM_PROMPT, WORKFLOW_AGENT_TOOL_DEFINITIONS } from './workflow-agent-tools'
 import type { ChatCompletionParams } from '@/types'
 import { wsBridge } from '@/lib/ws-bridge'
 
@@ -16,7 +17,7 @@ function toIpcPayload<T>(value: T): T {
 /** Agent 流式请求的可选配置 */
 export interface AgentStreamOptions {
   /** 运行模式：浏览器模式（默认）或工作流模式 */
-  mode?: 'browser' | 'workflow'
+  mode?: 'browser' | 'workflow' | 'workflow-agent'
   /** 工作流 ID（仅 workflow 模式） */
   workflowId?: string
   /** 工作流摘要信息（仅 workflow 模式） */
@@ -60,6 +61,7 @@ export async function runAgentStream(
   }
 
   const isWorkflow = options?.mode === 'workflow'
+  const isWorkflowAgent = options?.mode === 'workflow-agent'
 
   // 构造消息（含图片支持）
   const userContent = images?.length
