@@ -4,3 +4,4 @@ dist-app/
 .tmp-userdata-exec/
 dist-web/
 backend/data/
+node_modules.dev/

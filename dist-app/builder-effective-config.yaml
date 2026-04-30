@@ -40,6 +40,8 @@ extraResources:
       - '**/*'
 compression: store
 asar: true
+asarUnpack:
+  - node_modules/@anthropic-ai/claude-agent-sdk-*/claude*
 publish:
   provider: github
   owner: hunmer
