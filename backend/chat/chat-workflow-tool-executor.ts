@@ -7,7 +7,7 @@ import type { BackendPluginRegistry } from '../plugins/plugin-registry'
 import type { ConnectionManager } from '../ws/connection-manager'
 import type { ClientNodeCache } from './client-node-cache'
 import { createDefaultEmbeddedWorkflow, normalizeEmbeddedWorkflow } from '../../shared/embedded-workflow'
-import { LOOP_BODY_NODE_TYPE, LOOP_BODY_ROLE, LOOP_NEXT_SOURCE_HANDLE } from '../../shared/workflow-composite'
+import { LOOP_BODY_NODE_TYPE, LOOP_BODY_ROLE, LOOP_NEXT_SOURCE_HANDLE, LOOP_NODE_TYPE } from '../../shared/workflow-composite'
 import type { BackendWorkflowExecutionManager } from '../workflow/execution-manager'
 import type { BackendExecutionLogStore } from '../storage/execution-log-store'
 
@@ -95,6 +95,14 @@ function buildNodeUsageNotes(def: any): string[] {
     notes.push('更新 run_code.code 后，要同步用 update_node 设置 data.outputs，声明返回对象的字段结构；否则变量选择器和下游字段映射无法准确感知输出。')
   }
 
+  if (def.type === LOOP_NODE_TYPE || def.type === LOOP_BODY_NODE_TYPE) {
+    notes.push('loop_body 内部访问当前迭代项时，优先使用 {{ __loop__.item }}；访问当前序号用 {{ __loop__.index }}，总次数用 {{ __loop__.count }}。')
+    notes.push('loop 的 sharedVariables 是跨迭代共享的中间变量，在 loop_body 内部通过 {{ __loop__.vars.变量路径 }} 引用。')
+    notes.push('loop 节点和对应 loop_body 节点在循环体内也会暴露兼容数据：{{ __data__["loop节点ID"].$item }}、$index、$count、$isFirst、$isLast，以及 sharedVariables 的顶层字段；新编辑优先使用 __loop__.*。')
+    notes.push('loop_body 内嵌工作流的 start 节点不会自动代表当前迭代项；需要当前项时显式引用 __loop__.item，不要从 start 节点 params 猜测。')
+    notes.push('run_code 位于 loop_body 内时，可在代码中读取 context.__loop__?.item、context.__loop__?.index 和 context.__loop__?.vars。')
+  }
+
   return notes
 }
 
@@ -110,6 +118,29 @@ function buildNodeUsageExamples(def: any): Array<Record<string, any>> {
         ],
       },
     }]
+  }
+  if (def.type === LOOP_NODE_TYPE || def.type === LOOP_BODY_NODE_TYPE) {
+    return [
+      {
+        scene: 'loop_body 节点参数引用当前迭代项',
+        data: {
+          input: '{{ __loop__.item }}',
+          index: '{{ __loop__.index }}',
+          sharedValue: '{{ __loop__.vars.total }}',
+        },
+      },
+      {
+        scene: 'loop_body 内 run_code 读取循环上下文',
+        data: {
+          code: 'async function main({ context }) {\n  const loop = context.__loop__ || {}\n  return { item: loop.item, index: loop.index, vars: loop.vars || {} }\n}',
+          outputs: [
+            { key: 'item', type: 'any' },
+            { key: 'index', type: 'number' },
+            { key: 'vars', type: 'object' },
+          ],
+        },
+      },
+    ]
   }
   return []
 }
