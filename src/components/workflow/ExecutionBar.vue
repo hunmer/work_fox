@@ -198,13 +198,24 @@ function handleInputSubmit(inputs: Record<string, unknown>) {
 
 const isRunning = computed(() => store.executionStatus === 'running')
 const isPaused = computed(() => store.executionStatus === 'paused')
+const controlStatus = computed(() => store.executionControlStatus)
 const canStart = computed(() => {
-  if (isRunning.value || isPaused.value) return false
+  if (isRunning.value || isPaused.value || controlStatus.value !== 'idle') return false
   return !store.executionValidationError
 })
-const canPause = computed(() => isRunning.value)
-const canResume = computed(() => isPaused.value)
-const canStop = computed(() => isRunning.value || isPaused.value)
+const canPause = computed(() => isRunning.value && controlStatus.value === 'idle')
+const canResume = computed(() => isPaused.value && controlStatus.value === 'idle')
+const canStop = computed(() => (isRunning.value || isPaused.value) && controlStatus.value === 'idle')
+const showResumeButton = computed(() => isPaused.value || controlStatus.value === 'resuming')
+const pauseButtonText = computed(() => controlStatus.value === 'pausing' ? '暂停中' : '暂停')
+const stopButtonText = computed(() => controlStatus.value === 'stopping' ? '停止中' : '停止')
+const resumeButtonText = computed(() => controlStatus.value === 'resuming' ? '继续中' : '继续')
+const executionStatusText = computed(() => {
+  if (controlStatus.value === 'pausing') return '暂停请求已发送'
+  if (controlStatus.value === 'stopping') return '停止请求已发送'
+  if (controlStatus.value === 'resuming') return '继续请求已发送'
+  return store.executionStatus
+})
 
 const progressText = computed(() => {
   if (!store.executionLog) return ''
@@ -267,13 +278,21 @@ function setExpanded(nextExpanded: boolean) {
     <!-- 控制栏 -->
     <div class="flex items-center gap-2 px-3 py-1.5">
       <Button
-        v-if="canResume"
+        v-if="showResumeButton"
         variant="ghost"
         size="sm"
         class="h-6 text-xs gap-1 px-2"
         @click="store.resumeExecution()"
       >
-        <Play class="w-3 h-3" /> 继续
+        <Loader2
+          v-if="controlStatus === 'resuming'"
+          class="w-3 h-3 animate-spin"
+        />
+        <Play
+          v-else
+          class="w-3 h-3"
+        />
+        {{ resumeButtonText }}
       </Button>
       <Button
         v-else
@@ -302,7 +321,15 @@ function setExpanded(nextExpanded: boolean) {
         :disabled="!canPause"
         @click="store.pauseExecution()"
       >
-        <Pause class="w-3 h-3" /> 暂停
+        <Loader2
+          v-if="controlStatus === 'pausing'"
+          class="w-3 h-3 animate-spin"
+        />
+        <Pause
+          v-else
+          class="w-3 h-3"
+        />
+        {{ pauseButtonText }}
       </Button>
 
       <Button
@@ -312,7 +339,15 @@ function setExpanded(nextExpanded: boolean) {
         :disabled="!canStop"
         @click="store.stopExecution()"
       >
-        <Square class="w-3 h-3" /> 停止
+        <Loader2
+          v-if="controlStatus === 'stopping'"
+          class="w-3 h-3 animate-spin"
+        />
+        <Square
+          v-else
+          class="w-3 h-3"
+        />
+        {{ stopButtonText }}
       </Button>
 
       <div class="ml-auto flex items-center gap-3 text-[10px] text-muted-foreground">
@@ -324,7 +359,7 @@ function setExpanded(nextExpanded: boolean) {
         </span>
         <span v-if="progressText">进度: {{ progressText }}</span>
         <span v-if="elapsedText">耗时: {{ elapsedText }}</span>
-        <span>{{ store.executionStatus }}</span>
+        <span>{{ executionStatusText }}</span>
       </div>
 
       <Button

@@ -15,10 +15,12 @@
     "!node_modules/**/{test,tests,__tests__,example,examples,docs,doc,website,.github,.vscode}"
   ],
   "mac": {
+    "icon": "build/icon.icns",
     "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }],
     "category": "public.app-category.productivity"
   },
   "win": {
+    "icon": "build/icon.ico",
     "artifactName": "${productName}-Setup-${version}.${ext}",
     "target": [{ "target": "nsis", "arch": ["x64"] }],
     "requestedExecutionLevel": "asInvoker"

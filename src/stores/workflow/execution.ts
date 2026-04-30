@@ -22,6 +22,7 @@ export function createExecutionActions(
   const partialExecutionStartNodeId = ref<string | null>(null)
   const pausedNodeId = ref<string | null>(null)
   const pausedReason = ref<'manual' | 'breakpoint-start' | 'breakpoint-end' | null>(null)
+  const executionControlStatus = ref<'idle' | 'pausing' | 'resuming' | 'stopping'>('idle')
   const backendConnectionState = ref<'idle' | 'connected' | 'reconnecting' | 'error'>('idle')
   const backendReconnectAttempt = ref(0)
   const backendLastError = ref<string | null>(null)
@@ -69,6 +70,7 @@ export function createExecutionActions(
 
     switch (channel) {
       case 'workflow:started':
+        executionControlStatus.value = 'idle'
         currentExecutionId = payload.executionId
         executionStatus.value = 'running'
         executionLog.value = null
@@ -78,11 +80,13 @@ export function createExecutionActions(
         execLogMgr.selectedExecutionLogId.value = null
         break
       case 'workflow:paused':
+        executionControlStatus.value = 'idle'
         executionStatus.value = 'paused'
         pausedNodeId.value = (payload as ExecutionEventMap['workflow:paused']).currentNodeId || null
         pausedReason.value = (payload as ExecutionEventMap['workflow:paused']).reason || 'manual'
         break
       case 'workflow:resumed':
+        executionControlStatus.value = 'idle'
         executionStatus.value = 'running'
         pausedNodeId.value = null
         pausedReason.value = null
@@ -94,6 +98,7 @@ export function createExecutionActions(
         executionContext.value = (payload as ExecutionEventMap['execution:context']).context as Record<string, any>
         break
       case 'workflow:completed':
+        executionControlStatus.value = 'idle'
         currentExecutionId = payload.executionId
         executionStatus.value = 'completed'
         partialExecutionStartNodeId.value = null
@@ -107,6 +112,7 @@ export function createExecutionActions(
         }
         break
       case 'workflow:error':
+        executionControlStatus.value = 'idle'
         currentExecutionId = payload.executionId
         executionStatus.value = 'error'
         partialExecutionStartNodeId.value = null
@@ -230,35 +236,65 @@ export function createExecutionActions(
     }
   }
 
-  function pauseExecution(): void {
-    if (!currentExecutionId) return
-    createWorkflowDomainApi().workflow.pause(currentExecutionId)
+  async function pauseExecution(): Promise<void> {
+    if (!currentExecutionId || executionControlStatus.value !== 'idle') return
+    executionControlStatus.value = 'pausing'
+    backendLastError.value = null
+    try {
+      const result = await createWorkflowDomainApi().workflow.pause(currentExecutionId)
+      currentExecutionId = result.executionId
+      executionStatus.value = result.status as EngineStatus
+      if (executionStatus.value !== 'running') {
+        executionControlStatus.value = 'idle'
+      }
+    } catch (error) {
+      backendLastError.value = error instanceof Error ? error.message : String(error)
+      executionControlStatus.value = 'idle'
+    }
   }
 
   async function resumeExecution(): Promise<void> {
-    if (!currentExecutionId) return
-    const result = await createWorkflowDomainApi().workflow.resume(currentExecutionId)
-    currentExecutionId = result.executionId
-    executionStatus.value = result.status as EngineStatus
-    setTimeout(() => {
-      void recoverExecutionState()
-    }, 100)
-    if (executionStatus.value === 'completed' || executionStatus.value === 'error') {
-      partialExecutionStartNodeId.value = null
-      pausedNodeId.value = null
-      pausedReason.value = null
+    if (!currentExecutionId || executionControlStatus.value !== 'idle') return
+    executionControlStatus.value = 'resuming'
+    backendLastError.value = null
+    try {
+      const result = await createWorkflowDomainApi().workflow.resume(currentExecutionId)
+      currentExecutionId = result.executionId
+      executionStatus.value = result.status as EngineStatus
+      setTimeout(() => {
+        void recoverExecutionState()
+      }, 100)
+      if (executionStatus.value === 'completed' || executionStatus.value === 'error') {
+        partialExecutionStartNodeId.value = null
+        pausedNodeId.value = null
+        pausedReason.value = null
+      }
+      if (executionStatus.value !== 'paused') {
+        executionControlStatus.value = 'idle'
+      }
+    } catch (error) {
+      backendLastError.value = error instanceof Error ? error.message : String(error)
+      executionControlStatus.value = 'idle'
     }
   }
 
   async function stopExecution(): Promise<void> {
-    if (!currentExecutionId) return
-    const result = await createWorkflowDomainApi().workflow.stop(currentExecutionId)
-    currentExecutionId = result.executionId
-    executionStatus.value = result.status as EngineStatus
-    if (executionStatus.value !== 'running' && executionStatus.value !== 'paused') {
-      partialExecutionStartNodeId.value = null
-      pausedNodeId.value = null
-      pausedReason.value = null
+    if (!currentExecutionId || executionControlStatus.value !== 'idle') return
+    executionControlStatus.value = 'stopping'
+    backendLastError.value = null
+    try {
+      const result = await createWorkflowDomainApi().workflow.stop(currentExecutionId)
+      currentExecutionId = result.executionId
+      executionStatus.value = result.status as EngineStatus
+      if (executionStatus.value !== 'running' && executionStatus.value !== 'paused') {
+        partialExecutionStartNodeId.value = null
+        pausedNodeId.value = null
+        pausedReason.value = null
+        executionControlStatus.value = 'idle'
+      }
+    } catch (error) {
+      backendLastError.value = error instanceof Error ? error.message : String(error)
+      executionControlStatus.value = 'idle'
     }
   }
 
@@ -271,6 +307,7 @@ export function createExecutionActions(
     partialExecutionStartNodeId,
     pausedNodeId,
     pausedReason,
+    executionControlStatus,
     backendConnectionState,
     backendReconnectAttempt,
     backendLastError,

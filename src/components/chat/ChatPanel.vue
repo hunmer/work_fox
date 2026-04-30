@@ -104,10 +104,6 @@ function handleSend(content: string, images: string[]) {
   props.chat.sendMessage(content, images.length > 0 ? images : undefined)
 }
 
-function handleClose() {
-  uiStore.togglePanel()
-}
-
 function handleClear() {
   if (props.chat.currentSessionId) {
     props.chat.clearSessionMessages(props.chat.currentSessionId)
@@ -191,14 +187,6 @@ function formatTime(timestamp: number): string {
         @click="handleOpenSettings"
       >
         <Settings class="h-4 w-4" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        class="h-7 w-7"
-        @click="handleClose"
-      >
-        <X class="h-4 w-4" />
       </Button>
     </div>
 

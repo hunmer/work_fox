@@ -136,6 +136,7 @@ export function createWorkflowStore(tabId: string) {
       partialExecutionStartNodeId: execActions.partialExecutionStartNodeId,
       pausedNodeId: execActions.pausedNodeId,
       pausedReason: execActions.pausedReason,
+      executionControlStatus: execActions.executionControlStatus,
       executionLogs: execLogMgr.executionLogs,
       selectedExecutionLogId: execLogMgr.selectedExecutionLogId,
       selectedExecutionLog,
