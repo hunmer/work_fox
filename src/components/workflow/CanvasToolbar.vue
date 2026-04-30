@@ -20,7 +20,7 @@ const store = useWorkflowStore()
 const agentSettings = useAgentSettingsStore()
 const isExporting = ref(false)
 
-function handleAutoLayout() {
+function applyDagreLayout(direction: 'LR' | 'TB') {
   const wf = store.currentWorkflow
   if (!wf) return
 
@@ -28,7 +28,7 @@ function handleAutoLayout() {
 
   const g = new dagre.graphlib.Graph()
   g.setDefaultEdgeLabel(() => ({}))
-  g.setGraph({ rankdir: 'LR', nodesep: 60, ranksep: 80 })
+  g.setGraph({ rankdir: direction, nodesep: 60, ranksep: 80 })
 
   for (const node of wf.nodes) {
     g.setNode(node.id, { width: 200, height: 80 })
@@ -142,25 +142,26 @@ async function exportCanvas(format: 'png' | 'jpeg') {
           重做 (Ctrl+Shift+Z)
         </TooltipContent>
       </Tooltip>
-      <Tooltip>
-        <TooltipTrigger as-child>
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
           <Button
             variant="ghost"
             size="sm"
             class="h-7 w-7 p-0"
             :disabled="!store.currentWorkflow?.nodes.length"
-            @click="handleAutoLayout"
           >
             <LayoutGrid class="w-3.5 h-3.5" />
           </Button>
-        </TooltipTrigger>
-        <TooltipContent
-          side="top"
-          class="text-xs"
-        >
-          智能布局
-        </TooltipContent>
-      </Tooltip>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="center" side="top">
+          <DropdownMenuItem @click="applyDagreLayout('LR')">
+            横向布局
+          </DropdownMenuItem>
+          <DropdownMenuItem @click="applyDagreLayout('TB')">
+            垂直布局
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <Tooltip>
         <TooltipTrigger as-child>
           <Button

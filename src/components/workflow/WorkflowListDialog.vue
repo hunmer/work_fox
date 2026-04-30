@@ -127,7 +127,7 @@ function onSelectLocation() {
         </ResizablePanel>
       </ResizablePanelGroup>
 
-      <DialogFooter class=”px-4 pb-4 gap-2”>
+      <DialogFooter class="px-4 pb-4 gap-2">
         <Button
           variant="outline"
           size="sm"
