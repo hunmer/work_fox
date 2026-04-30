@@ -282,6 +282,8 @@ export class ChatWorkflowToolExecutor {
 
   async executeWorkflowAgentTool(name: string, args: any, ownerClientId = 'chat'): Promise<ToolResult> {
     switch (name) {
+      case 'list_workflows':
+        return this.executeListWorkflows(args)
       case 'search_workflow':
         return this.executeSearchWorkflow(args)
       case 'execute_workflow_sync':
@@ -295,11 +297,60 @@ export class ChatWorkflowToolExecutor {
     }
   }
 
+  private executeListWorkflows(args: any): ToolResult {
+    const rawPage = typeof args?.page === 'number' ? args.page : 1
+    const rawPageSize = typeof args?.page_size === 'number' ? args.page_size : 10
+    const page = Math.max(1, Math.floor(rawPage))
+    const pageSize = Math.min(50, Math.max(1, Math.floor(rawPageSize)))
+
+    const workflows = this.workflowStore
+      .listWorkflows()
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+
+    const total = workflows.length
+    const totalPages = Math.max(1, Math.ceil(total / pageSize))
+    const currentPage = Math.min(page, totalPages)
+    const start = (currentPage - 1) * pageSize
+    const items = workflows
+      .slice(start, start + pageSize)
+      .map((workflow) => {
+        const startNode = workflow.nodes.find((node) => node.type === 'start')
+        const inputFields = Array.isArray(startNode?.data?.inputFields)
+          ? cloneJson(startNode.data.inputFields as OutputField[])
+          : []
+
+        return {
+          workflow_id: workflow.id,
+          title: workflow.name,
+          description: workflow.description ?? '',
+          inputFields,
+          updatedAt: workflow.updatedAt,
+        }
+      })
+
+    return {
+      success: true,
+      message: `第 ${currentPage} 页，共 ${totalPages} 页`,
+      data: {
+        page: currentPage,
+        page_size: pageSize,
+        total,
+        total_pages: totalPages,
+        workflows: items,
+      },
+    }
+  }
+
   private executeSearchWorkflow(args: any): ToolResult {
     const keyword = typeof args?.keyword === 'string' ? args.keyword.trim().toLowerCase() : ''
     if (!keyword) {
       return { success: false, message: '缺少必填参数: keyword' }
     }
+
+    const rawPage = typeof args?.page === 'number' ? args.page : 1
+    const rawPageSize = typeof args?.page_size === 'number' ? args.page_size : 10
+    const page = Math.max(1, Math.floor(rawPage))
+    const pageSize = Math.min(50, Math.max(1, Math.floor(rawPageSize)))
 
     const workflows = this.workflowStore.listWorkflows()
     const matches = workflows
@@ -324,11 +375,21 @@ export class ChatWorkflowToolExecutor {
       })
       .sort((a, b) => b.updatedAt - a.updatedAt)
 
+    const total = matches.length
+    const totalPages = Math.max(1, Math.ceil(total / pageSize))
+    const currentPage = Math.min(page, totalPages)
+    const start = (currentPage - 1) * pageSize
+    const items = matches.slice(start, start + pageSize)
+
     return {
       success: true,
-      message: `找到 ${matches.length} 个匹配工作流`,
+      message: `找到 ${total} 个匹配工作流，第 ${currentPage} 页，共 ${totalPages} 页`,
       data: {
-        workflows: matches,
+        page: currentPage,
+        page_size: pageSize,
+        total,
+        total_pages: totalPages,
+        workflows: items,
       },
     }
   }

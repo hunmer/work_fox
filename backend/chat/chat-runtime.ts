@@ -387,7 +387,11 @@ export class ChatRuntime {
       const toolAdapter = await createChatToolAdapter({
         clientId: clientId || '',
         requestId: _requestId,
-        mode: params._mode === 'workflow' ? 'workflow' : 'browser',
+        mode: params._mode === 'workflow-agent'
+          ? 'workflow-agent'
+          : params._mode === 'workflow'
+            ? 'workflow'
+            : 'browser',
         workflowId: params._workflowId,
         enabledToolNames: params.enabledToolNames,
         enabledPlugins: runtime?.enabledPlugins,
