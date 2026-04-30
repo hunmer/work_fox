@@ -126,6 +126,11 @@ const SYSTEM_PROMPT_BASE = [
 
 const DEFAULT_RULE_FILE_NAMES = ['rule.md']
 
+function resolveClaudeCodeExecutable(): string | undefined {
+  const executablePath = process.env.WORKFOX_CLAUDE_CODE_EXECUTABLE?.trim()
+  return executablePath || undefined
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -450,6 +455,7 @@ export class ChatRuntime {
           additionalDirectories,
           persistSession: false,
           includePartialMessages: true,
+          pathToClaudeCodeExecutable: resolveClaudeCodeExecutable(),
           maxTurns: 20,
           tools: { type: 'preset', preset: 'claude_code' },
           allowedTools: uniqueAllowedTools.length > 0 ? uniqueAllowedTools : undefined,

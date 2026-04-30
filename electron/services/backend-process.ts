@@ -47,6 +47,7 @@ class BackendProcessManager {
           WORKFOX_BACKEND_HOST: '127.0.0.1',
           WORKFOX_USER_DATA_DIR: resolveUserDataDir(),
           WORKFOX_PLUGIN_DIR: resolvePluginDir(),
+          WORKFOX_CLAUDE_CODE_EXECUTABLE: resolveClaudeCodeExecutable(),
           WORKFOX_LOG_LEVEL: process.env.WORKFOX_LOG_LEVEL || 'info',
           WORKFOX_DEV: app.isPackaged ? '0' : '1',
           WORKFOX_APP_VERSION: app.getVersion(),
@@ -163,6 +164,40 @@ function resolvePluginDir(): string {
   return app.isPackaged
     ? join(process.resourcesPath, 'plugins')
     : join(app.getAppPath(), 'resources', 'plugins')
+}
+
+function resolveClaudeCodeExecutable(): string {
+  if (process.env.WORKFOX_CLAUDE_CODE_EXECUTABLE) {
+    return process.env.WORKFOX_CLAUDE_CODE_EXECUTABLE
+  }
+
+  if (!app.isPackaged) {
+    return ''
+  }
+
+  const binaryName = process.platform === 'win32' ? 'claude.exe' : 'claude'
+  const packageNames = process.platform === 'linux'
+    ? [
+        `claude-agent-sdk-linux-${process.arch}-musl`,
+        `claude-agent-sdk-linux-${process.arch}`,
+      ]
+    : [`claude-agent-sdk-${process.platform}-${process.arch}`]
+
+  for (const packageName of packageNames) {
+    const executablePath = join(
+      process.resourcesPath,
+      'app.asar.unpacked',
+      'node_modules',
+      '@anthropic-ai',
+      packageName,
+      binaryName,
+    )
+    if (existsSync(executablePath)) {
+      return executablePath
+    }
+  }
+
+  return ''
 }
 
 export const backendProcessManager = new BackendProcessManager()
