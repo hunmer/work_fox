@@ -83,6 +83,18 @@ export default defineConfig({
         target: 'http://localhost:9123',
         changeOrigin: true,
       },
+      '/ws': {
+        target: 'ws://localhost:9123',
+        ws: true,
+      },
+      '/health': {
+        target: 'http://localhost:9123',
+        changeOrigin: true,
+      },
+      '/version': {
+        target: 'http://localhost:9123',
+        changeOrigin: true,
+      },
     },
   },
 })

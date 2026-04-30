@@ -115,7 +115,7 @@ const panelStyle = computed(() => ({
 }))
 
 function activate() {
-  emit("update:zIndex", Date.now())
+  emit("update:zIndex", props.zIndex)
 }
 
 // ——— 面板拖拽 ———
@@ -302,7 +302,7 @@ onBeforeUnmount(() => {
   border: 1px solid #d9d9d9;
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-  overflow: hidden;
+  overflow: visible;
   user-select: none;
 }
 

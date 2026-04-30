@@ -1,64 +1,85 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
+import { Check, ChevronDown, Sparkles } from 'lucide-vue-next'
 import { useAIProviderStore } from '@/stores/ai-provider'
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 
 const providerStore = useAIProviderStore()
+const open = ref(false)
+
+const enabledProviders = computed(() => providerStore.providers.filter((provider) => provider.enabled))
+
+const currentModelLabel = computed(() => {
+  const provider = providerStore.providers.find((item) => item.id === providerStore.selectedProviderId)
+  const model = provider?.models.find((item) => item.id === providerStore.selectedModelId)
+  return model?.name || '选择模型'
+})
 
 function handleModelChange(value: string) {
   const [providerId, modelId] = value.split(':')
-  if (providerId && modelId) {
-    providerStore.selectProvider(providerId)
-    providerStore.selectModel(modelId)
-  }
+  if (!providerId || !modelId) return
+  providerStore.selectProvider(providerId)
+  providerStore.selectModel(modelId)
+  open.value = false
 }
 
-function getCurrentValue(): string {
-  if (providerStore.selectedProviderId && providerStore.selectedModelId) {
-    return `${providerStore.selectedProviderId}:${providerStore.selectedModelId}`
-  }
-  return ''
+function isCurrentModel(providerId: string, modelId: string) {
+  return providerStore.selectedProviderId === providerId && providerStore.selectedModelId === modelId
 }
 </script>
 
 <template>
-  <Select
-    :model-value="getCurrentValue()"
-    @update:model-value="handleModelChange"
-  >
-    <SelectTrigger class="h-7 text-xs w-[180px]">
-      <SelectValue placeholder="选择模型" />
-    </SelectTrigger>
-    <SelectContent>
-      <SelectGroup
-        v-for="provider in providerStore.providers.filter(p => p.enabled)"
-        :key="provider.id"
-      >
-        <SelectLabel>{{ provider.name }}</SelectLabel>
-        <SelectItem
-          v-for="model in provider.models"
-          :key="model.id"
-          :value="`${provider.id}:${model.id}`"
-          class="text-xs"
-        >
-          {{ model.name }}
-          <span
-            v-if="model.supportsVision"
-            class="text-muted-foreground ml-1"
-          >📷</span>
-          <span
-            v-if="model.supportsThinking"
-            class="text-muted-foreground ml-1"
-          >💭</span>
-        </SelectItem>
-      </SelectGroup>
-    </SelectContent>
-  </Select>
+  <Popover v-model:open="open">
+    <PopoverTrigger as-child>
+      <Button variant="ghost" size="sm" class="h-7 w-[180px] justify-between px-2 text-xs">
+        <span class="truncate">{{ currentModelLabel }}</span>
+        <ChevronDown class="ml-2 size-3.5 shrink-0 opacity-70" />
+      </Button>
+    </PopoverTrigger>
+    <PopoverContent
+      align="end"
+      side="top"
+      :side-offset="8"
+      class="z-[20000] w-[280px] p-0"
+    >
+      <Command>
+        <CommandInput placeholder="搜索模型..." />
+        <CommandList>
+          <CommandEmpty>没有可用模型</CommandEmpty>
+          <CommandGroup
+            v-for="provider in enabledProviders"
+            :key="provider.id"
+            :heading="provider.name"
+          >
+            <CommandItem
+              v-for="model in provider.models"
+              :key="model.id"
+              :value="`${provider.name} ${model.name} ${model.id}`"
+              class="flex items-center justify-between gap-2 text-xs"
+              @select="handleModelChange(`${provider.id}:${model.id}`)"
+            >
+              <div class="min-w-0">
+                <div class="truncate">{{ model.name }}</div>
+                <div class="truncate text-[10px] text-muted-foreground">
+                  {{ model.id }}
+                </div>
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                <Sparkles
+                  v-if="model.supportsThinking"
+                  class="size-3 text-muted-foreground"
+                />
+                <Check
+                  v-if="isCurrentModel(provider.id, model.id)"
+                  class="size-3.5"
+                />
+              </div>
+            </CommandItem>
+          </CommandGroup>
+        </CommandList>
+      </Command>
+    </PopoverContent>
+  </Popover>
 </template>
