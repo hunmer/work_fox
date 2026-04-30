@@ -167,6 +167,8 @@ export interface NodeProperty {
   codeLanguage?: string
   /** code 编辑器高度 */
   codeHeight?: number
+  /** object/json 编辑器高度 */
+  height?: number
   /** array 类型的子字段定义 */
   fields?: ArrayFieldItem[]
   /** 新增项的默认值模板 */
