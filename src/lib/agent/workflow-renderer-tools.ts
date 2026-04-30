@@ -103,6 +103,12 @@ export function executeRendererWorkflowTool(
     case 'get_current_workflow':
       return getCurrentWorkflow(args)
 
+    case 'create_workflow_version':
+      return createWorkflowVersion(args)
+
+    case 'restore_workflow_version':
+      return restoreWorkflowVersion(args)
+
     case 'execute_workflow_sync':
       return executeWorkflowSync()
 
@@ -114,6 +120,72 @@ export function executeRendererWorkflowTool(
 
     default:
       return { success: false, message: `未知渲染进程工作流工具: ${name}` }
+  }
+}
+
+async function createWorkflowVersion(args: Record<string, unknown>): Promise<ToolResult> {
+  const workflowStore = useTabStore().activeStore
+  if (!workflowStore) {
+    return { success: false, message: '当前没有激活的工作流标签页' }
+  }
+  const workflow = workflowStore.currentWorkflow
+  if (!workflow) {
+    return { success: false, message: '当前没有加载工作流画布' }
+  }
+
+  const beforeIds = new Set((workflowStore.versions || []).map((version: any) => version.id))
+  const name = typeof args.name === 'string' && args.name.trim() ? args.name.trim() : undefined
+  await workflowStore.saveVersion(name)
+
+  const createdVersion = (workflowStore.versions || []).find((version: any) => !beforeIds.has(version.id))
+    || (workflowStore.versions || [])[0]
+
+  return {
+    success: true,
+    message: `已创建工作流版本${createdVersion?.name ? `: ${createdVersion.name}` : ''}`,
+    data: {
+      version: createdVersion
+        ? {
+            id: createdVersion.id,
+            workflowId: createdVersion.workflowId,
+            name: createdVersion.name,
+            createdAt: createdVersion.createdAt,
+            nodeCount: createdVersion.snapshot?.nodes?.length,
+            edgeCount: createdVersion.snapshot?.edges?.length,
+          }
+        : undefined,
+      workflow: summarizeWorkflow(clone(workflow)),
+    },
+  }
+}
+
+async function restoreWorkflowVersion(args: Record<string, unknown>): Promise<ToolResult> {
+  const workflowStore = useTabStore().activeStore
+  if (!workflowStore) {
+    return { success: false, message: '当前没有激活的工作流标签页' }
+  }
+  if (!workflowStore.currentWorkflow) {
+    return { success: false, message: '当前没有加载工作流画布' }
+  }
+
+  const versionId = typeof args.version_id === 'string'
+    ? args.version_id
+    : (typeof args.versionId === 'string' ? args.versionId : '')
+  if (!versionId) {
+    return { success: false, message: '缺少必填参数: version_id' }
+  }
+
+  await workflowStore.restoreVersion(versionId)
+
+  const restoredWorkflow = workflowStore.currentWorkflow
+  if (!restoredWorkflow) {
+    return { success: false, message: '恢复版本后未找到当前工作流' }
+  }
+
+  return {
+    success: true,
+    message: `已恢复工作流版本: ${versionId}`,
+    data: { workflow: summarizeWorkflow(clone(restoredWorkflow)) },
   }
 }
 

@@ -14,14 +14,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import {
-  Braces, FolderTree, ImagePlus, Send, Square, Trash2, Wrench, Crosshair,
+  Braces, CheckCircle2, Circle, CircleDot, FolderTree, ImagePlus, ListTodo, Send, Square, Trash2, Wrench, Crosshair,
 } from 'lucide-vue-next'
-import type { ToolDisplayItem } from '@/types'
+import type { ToolCall, ToolDisplayItem } from '@/types'
 import { useAgentSettingsStore } from '@/stores/agent-settings'
 import { useChatUIStore } from '@/stores/chat-ui'
 import { useTabStore } from '@/stores/tab'
@@ -33,6 +38,7 @@ const props = defineProps<{
   disabled?: boolean
   tools?: ToolDisplayItem[]
   enabledTools?: Record<string, boolean>
+  streamingToolCalls?: ToolCall[]
   isWorkflowContext?: boolean
   workflowEditMode?: boolean
   selectedNodes?: Array<{ id: string; type: string; label: string }>
@@ -48,6 +54,8 @@ const emit = defineEmits<{
 }>()
 
 const images = ref<string[]>([])
+const todoPopoverOpen = ref(false)
+let todoPopoverCloseTimer: ReturnType<typeof setTimeout> | null = null
 const editorRef = ref<InstanceType<typeof ChatInputEditor> | null>(null)
 
 const toolList = computed(() => props.tools ?? [])
@@ -76,6 +84,136 @@ const globalSkillCount = computed(() => agentSettingsStore.globalSettings.skills
 const workflowSkillCount = computed(() => currentWorkflowAgent.value?.skills.filter((item) => item.enabled).length ?? 0)
 const globalMcpCount = computed(() => agentSettingsStore.globalSettings.mcps.filter((item) => item.enabled).length)
 const workflowMcpCount = computed(() => currentWorkflowAgent.value?.mcps.filter((item) => item.enabled).length ?? 0)
+
+interface TodoItem {
+  id: string
+  content: string
+  status: string
+  completed: boolean
+}
+
+function normalizeToolName(name: string): string {
+  return name
+    .replace(/^mcp__.*?__/, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toLowerCase()
+}
+
+function getObject(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined
+}
+
+function parseJsonObject(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== 'string') return undefined
+  try {
+    return getObject(JSON.parse(value))
+  } catch {
+    return undefined
+  }
+}
+
+function unwrapToolResultPayload(value: unknown): unknown {
+  const objectValue = getObject(value)
+  if (!objectValue) return value
+  if (Array.isArray(objectValue.content)) {
+    const textItem = objectValue.content
+      .filter((item): item is Record<string, unknown> => !!getObject(item))
+      .find((item) => typeof item.text === 'string')
+    return parseJsonObject(textItem?.text) ?? value
+  }
+  return parseJsonObject(objectValue.text) ?? objectValue
+}
+
+function extractTodosFromValue(value: unknown): TodoItem[] {
+  const payload = unwrapToolResultPayload(value)
+  const objectValue = getObject(payload)
+  const rawTodos = Array.isArray(payload)
+    ? payload
+    : Array.isArray(objectValue?.todos)
+      ? objectValue.todos
+      : Array.isArray(objectValue?.items)
+        ? objectValue.items
+        : []
+
+  return rawTodos
+    .filter((item): item is Record<string, unknown> => !!getObject(item))
+    .map((item, index) => {
+      const status = typeof item.status === 'string'
+        ? item.status
+        : item.completed === true || item.done === true || item.checked === true
+          ? 'completed'
+          : 'pending'
+      const content = typeof item.content === 'string'
+        ? item.content
+        : typeof item.text === 'string'
+          ? item.text
+          : typeof item.title === 'string'
+            ? item.title
+            : `任务 ${index + 1}`
+      return {
+        id: typeof item.id === 'string' ? item.id : `${index}-${content}`,
+        content,
+        status,
+        completed: ['completed', 'done', 'success', 'finished'].includes(status.toLowerCase()),
+      }
+    })
+}
+
+const latestTodoCall = computed(() => {
+  const calls = props.streamingToolCalls ?? []
+  for (let i = calls.length - 1; i >= 0; i--) {
+    const call = calls[i]
+    const name = normalizeToolName(call.name)
+    if (name.includes('todowrite') || name.includes('todo')) return call
+  }
+  return null
+})
+
+const todoItems = computed<TodoItem[]>(() => {
+  const call = latestTodoCall.value
+  if (!call) return []
+  const fromResult = extractTodosFromValue(call.result)
+  if (fromResult.length) return fromResult
+  return extractTodosFromValue(call.args)
+})
+
+const todoTotal = computed(() => todoItems.value.length)
+const todoCompleted = computed(() => todoItems.value.filter((item) => item.completed).length)
+const todoProgress = computed(() => todoTotal.value ? Math.round((todoCompleted.value / todoTotal.value) * 100) : 0)
+
+function getTodoStatusLabel(item: TodoItem): string {
+  const status = item.status.toLowerCase()
+  if (item.completed) return '完成'
+  if (status === 'in_progress' || status === 'inprogress' || status === 'active') return '进行中'
+  if (status === 'cancelled' || status === 'canceled') return '已取消'
+  return '待处理'
+}
+
+function getTodoStatusClass(item: TodoItem): string {
+  const status = item.status.toLowerCase()
+  if (item.completed) return 'text-emerald-600 dark:text-emerald-400'
+  if (status === 'in_progress' || status === 'inprogress' || status === 'active') return 'text-blue-600 dark:text-blue-400'
+  if (status === 'cancelled' || status === 'canceled') return 'text-muted-foreground line-through'
+  return 'text-muted-foreground'
+}
+
+function openTodoPopover() {
+  if (todoPopoverCloseTimer) {
+    clearTimeout(todoPopoverCloseTimer)
+    todoPopoverCloseTimer = null
+  }
+  todoPopoverOpen.value = true
+}
+
+function scheduleCloseTodoPopover() {
+  if (todoPopoverCloseTimer) clearTimeout(todoPopoverCloseTimer)
+  todoPopoverCloseTimer = setTimeout(() => {
+    todoPopoverOpen.value = false
+    todoPopoverCloseTimer = null
+  }, 120)
+}
 
 /** 字符计数 */
 const charCount = computed(() => {
@@ -136,9 +274,85 @@ function removeImage(index: number) {
   <div class="p-3 mb-3 space-y-1">
     <!-- 上方状态栏：Skill / MCP / 工作区 -->
     <div class="flex items-center justify-end gap-0.5">
+      <Popover
+        v-if="todoTotal > 0"
+        v-model:open="todoPopoverOpen"
+      >
+        <PopoverTrigger as-child>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="gap-1 h-6 px-1.5 text-xs"
+            @mouseenter="openTodoPopover"
+            @mouseleave="scheduleCloseTodoPopover"
+          >
+            <ListTodo class="size-3.5" />
+            <span class="text-[10px] tabular-nums text-muted-foreground">
+              {{ todoCompleted }}/{{ todoTotal }}
+            </span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          side="top"
+          align="end"
+          class="w-80 p-0"
+          @mouseenter="openTodoPopover"
+          @mouseleave="scheduleCloseTodoPopover"
+        >
+          <div class="border-b px-3 py-2">
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-2 text-sm font-medium">
+                <ListTodo class="size-4" />
+                Todo Writer
+              </div>
+              <span class="text-xs tabular-nums text-muted-foreground">
+                {{ todoCompleted }}/{{ todoTotal }}
+              </span>
+            </div>
+            <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+              <div
+                class="h-full rounded-full bg-primary transition-all"
+                :style="{ width: `${todoProgress}%` }"
+              />
+            </div>
+          </div>
+          <div class="max-h-72 overflow-y-auto p-1">
+            <div
+              v-for="item in todoItems"
+              :key="item.id"
+              class="flex items-start gap-2 rounded px-2 py-1.5 text-xs"
+            >
+              <CheckCircle2
+                v-if="item.completed"
+                class="mt-0.5 size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400"
+              />
+              <CircleDot
+                v-else-if="['in_progress', 'inprogress', 'active'].includes(item.status.toLowerCase())"
+                class="mt-0.5 size-3.5 shrink-0 text-blue-600 dark:text-blue-400"
+              />
+              <Circle
+                v-else
+                class="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+              />
+              <div class="min-w-0 flex-1">
+                <div
+                  class="break-words leading-snug"
+                  :class="getTodoStatusClass(item)"
+                >
+                  {{ item.content }}
+                </div>
+                <div class="mt-0.5 text-[10px] text-muted-foreground">
+                  {{ getTodoStatusLabel(item) }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
+
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
-          <Button variant="ghost" size="xs" :disabled="isStreaming" class="gap-1 h-6 px-1.5">
+          <Button variant="ghost" size="sm" :disabled="isStreaming" class="gap-1 h-6 px-1.5 text-xs">
             <Braces class="size-3.5" />
             <span class="text-[10px] text-muted-foreground">
               {{ isWorkflowContext ? workflowSkillCount : globalSkillCount }}
@@ -166,7 +380,7 @@ function removeImage(index: number) {
 
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
-          <Button variant="ghost" size="xs" :disabled="isStreaming" class="gap-1 h-6 px-1.5">
+          <Button variant="ghost" size="sm" :disabled="isStreaming" class="gap-1 h-6 px-1.5 text-xs">
             <Wrench class="size-3.5" />
             <span class="text-[10px] text-muted-foreground">
               {{ isWorkflowContext ? workflowMcpCount : globalMcpCount }}
@@ -194,7 +408,7 @@ function removeImage(index: number) {
 
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
-          <Button variant="ghost" size="xs" :disabled="isStreaming" class="h-6 px-1.5">
+          <Button variant="ghost" size="sm" :disabled="isStreaming" class="h-6 px-1.5 text-xs">
             <FolderTree class="size-3.5" />
           </Button>
         </DropdownMenuTrigger>

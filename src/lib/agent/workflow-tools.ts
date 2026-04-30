@@ -76,6 +76,36 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
+    name: 'create_workflow_version',
+    description:
+      '为当前渲染进程画布中的工作流创建一个版本快照，保存当前 nodes/edges。适合在复杂、多步、批量或破坏性编辑前备份，也可按用户明确要求创建版本。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description:
+            '可选。版本名称。不传则使用系统生成的下一个版本名；建议复杂编辑前使用简短名称说明备份目的，例如 "AI 修改前备份"。',
+        },
+      },
+    },
+  },
+  {
+    name: 'restore_workflow_version',
+    description:
+      '把当前工作流恢复到指定版本快照。恢复会替换当前画布的 nodes/edges，是破坏性操作；除非用户明确只想回滚，否则恢复前应视情况先调用 create_workflow_version 备份当前状态。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        version_id: {
+          type: 'string',
+          description: '要恢复的版本 ID。',
+        },
+      },
+      required: ['version_id'],
+    },
+  },
+  {
     name: 'search_nodes',
     description:
       '在当前工作流中搜索节点，支持按 keyword/type/label/category/description 模糊匹配。返回当前画布中匹配的节点，并附带节点类型的分类和描述信息。',

@@ -179,7 +179,14 @@ export async function createChatToolAdapter(
   }
 
   if (context.mode === 'workflow' && context.workflowId) {
-    const rendererTools = new Set(['get_current_workflow', 'execute_workflow_sync', 'execute_workflow_async', 'get_workflow_result'])
+    const rendererTools = new Set([
+      'get_current_workflow',
+      'create_workflow_version',
+      'restore_workflow_version',
+      'execute_workflow_sync',
+      'execute_workflow_async',
+      'get_workflow_result',
+    ])
     const workflowTools = WORKFLOW_TOOL_DEFINITIONS.map((definition: any) => {
       const mcpToolName = sanitizeToolName(definition.name)
       registerMcpToolName(WORKFLOW_TOOL_SERVER, mcpToolName, definition.name)

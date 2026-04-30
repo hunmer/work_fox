@@ -26,7 +26,24 @@ const props = defineProps<{
 }>()
 
 const store = useWorkflowStore()
-const textModeKeys = ref<Set<string>>(new Set())
+
+function isVariableRef(value: any): boolean {
+  return typeof value === 'string' && value.includes('{{')
+}
+
+const textModeOverrides = ref<Set<string>>(new Set())
+
+const textModeKeys = computed(() => {
+  const keys = new Set<string>()
+  if (!activeNode.value?.data) return keys
+  for (const prop of visibleProperties.value) {
+    if (isTextType(prop.type)) continue
+    if (isVariableRef(activeNode.value.data[prop.key]) || textModeOverrides.value.has(prop.key)) {
+      keys.add(prop.key)
+    }
+  }
+  return keys
+})
 const collapsedKeys = ref<Set<string>>(new Set())
 
 const activeNode = computed(() => props.node ?? store.selectedNode)
@@ -58,9 +75,9 @@ function isTextType(type: string): boolean {
 }
 
 function toggleTextMode(key: string) {
-  const next = new Set(textModeKeys.value)
+  const next = new Set(textModeOverrides.value)
   next.has(key) ? next.delete(key) : next.add(key)
-  textModeKeys.value = next
+  textModeOverrides.value = next
 }
 
 function getFieldValue(key: string): any {

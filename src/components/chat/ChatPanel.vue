@@ -255,6 +255,7 @@ function formatTime(timestamp: number): string {
           :disabled="!providerStore.currentModel"
           :tools="toolDisplayItems"
           :enabled-tools="enabledTools"
+          :streaming-tool-calls="chat.streamingToolCalls"
           :is-workflow-context="isWorkflowContext"
           :workflow-edit-mode="uiStore.workflowEditMode"
           :selected-nodes="selectedNodes"

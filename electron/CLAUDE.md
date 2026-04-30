@@ -9,10 +9,10 @@
 主进程只承担 **平台专属能力**：
 
 1. **窗口生命周期管理**：无边框窗口创建、最大化状态恢复、`local://` 自定义协议注册（支持音视频 Range 请求）
-2. **交互桥接**：`agent:execTool` IPC handler，执行工作流本地桥接节点（如 `delay`）和插件工作流节点
+2. **交互桥接**：`agent:execTool` IPC handler，执行工作流本地桥接节点（如 `delay`）、插件工作流节点和交互节点
 3. **Backend 子进程管理**：fork Node.js 后端服务，管理生命周期和 endpoint 发现
 4. **插件管理**：扫描、加载、启用/禁用本地 client 插件，提供事件总线、存储 API 和运行时宿主
-5. **工作流节点注册**：内置节点定义（拆分为 nodes/ 子目录）+ 插件节点注册，统一调度
+5. **工作流节点注册**：内置节点定义（拆分为 nodes/ 子目录，含交互节点）+ 插件节点注册，统一调度
 6. **全局快捷键**：通过 `globalShortcut` API 注册系统级快捷键
 7. **原生对话框**：工作流导入/导出文件对话框
 8. **桌面原生能力**：`desktop-native.ts` 封装剪贴板读写、系统通知、文件管理器、Shell 操作、原生对话框
@@ -91,6 +91,7 @@
 | `WORKFOX_PLUGIN_DIR` | 插件目录 |
 | `WORKFOX_BACKEND_TOKEN` | 会话认证 token |
 | `WORKFOX_APP_VERSION` | 应用版本号 |
+| `WORKFOX_HOOK_SECRET` | Hook 认证密钥 |
 
 ## 内置节点定义
 
@@ -101,13 +102,17 @@
 | `nodes/flow-control.ts` | `start`, `end`, `sub_workflow`, `run_code`, `toast`, `switch`, `variable_aggregate`, `loop_break`（LOOP_BREAK_NODE_TYPE）, `loop`（LOOP_NODE_TYPE，复合节点）, `loop_body`（LOOP_BODY_NODE_TYPE，不可手动创建） |
 | `nodes/ai.ts` | `agent_run` |
 | `nodes/display.ts` | `gallery_preview`, `music_player`, `table_display`, `sticky_note` |
+| `nodes/interaction.ts` | `alert`（消息弹窗）, `prompt`（输入弹窗）, `form`（表单弹窗） |
 
-### 新增节点说明
+### 节点说明
 
 - **variable_aggregate**：多分支输出变量分组聚合，返回每组第一个非空值
 - **loop_break**：在 loop_body 中标记跳出循环
 - **sticky_note**：画布注释便签，不影响执行（无 handle），5 色可选
 - **table_display**：表格展示节点，支持单选/多选确认
+- **alert**：消息弹窗节点，显示消息并等待用户确认
+- **prompt**：输入弹窗节点，弹出输入框获取用户输入
+- **form**：表单弹窗节点，弹出自定义表单（text/textarea/number/select/checkbox/password 字段）
 
 ## 桌面原生能力（desktop-native.ts）
 
@@ -151,8 +156,11 @@ A: 快捷键配置存储在 backend WS（`shortcut:*` 通道），但 `globalSho
 **Q: 交互桥接是什么？**
 A: backend 工作流执行中，`agent_run` 和本地桥接节点（如 `delay`）需要回到 Electron 主进程执行。backend 通过 WS interaction 发起请求，renderer 收到后调用 `window.api.agent.execTool`，最终路由到 `chat.ts` 的 `agent:execTool` handler。
 
+**Q: 交互节点（alert/prompt/form）如何工作？**
+A: 这些节点通过 backend `InteractionManager` 发起 WS 交互请求（`dialog_alert`/`dialog_prompt`/`dialog_form` 类型），前端 `src/lib/backend-api/interaction.ts` 收到后使用 `dialog.ts` 弹窗 API 处理，结果返回 backend 继续执行。
+
 **Q: 节点定义为什么拆分到 nodes/ 子目录？**
-A: 随着节点类型增多（流程控制、AI、展示），单文件 `builtin-nodes.ts` 过于臃肿。拆分为 flow-control.ts / ai.ts / display.ts 三个文件，由 `builtin-nodes.ts` 聚合导出。
+A: 随着节点类型增多（流程控制、AI、展示、交互），单文件 `builtin-nodes.ts` 过于臃肿。拆分为 flow-control.ts / ai.ts / display.ts / interaction.ts 四个文件，由 `builtin-nodes.ts` 聚合导出。
 
 ## 相关文件清单
 
@@ -172,9 +180,11 @@ electron/
     workflow-browser-node-runtime.ts   浏览器节点运行时
     builtin-nodes.ts                   内置节点定义入口（聚合 nodes/ 子目录）
     nodes/
+      index.ts                         节点聚合导出（含 interaction）
       flow-control.ts                  流程控制节点（start/end/switch/loop/variable_aggregate/loop_break/sub_workflow/run_code/toast）
       ai.ts                            AI 节点（agent_run）
       display.ts                       展示节点（gallery_preview/music_player/table_display/sticky_note）
+      interaction.ts                   交互节点（alert/prompt/form）
     desktop-native.ts                  桌面原生能力（剪贴板/通知/对话框/Shell）
     plugin-manager.ts                  插件管理器（总入口）
     plugin-runtime-host.ts             插件运行时宿主
@@ -196,6 +206,7 @@ electron/
 
 | 日期 | 操作 | 说明 |
 |---|---|---|
+| 2026-04-30 | 增量更新 | 新增 nodes/interaction.ts（alert/prompt/form 交互节点）；nodes/index.ts 聚合导出新增 interactionNodes；补充 WORKFOX_HOOK_SECRET 环境变量；补充交互节点工作流程说明 |
 | 2026-04-27 | 增量更新 | 新增 desktop-native.ts 桌面原生能力；builtin-nodes.ts 节点定义拆分为 nodes/ 子目录（flow-control/ai/display）；新增 variable_aggregate/loop_break/sticky_note/table_display 节点类型 |
 | 2026-04-24 | 死代码清理 | 删除 tabs/agent-settings/chat-history-store/ai-provider-test，chat.ts/fs.ts/shortcut.ts 移除已迁移 handler，store.ts 移除已迁移方法 |
 | 2026-04-22 | 增量更新 | 补充 backend-process、plugin-catalog/runtime-host、local:// 协议、IPC 变更、环境变量等 |

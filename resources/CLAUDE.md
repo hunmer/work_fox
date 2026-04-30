@@ -24,6 +24,7 @@
 | `workfox.openai` | OpenAI 图片生成 | gpt-image-1/dall-e-3 文生图、图片编辑 | 有 | server |
 | `workfox.epub-parser` | EPUB解析器 | 解析 EPUB 电子书，提取书籍信息/目录/章节内容 | 有 | server |
 | `workfox.aliyun-oss` | 阿里云OSS | 阿里云 OSS 文件存储，支持上传/下载/删除/列举/签名URL | 有 | server |
+| `workfox.mail` | 邮件发送 | 通过 SMTP 发送邮件，支持 HTML/纯文本、附件、抄送/密送 | 有 | server |
 | `workfox.test-plugin` | Test Plugin | Web client 插件 manifest / runtime / view 示例 | 视图示例 | client（CDN manifest 示例） |
 
 ## 插件文件结构
@@ -32,37 +33,40 @@
   plugins/
     plugins.json                         插件商店元数据
     window-manager/
-    info.json                          插件元信息（id/name/version/description/author/tags/type/config）
-    main.js                            插件入口（Node.js 模块）
-    workflow.js                        工作流节点定义与 handler
-    tools.js                           AI Agent 工具定义
-    api.js                             插件 API 能力
-    icon.png                           插件图标
-  file-system/
-    info.json / main.js / tools.js / workflow.js
-  fetch/
-    info.json / main.js / tools.js / workflow.js
-  jimeng/
-    info.json / main.js / tools.js / workflow.js
-  fish-audio/
-    info.json / main.js / tools.js / workflow.js / shared.js
-  aliyun-ai/
-    info.json / main.js / tools.js / workflow.js
-    *.md                               API 参考文档（千问/万相/可灵/声动人像等）
-  openai/
-    info.json / main.js / tools.js / workflow.js
-    *.md                               API 参考文档（Create image/Create image edit）
-  aliyun-oss/
-    info.json / main.js / tools.js / workflow.js / shared.js
-    doc.txt                            API 参考文档
-    node_modules/                      插件自有依赖
-  epub-parser/
-    info.json / main.js / tools.js / workflow.js
-    node_modules/                      插件自有依赖（jszip/pako 等）
-  test-plugin/
-    web-plugin.json                    Web client manifest 示例
-    web-client.js                      CDN client runtime 示例
-    view.js                            CDN view 示例
+      info.json                          插件元信息（id/name/version/description/author/tags/type/config）
+      main.js                            插件入口（Node.js 模块）
+      workflow.js                        工作流节点定义与 handler
+      tools.js                           AI Agent 工具定义
+      api.js                             插件 API 能力
+      icon.png                           插件图标
+    file-system/
+      info.json / main.js / tools.js / workflow.js
+    fetch/
+      info.json / main.js / tools.js / workflow.js
+    jimeng/
+      info.json / main.js / tools.js / workflow.js
+    fish-audio/
+      info.json / main.js / tools.js / workflow.js / shared.js
+    aliyun-ai/
+      info.json / main.js / tools.js / workflow.js
+      *.md                               API 参考文档（千问/万相/可灵/声动人像等）
+    openai/
+      info.json / main.js / tools.js / workflow.js
+      *.md                               API 参考文档（Create image/Create image edit）
+    aliyun-oss/
+      info.json / main.js / tools.js / workflow.js / shared.js
+      doc.txt                            API 参考文档
+      node_modules/                      插件自有依赖
+    mail/
+      info.json / main.js / workflow.js / tools.js / package.json
+      node_modules/                      插件依赖（nodemailer）
+    epub-parser/
+      info.json / main.js / tools.js / workflow.js
+      node_modules/                      插件自有依赖（jszip/pako 等）
+    test-plugin/
+      web-plugin.json                    Web client manifest 示例
+      web-client.js                      CDN client runtime 示例
+      view.js                            CDN view 示例
 ```
 
 ### info.json 结构
@@ -122,6 +126,7 @@ Web CDN client runtime 当前提供的是较轻量上下文：
 - **全局配置**：通过 `info.json` 的 `config` 字段声明配置项，存储在 `plugin:get-config` / `plugin:save-config`
 - **工作流级配置方案**：每个工作流可对插件使用不同的配置方案，通过 `workflow:*-plugin-scheme` 通道管理
 - **配置项类型**：`string` / `number` / `boolean` / `select` / `object`
+- **配置引用**：工作流节点属性中可通过 `{{ __config__["pluginId"]["key"] }}` 引用插件配置值
 
 ## 新增插件注意事项
 
@@ -129,6 +134,7 @@ Web CDN client runtime 当前提供的是较轻量上下文：
 - `openai`：需要配置 OpenAI API Key，支持自定义 API 地址（代理），提供 tools.js Agent 工具
 - `epub-parser`：无配置项，自带 node_modules 依赖（jszip/pako 等），解析 EPUB 电子书
 - `aliyun-oss`：需要配置阿里云 OSS Region/AccessKey/Bucket，支持 HTTPS 协议，提供 tools.js Agent 工具和 workflow.js 工作流节点
+- `mail`：需要配置 SMTP 服务器地址/端口/用户名/密码，支持 465(SSL)/587(TLS) 端口，提供 `mail_send` 工作流节点和 Agent 工具，支持 HTML 正文、抄送/密送、附件
 
 ## 相关文件清单
 
@@ -144,6 +150,7 @@ resources/
     aliyun-ai/                          阿里云百炼AI 插件（server）
     openai/                             OpenAI 图片生成插件（server）
     aliyun-oss/                         阿里云 OSS 存储插件（server）
+    mail/                               邮件发送插件（server，依赖 nodemailer）
     epub-parser/                        EPUB 解析器插件（server）
     test-plugin/                        Web client manifest / runtime / view 示例
 ```
@@ -152,6 +159,7 @@ resources/
 
 | 日期 | 操作 | 说明 |
 |---|---|---|
+| 2026-04-30 | 增量更新 | 新增 mail 插件（SMTP 邮件发送，含 mail_send 工作流节点和 Agent 工具，依赖 nodemailer） |
 | 2026-04-27 | 增量更新 | 新增 aliyun-oss 插件（阿里云 OSS 文件存储） |
 | 2026-04-25 | 增量更新 | 新增 aliyun-ai、openai、epub-parser 插件文档 |
 | 2026-04-23 | 增量更新 | 同步最新插件系统：server/client 分流、Web CDN manifest、window-manager Electron only |

@@ -2,20 +2,21 @@
 
 # Backend 服务（Node.js 子进程）
 
-> WorkFox 的独立后端服务，由 Electron 主进程 fork 启动，提供 HTTP 健康检查 + WebSocket API，负责工作流执行、数据持久化、插件注册、Chat 流式运行、Dashboard 统计等核心能力。也支持在 Web 模式下独立运行。
+> WorkFox 的独立后端服务，由 Electron 主进程 fork 启动，提供 HTTP 健康检查 + WebSocket API + Webhook Hook 端点，负责工作流执行、触发器调度、数据持久化、插件注册、Chat 流式运行、Dashboard 统计等核心能力。也支持在 Web 模式下独立运行。
 
 ## 模块职责
 
 1. **WebSocket 服务器**：基于 `ws` 库的 WS 服务器，通过 `WSRouter` 分发请求到注册的 channel handler
 2. **工作流执行**：`ExecutionManager` 管理工作流的生命周期（start/pause/resume/stop），支持 execution recovery 和复合节点
-3. **交互式操作**：`InteractionManager` 处理需要客户端参与的执行步骤（agent_chat、node_execution、chat_tool 等），支持断线重连
-4. **数据持久化**：JSON 文件存储（workflow / version / execution-log / operation-history / ai-provider / chat-history / settings）
-5. **插件注册**：`BackendPluginRegistry` 扫描和加载 server 类型插件，执行 workflow handler，并提供 `plugin:install/uninstall` 与 backend `agent:execTool`
-6. **Chat 运行时**：`ChatRuntime` 封装 Claude Agent SDK，支持 Web 模式下的流式对话；`ChatToolAdapter` 将工作流工具/插件工具/浏览器工具桥接到 SDK MCP Server
-7. **工作流工具执行器**：`ChatWorkflowToolExecutor` 在 Chat 对话中直接操作工作流节点（create/update/delete/batch/auto_layout 等）
-8. **客户端节点缓存**：`ClientNodeCache` 管理来自客户端注册的插件节点定义和工具定义
-9. **连接管理**：`ConnectionManager` 管理 WS 客户端会话、心跳、token 验证、重连处理
-10. **Dashboard 统计**：`DashboardStatsStore` 聚合工作流执行数据，提供统计概览、执行趋势、历史分页、工作流详情查询
+3. **触发器调度**：`WorkflowTriggerService` 管理 cron 定时触发和 webhook hook 触发，`handleHookRequest` 处理 HTTP Hook 请求
+4. **交互式操作**：`InteractionManager` 处理需要客户端参与的执行步骤（agent_chat、node_execution、chat_tool、dialog_alert/prompt/form 等），支持断线重连
+5. **数据持久化**：JSON 文件存储（workflow / version / execution-log / operation-history / ai-provider / chat-history / settings / staging）
+6. **插件注册**：`BackendPluginRegistry` 扫描和加载 server 类型插件，执行 workflow handler，并提供 `plugin:install/uninstall` 与 backend `agent:execTool`
+7. **Chat 运行时**：`ChatRuntime` 封装 Claude Agent SDK，支持 Web 模式下的流式对话；`ChatToolAdapter` 将工作流工具/插件工具/浏览器工具桥接到 SDK MCP Server
+8. **工作流工具执行器**：`ChatWorkflowToolExecutor` 在 Chat 对话中直接操作工作流节点（create/update/delete/batch/auto_layout 等）
+9. **客户端节点缓存**：`ClientNodeCache` 管理来自客户端注册的插件节点定义和工具定义
+10. **连接管理**：`ConnectionManager` 管理 WS 客户端会话、心跳、token 验证、重连处理
+11. **Dashboard 统计**：`DashboardStatsStore` 聚合工作流执行数据，提供统计概览、执行趋势、历史分页、工作流详情查询
 
 ## 入口与启动
 
@@ -23,14 +24,15 @@
 - 启动流程：
   1. `loadBackendConfig()` 从环境变量加载配置
   2. 创建 Logger、HTTP/WS 服务器、StoragePaths
-  3. 初始化各 domain Store（workflow / version / execution-log / operation-history / ai-provider / chat-history / settings）
+  3. 初始化各 domain Store（workflow / version / execution-log / operation-history / ai-provider / chat-history / settings / staging）
   4. 创建 `BackendPluginRegistry` 并加载插件
   5. 创建 `InteractionManager`、`ExecutionManager`、`ClientNodeCache`
-  6. 注册所有 WS channel handlers（storage / plugin / execution / app / fs / chat / dashboard）
-  7. 创建 `ChatRuntime`（注入 workflowToolExecutor、clientNodeCache）并注册 chat channels
-  8. 创建 `DashboardStatsStore` 并注册 dashboard channels
-  9. 监听客户端断连事件，自动清理 `ClientNodeCache`
-  10. 启动服务器，向 stdout 输出 `WORKFOX_BACKEND_READY` JSON 行
+  6. 创建 `WorkflowTriggerService`，注册所有已启用触发器，注册 Hook 路由
+  7. 注册所有 WS channel handlers（storage / plugin / execution / app / fs / chat / dashboard / trigger / staging）
+  8. 创建 `ChatRuntime`（注入 workflowToolExecutor、clientNodeCache）并注册 chat channels
+  9. 创建 `DashboardStatsStore` 并注册 dashboard channels
+  10. 监听客户端断连事件，自动清理 `ClientNodeCache`
+  11. 启动服务器，向 stdout 输出 `WORKFOX_BACKEND_READY` JSON 行
 - 关闭流程：监听 SIGINT/SIGTERM，调用 `backend.stop()` 优雅关闭
 
 ### BackendConfig 配置项
@@ -48,6 +50,7 @@ interface BackendConfig {
   heartbeatIntervalMs: number   // 心跳间隔，默认 15s
   appVersion: string     // 应用版本
   sessionToken?: string  // 会话认证 token
+  hookSecret?: string    // WORKFOX_HOOK_SECRET，Hook 认证密钥
 }
 ```
 
@@ -59,6 +62,7 @@ interface BackendConfig {
 |---|---|---|
 | `/health` | GET | 健康检查（返回 ok/version/uptimeSec） |
 | `/version` | GET | 版本信息（返回 version/protocolVersion） |
+| `/hook/:hookName` | POST | Webhook Hook 触发（Bearer token 认证，SSE 响应） |
 
 ### WS Channel Handlers（`ws/`）
 
@@ -68,10 +72,12 @@ interface BackendConfig {
 | `storage-channels.ts` | `workflow:*`, `workflowFolder:*`, `workflowVersion:*`, `executionLog:*`, `operationHistory:*` | 数据 CRUD |
 | `execution-channels.ts` | `workflow:execute`, `workflow:debug-node`, `workflow:pause/resume/stop`, `workflow:get-execution-recovery` | 工作流执行控制 |
 | `plugin-channels.ts` | `plugin:*`, `workflow:*-plugin-scheme` | 插件管理与配置 |
-| `app-channels.ts` | `aiProvider:*`, `chatHistory:*`, `agentSettings:*`, `shortcut:*`, `tabs:*`, `app:getVersion`, `agent:execTool` | 应用全局通道与 backend 工具执行 |
+| `app-channels.ts` | `aiProvider:*`, `chatHistory:*`, `agentSettings:*`, `executionPreset:*`, `shortcut:*`, `tabs:*`, `app:getVersion`, `agent:execTool` | 应用全局通道与 backend 工具执行 |
 | `fs-channels.ts` | `fs:*` | 文件系统操作 |
 | `chat-channels.ts` | `chat:completions`, `chat:abort`, `chat:register-client-nodes`, `chat:register-client-agent-tools` | Chat 流式对话与客户端注册 |
 | `dashboard-channels.ts` | `dashboard:stats`, `dashboard:executions`, `dashboard:workflow-detail` | Dashboard 统计查询 |
+| `trigger-channels.ts` | `trigger:validate-cron`, `trigger:check-hook-name` | 触发器校验与冲突检测 |
+| `staging-channels.ts` | `staging:load`, `staging:save`, `staging:clear` | 节点暂存区 CRUD |
 
 所有通道的类型契约定义在 `shared/channel-contracts.ts`，元数据在 `shared/channel-metadata.ts`。
 
@@ -79,6 +85,8 @@ interface BackendConfig {
 
 - **express** 5.x：HTTP 服务器
 - **ws** 8.x：WebSocket 服务器
+- **node-cron** 4.x：Cron 定时任务调度
+- **cron-parser** 5.x：Cron 表达式解析与下次执行时间预览
 - **@anthropic-ai/claude-agent-sdk**：Claude Agent 运行时（ChatRuntime 中动态导入）
 - **@dagrejs/dagre**：工作流自动布局（ChatWorkflowToolExecutor 中使用）
 - **zod** 4.x：Chat 工具参数 schema 校验
@@ -89,10 +97,11 @@ interface BackendConfig {
 
 | Store | 文件路径模式 |
 |---|---|
-| `BackendWorkflowStore` | `{userDataDir}/workflows/{id}.json` |
-| `BackendWorkflowVersionStore` | `{userDataDir}/workflow-versions/{workflowId}/{versionId}.json` |
-| `BackendExecutionLogStore` | `{userDataDir}/execution-logs/{workflowId}/{logId}.json` |
-| `BackendOperationHistoryStore` | `{userDataDir}/operation-history/{workflowId}.json` |
+| `BackendWorkflowStore` | `{userDataDir}/agent-workflows/{id}/workflow.json` |
+| `BackendWorkflowVersionStore` | `{userDataDir}/agent-workflows/{workflowId}/versions/{versionId}.json` |
+| `BackendExecutionLogStore` | `{userDataDir}/agent-workflows/{workflowId}/execution_history/{logId}.json` |
+| `BackendOperationHistoryStore` | `{userDataDir}/agent-workflows/{workflowId}/operation_history.json` |
+| `BackendStagingStore` | `{userDataDir}/agent-workflows/{workflowId}/staging.json` |
 | `BackendAIProviderStore` | `{userDataDir}/ai-providers.json` |
 | `BackendChatHistoryStore` | `{userDataDir}/chat-history/{workflowId}/{sessionId}.json` |
 | `BackendSettingsStore` | `{userDataDir}/{filename}`（可配置文件名） |
@@ -103,7 +112,9 @@ interface BackendConfig {
 
 ### 关键类型
 
-- **Workflow**: 工作流（id / name / folderId / nodes / edges / enabledPlugins / agentConfig / pluginConfigSchemes / layoutSnapshot）
+- **Workflow**: 工作流（id / name / folderId / icon / description / tags / nodes / edges / enabledPlugins / agentConfig / pluginConfigSchemes / layoutSnapshot / groups / triggers）
+- **WorkflowTrigger**: 触发器 discriminated union（cron: cron/timezone / hook: hookName）
+- **StagedNode**: 暂存节点（id / sourceNodeId / type / label / data / composite / stagedAt）
 - **WorkflowFolder**: 文件夹（id / name / parentId / order）
 - **WorkflowVersion**: 版本快照（id / workflowId / name / snapshot）
 - **ExecutionLog**: 执行日志（id / workflowId / steps / status）
@@ -111,6 +122,7 @@ interface BackendConfig {
 - **DashboardStatsResponse**: 统计概览（workflowCount / runningCount / pluginCount / todayExecutions / weekExecutions / totalExecutions / dailyTrend）
 - **DashboardExecutionsResponse**: 执行历史分页（items / total / page / pageSize）
 - **DashboardWorkflowDetailResponse**: 工作流详情（workflow / versions / executions）
+- **ExecutionInputPreset**: 执行输入预设（id / name / values / createdAt）
 
 ## 核心组件
 
@@ -133,10 +145,35 @@ interface BackendConfig {
 - 支持执行恢复（finishedRecoveries 缓存 + TTL 过期清理）
 - 支持获取运行中会话数（`getRunningSessionCount()`），供 Dashboard 使用
 
+### WorkflowTriggerService（`workflow/trigger-service.ts`）
+
+- 职责：管理工作流触发器的注册和执行
+- 功能：
+  - `start()` -- 启动时扫描所有工作流的 triggers 并注册
+  - `reloadWorkflow(workflowId)` -- 热更新某个工作流的触发器
+  - `removeWorkflow(workflowId)` -- 移除某个工作流的所有触发器
+  - `validateCron(cronExpr)` -- 校验 cron 表达式并返回下次 5 次执行时间
+  - `getHookConflicts(hookName, excludeWorkflowId?)` -- 检测 hook 名称冲突
+  - `getHookUrl(hookName)` -- 获取 hook 的完整 URL
+  - `executeForHook(workflowId, input, eventSink)` -- 通过 hook 触发执行
+- Cron 实现：使用 `node-cron` 调度，支持 timezone
+- Hook 实现：使用 `hookIndex`（Map<hookName, Set<HookBinding>>）维护绑定关系
+
+### handleHookRequest（`workflow/hook-handler.ts`）
+
+- 职责：处理 HTTP POST `/hook/:hookName` 请求
+- 功能：
+  - Bearer token 认证（`config.hookSecret`）
+  - 查找绑定到 hookName 的所有工作流
+  - SSE（Server-Sent Events）响应推送执行事件
+  - 5 分钟 SSE 超时（超时后关闭连接但工作流继续执行）
+  - 支持并行触发多个工作流
+  - 支持通过 body.workflowId 指定特定工作流
+
 ### InteractionManager（`workflow/interaction-manager.ts`）
 
 - 职责：处理需要客户端参与的执行步骤
-- 支持的交互类型：`agent_chat`、`node_execution`、`chat_tool`、`file_select`、`form`、`confirm`、`custom`
+- 支持的交互类型：`agent_chat`、`node_execution`、`chat_tool`、`dialog_alert`、`dialog_prompt`、`dialog_form`、`table_confirm`、`file_select`、`form`、`confirm`、`custom`
 - 流程：发送 `interaction_required` -> 等待 `interaction_response`（支持超时和取消）
 - 断线重连：客户端重连后自动重新发送待处理的交互请求
 
@@ -151,6 +188,12 @@ interface BackendConfig {
 - 支持在线安装 / 卸载 server 插件（ZIP 下载到 backend 插件目录）
 - 插件禁用状态持久化到 `disabled.json`
 - 内置能力：`builtin-fs-api`（文件系统）、`builtin-fetch-api`（HTTP 请求）
+
+### BackendStagingStore（`storage/staging-store.ts`）
+
+- 职责：管理工作流节点暂存区的持久化
+- 方法：`load(workflowId)` / `save(workflowId, nodes)` / `clear(workflowId)`
+- 存储：每个工作流独立 `staging.json` 文件
 
 ### ChatRuntime（`chat/chat-runtime.ts`）
 
@@ -232,6 +275,15 @@ A: `ChatToolAdapter` 通过 `ClientNodeCache.hasClientTool()` 判断工具是否
 **Q: Dashboard 统计数据是如何聚合的？**
 A: `DashboardStatsStore.getStats()` 遍历所有工作流的执行日志 JSON 文件，按日期范围聚合计数，结果缓存 60 秒。执行历史通过 `getExecutions()` 分页查询，支持时间范围和状态过滤。
 
+**Q: 触发器如何工作？**
+A: `WorkflowTriggerService` 在启动时扫描所有工作流的 `triggers` 数组。Cron 触发器使用 `node-cron` 按计划执行工作流。Hook 触发器通过 HTTP POST `/hook/:hookName` 端点触发，支持 SSE 事件流回传执行状态。工作流保存时自动调用 `reloadWorkflow` 热更新触发器。
+
+**Q: Hook 认证如何配置？**
+A: 设置环境变量 `WORKFOX_HOOK_SECRET`，调用 `/hook/:hookName` 时在 Authorization 头传入 `Bearer {secret}`。不设置则不校验。
+
+**Q: Staging 暂存区是做什么的？**
+A: 允许在工作流之间复用节点。将节点复制/移动到暂存区后，可以在其他工作流中粘贴回来。数据持久化在每个工作流的 `staging.json` 文件中。
+
 ## 相关文件清单
 
 ```
@@ -240,7 +292,7 @@ backend/
   app/
     config.ts                          BackendConfig 环境变量加载
     logger.ts                          日志工具
-    create-server.ts                   HTTP + WS 服务器工厂
+    create-server.ts                   HTTP + WS 服务器工厂（含 Hook 路由和可选静态文件服务）
   ws/
     router.ts                          WSRouter（channel dispatch + 超时）
     connection-manager.ts              ConnectionManager（会话/心跳/token/重连）
@@ -248,15 +300,19 @@ backend/
     storage-channels.ts                数据 CRUD 通道
     execution-channels.ts              工作流执行控制通道
     plugin-channels.ts                 插件管理通道
-    app-channels.ts                    应用全局通道（AI provider/chat history/settings/shortcut/tabs）
+    app-channels.ts                    应用全局通道（AI provider/chat history/settings/executionPreset/shortcut/tabs）
     fs-channels.ts                     文件系统操作通道
     chat-channels.ts                   Chat 流式对话与客户端注册通道
     dashboard-channels.ts              Dashboard 统计查询通道
+    trigger-channels.ts                触发器校验与冲突检测通道
+    staging-channels.ts                节点暂存区 CRUD 通道
   workflow/
     execution-manager.ts               工作流执行管理器
     interaction-manager.ts             交互式操作管理器
+    trigger-service.ts                 触发器调度服务（Cron + Hook）
+    hook-handler.ts                    Webhook Hook HTTP 请求处理器（SSE 响应）
   storage/
-    paths.ts                           存储路径管理
+    paths.ts                           存储路径管理（含 stagingPath）
     json-store.ts                      JSON 文件存储工具
     workflow-store.ts                  工作流 CRUD
     workflow-version-store.ts          版本快照 CRUD
@@ -265,6 +321,7 @@ backend/
     ai-provider-store.ts               AI Provider CRUD
     chat-history-store.ts              聊天历史 CRUD
     settings-store.ts                  通用键值设置存储
+    staging-store.ts                   节点暂存区存储
   plugins/
     plugin-registry.ts                 后端插件注册表
     builtin-fetch-api.ts               内置 HTTP 请求能力
@@ -283,6 +340,7 @@ backend/
 
 | 日期 | 操作 | 说明 |
 |---|---|---|
+| 2026-04-30 | 增量更新 | 新增 trigger-service（Cron/Hook 触发器调度）、hook-handler（SSE Hook 处理器）、trigger-channels（validate-cron/check-hook-name）、staging-store（节点暂存区持久化）、staging-channels（load/save/clear）；app-channels 新增 executionPreset 通道；create-server 支持 Hook 路由和可选静态文件服务；paths.ts 新增 stagingPath |
 | 2026-04-27 | 增量更新 | 新增 dashboard/stats-store + ws/dashboard-channels；新增 ChatEventSender 9 事件通道文档；新增 dashboard:* WS 通道契约；补充 ExecutionManager.getRunningSessionCount |
 | 2026-04-25 | 增量更新 | 新增 chat-tool-adapter / chat-workflow-tool-executor / client-node-cache；补充复合节点创建、嵌入式子工作流操作、Chat 工具 MCP 桥接、客户端注册通道；补充 debug-node 通道 |
 | 2026-04-22 | 初始化 | 首次生成 backend 模块文档 |
