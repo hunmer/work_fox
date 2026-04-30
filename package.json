@@ -1,6 +1,6 @@
 {
   "name": "work-fox",
-  "version": "0.0.12",
+  "version": "1.0.0",
   "description": "Workflow + AI Agent 桌面应用",
   "author": "hunmer",
   "packageManager": "pnpm@10.17.1",
