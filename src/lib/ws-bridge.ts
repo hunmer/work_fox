@@ -338,8 +338,9 @@ export class WSBridge {
       // ignore invalid localStorage value
     }
 
+    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     return {
-      url: `ws://${window.location.hostname}:3001`,
+      url: `${wsProto}//${window.location.host}/ws`,
       token: '',
     }
   }

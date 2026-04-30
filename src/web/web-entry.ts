@@ -11,8 +11,9 @@ import { useThemeStore } from '../stores/theme'
 const BACKEND_ENDPOINT_STORAGE_KEY = 'workfox.backendEndpoint'
 
 function defaultEndpoint() {
+  const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:'
   return {
-    url: `ws://${location.hostname}:9123/ws`,
+    url: `${wsProto}//${location.host}/ws`,
     token: '',
   }
 }

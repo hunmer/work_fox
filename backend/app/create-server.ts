@@ -1,4 +1,5 @@
 import http from 'node:http'
+import { resolve } from 'node:path'
 import express from 'express'
 import { WebSocketServer } from 'ws'
 import type { BackendConfig } from './config'
@@ -43,6 +44,19 @@ export function createBackendServer(config: BackendConfig, logger: Logger): Back
       protocolVersion: 1,
     })
   })
+
+  // Optional: serve static web frontend for standalone Docker deployment
+  if (process.env.WORKFOX_SERVE_WEB === '1') {
+    const webDir = resolve(process.cwd(), 'dist-web')
+    app.use(express.static(webDir))
+    app.get('{*path}', (_req, res, next) => {
+      if (_req.accepts('html')) {
+        res.sendFile(resolve(webDir, 'index-web.html'))
+      } else {
+        next()
+      }
+    })
+  }
 
   return {
     server,

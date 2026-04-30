@@ -1,0 +1,31 @@
+services:
+  workfox:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    container_name: workfox
+    restart: unless-stopped
+    ports:
+      - "${WORKFOX_PORT:-9123}:9123"
+    environment:
+      - WORKFOX_BACKEND_HOST=0.0.0.0
+      - WORKFOX_BACKEND_PORT=9123
+      - WORKFOX_USER_DATA_DIR=/app/backend/data
+      - WORKFOX_LOG_LEVEL=${WORKFOX_LOG_LEVEL:-info}
+      - WORKFOX_BACKEND_TOKEN=${WORKFOX_BACKEND_TOKEN:-}
+      - WORKFOX_HOOK_SECRET=${WORKFOX_HOOK_SECRET:-}
+      - WORKFOX_SERVE_WEB=1
+      - NODE_ENV=production
+    volumes:
+      - workfox-data:/app/backend/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9123/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+volumes:
+  workfox-data:
+    driver: local
