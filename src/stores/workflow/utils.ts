@@ -1,4 +1,5 @@
 import type { Workflow, WorkflowNode, OutputField } from '@/lib/workflow/types'
+import { getNodesForExecutionScope } from '@shared/workflow-composite'
 
 export interface WorkflowChanges {
   upsertNodes: any[]
@@ -8,7 +9,9 @@ export interface WorkflowChanges {
 }
 
 export function validateWorkflowExecution(workflow: Workflow): string | null {
-  const nodes = workflow.nodes
+  const nodes = getNodesForExecutionScope(workflow.nodes, null)
+  const nodeIds = new Set(nodes.map((node) => node.id))
+  const edges = workflow.edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
   const startNodes = nodes.filter((n) => n.type === 'start')
   const endNodes = nodes.filter((n) => n.type === 'end')
   if (startNodes.length === 0) return '缺少「开始」节点'
@@ -20,7 +23,7 @@ export function validateWorkflowExecution(workflow: Workflow): string | null {
   const queue = [startNodes[0].id]
   while (queue.length > 0) {
     const current = queue.shift()!
-    for (const edge of workflow.edges) {
+    for (const edge of edges) {
       if (edge.source === current && !visited.has(edge.target)) {
         visited.add(edge.target)
         queue.push(edge.target)

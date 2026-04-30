@@ -11,6 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { executionLogBackendApi } from '@/lib/backend-api/execution-log'
 import type { ExecutionLog, ExecutionStep, WorkflowNode } from '@/lib/workflow/types'
 import type { OutputField } from '@shared/workflow-types'
+import { getNodesForExecutionScope } from '@shared/workflow-composite'
 import { WORKFLOW_EXEC_BAR_LAYOUT_KEY } from './workflowLayoutContext'
 import ExecutionInputDrawer from './ExecutionInputDrawer.vue'
 
@@ -177,7 +178,7 @@ const inputDrawerOpen = ref(false)
 const startInputFields = computed<OutputField[]>(() => {
   const nodes = store.currentWorkflow?.nodes
   if (!nodes) return []
-  const startNode = nodes.find(n => n.type === 'start')
+  const startNode = getNodesForExecutionScope(nodes, null).find(n => n.type === 'start')
   const fields = startNode?.data?.inputFields
   return Array.isArray(fields) ? fields : []
 })
