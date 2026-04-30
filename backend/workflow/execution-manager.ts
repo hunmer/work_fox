@@ -803,7 +803,7 @@ export class BackendWorkflowExecutionManager {
       schema,
     })
 
-    return { ...result, headers, cells }
+    return { ...(result as Record<string, any>), headers, cells }
   }
 
   private async executeAlertDialog(

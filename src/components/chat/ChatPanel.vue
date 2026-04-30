@@ -36,17 +36,28 @@ const activeTab = ref<string>('messages')
 const isElectron = navigator.userAgent.includes('Electron')
 
 async function openSessionFile() {
-  const sk = props.chat.scopeKey.value
+  const sk = props.chat.scopeKey
   if (!sk) return
   const path = await getChatHistoryPath(sk)
   window.api.fs.openInExplorer(path)
 }
 
 async function copySessionPath() {
-  const sk = props.chat.scopeKey.value
+  const sk = props.chat.scopeKey
   if (!sk) return
   const path = await getChatHistoryPath(sk)
-  navigator.clipboard.writeText(path)
+  try {
+    await navigator.clipboard.writeText(path)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = path
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
 }
 
 async function loadPluginTools(pluginIds: string[]) {

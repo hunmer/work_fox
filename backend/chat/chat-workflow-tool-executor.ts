@@ -7,7 +7,7 @@ import type { BackendPluginRegistry } from '../plugins/plugin-registry'
 import type { ConnectionManager } from '../ws/connection-manager'
 import type { ClientNodeCache } from './client-node-cache'
 import { createDefaultEmbeddedWorkflow, normalizeEmbeddedWorkflow } from '../../shared/embedded-workflow'
-import { LOOP_BODY_NODE_TYPE, LOOP_BODY_ROLE } from '../../shared/workflow-composite'
+import { LOOP_BODY_NODE_TYPE, LOOP_BODY_ROLE, LOOP_NEXT_SOURCE_HANDLE } from '../../shared/workflow-composite'
 import type { BackendWorkflowExecutionManager } from '../workflow/execution-manager'
 import type { BackendExecutionLogStore } from '../storage/execution-log-store'
 
@@ -198,6 +198,21 @@ function sameHandle(a: string | null | undefined, b: string | null | undefined):
   return (a ?? null) === (b ?? null)
 }
 
+function isTopLevelNode(node: WorkflowNode): boolean {
+  return !node.composite?.parentId && !node.composite?.hidden
+}
+
+function findAutoLoopNextEdgeTarget(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowNode | null {
+  const endNodes = nodes.filter((node) => node.type === 'end' && isTopLevelNode(node))
+  if (endNodes.length !== 1) return null
+  const endNode = endNodes[0]
+  const occupied = edges.some((edge) =>
+    edge.target === endNode.id
+    && sameHandle(edge.targetHandle, null)
+  )
+  return occupied ? null : endNode
+}
+
 function validateCreateEdge(
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
@@ -290,28 +305,120 @@ function buildBatchOperationHelp(operation: unknown, index: number, tool: string
   }
 }
 
+function getNodeSize(node: WorkflowNode): { width: number; height: number } {
+  const width = typeof node.data?.width === 'number' && Number.isFinite(node.data.width)
+    ? node.data.width
+    : 220
+  const height = typeof node.data?.height === 'number' && Number.isFinite(node.data.height)
+    ? node.data.height
+    : 120
+  return { width, height }
+}
+
+function getCompositeParentId(node: WorkflowNode): string | null {
+  return node.composite?.parentId ?? null
+}
+
+function isHiddenNode(node: WorkflowNode): boolean {
+  return !!node.composite?.hidden
+}
+
+function getDescendantNodeIds(nodes: WorkflowNode[], parentId: string): Set<string> {
+  const descendants = new Set<string>()
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const node of nodes) {
+      if (descendants.has(node.id)) continue
+      const currentParentId = getCompositeParentId(node)
+      if (currentParentId === parentId || (currentParentId && descendants.has(currentParentId))) {
+        descendants.add(node.id)
+        changed = true
+      }
+    }
+  }
+  return descendants
+}
+
 function autoLayout(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowNode[] {
   const g = new dagre.graphlib.Graph()
   g.setDefaultEdgeLabel(() => ({}))
   g.setGraph({ rankdir: 'LR', nodesep: 60, ranksep: 80 })
 
-  for (const node of nodes) {
-    g.setNode(node.id, { width: 200, height: 80 })
+  const layoutNodes = nodes.filter((node) => !isHiddenNode(node) && !getCompositeParentId(node))
+  const layoutNodeIds = new Set(layoutNodes.map((node) => node.id))
+  const nodeSizes = new Map<string, { width: number; height: number }>()
+
+  for (const node of layoutNodes) {
+    const size = getNodeSize(node)
+    nodeSizes.set(node.id, size)
+    g.setNode(node.id, size)
   }
-  for (const edge of edges) {
+  for (const edge of edges.filter((edge) =>
+    layoutNodeIds.has(edge.source)
+    && layoutNodeIds.has(edge.target)
+    && !edge.composite?.hidden
+  )) {
     g.setEdge(edge.source, edge.target)
   }
 
   dagre.layout(g)
+  const movedDescendantOffsets = new Map<string, { dx: number; dy: number }>()
+  for (const node of layoutNodes) {
+    const pos = g.node(node.id)
+    const size = nodeSizes.get(node.id)
+    if (!pos || !size) continue
+    const nextPosition = {
+      x: pos.x - size.width / 2,
+      y: pos.y - size.height / 2,
+    }
+    const dx = nextPosition.x - node.position.x
+    const dy = nextPosition.y - node.position.y
+    if (dx !== 0 || dy !== 0) {
+      for (const descendantId of getDescendantNodeIds(nodes, node.id)) {
+        movedDescendantOffsets.set(descendantId, { dx, dy })
+      }
+    }
+  }
+
   return nodes.map((node) => {
     const pos = g.node(node.id)
-    return {
-      ...node,
-      position: {
-        x: pos.x - 100,
-        y: pos.y - 40,
-      },
+    const size = nodeSizes.get(node.id)
+    if (pos && size) {
+      return {
+        ...node,
+        position: {
+          x: pos.x - size.width / 2,
+          y: pos.y - size.height / 2,
+        },
+      }
     }
+
+    const offset = movedDescendantOffsets.get(node.id)
+    if (offset) {
+      return {
+        ...node,
+        position: {
+          x: node.position.x + offset.dx,
+          y: node.position.y + offset.dy,
+        },
+      }
+    }
+
+    return node
+  })
+}
+
+function getPositionChangedNodes(
+  previous: Array<{ id: string, position: { x: number, y: number } }>,
+  next: WorkflowNode[],
+): WorkflowNode[] {
+  const previousPositions = new Map(previous.map((node) => [node.id, node.position]))
+  return next.filter((node) => {
+    const previousPosition = previousPositions.get(node.id)
+    return !previousPosition
+      || previousPosition.x !== node.position.x
+      || previousPosition.y !== node.position.y
   })
 }
 
@@ -1089,6 +1196,22 @@ export class ChatWorkflowToolExecutor {
         const created = this.createNodesByDefinition(typeDef, label, ctx.args?.data)
         target.nodes.push(...created.nodes)
         target.edges.push(...created.edges)
+        const autoCreatedEdges: WorkflowEdge[] = []
+        if (!target.hostNode && created.rootNode.type === 'loop') {
+          const endNode = findAutoLoopNextEdgeTarget(target.nodes, target.edges)
+          if (endNode) {
+            const edgeId = getEdgeId(created.rootNode.id, LOOP_NEXT_SOURCE_HANDLE, endNode.id, null)
+            const edge: WorkflowEdge = {
+              id: edgeId,
+              source: created.rootNode.id,
+              target: endNode.id,
+              sourceHandle: LOOP_NEXT_SOURCE_HANDLE,
+              targetHandle: null,
+            }
+            target.edges.push(edge)
+            autoCreatedEdges.push(edge)
+          }
+        }
         let nextNodes = ctx.nodes
         let nextEdges = ctx.edges
         if (target.hostNode) {
@@ -1097,7 +1220,7 @@ export class ChatWorkflowToolExecutor {
           nextEdges = committed.edges
         } else {
           ctx.changes.upsertNodes.push(...created.nodes)
-          ctx.changes.upsertEdges.push(...created.edges)
+          ctx.changes.upsertEdges.push(...created.edges, ...autoCreatedEdges)
           nextNodes = target.nodes
           nextEdges = target.edges
         }
@@ -1108,7 +1231,8 @@ export class ChatWorkflowToolExecutor {
             data: {
               nodeId: created.rootNode.id,
               createdNodeIds: created.nodes.map((node) => node.id),
-              createdEdgeIds: created.edges.map((edge) => edge.id),
+              createdEdgeIds: [...created.edges, ...autoCreatedEdges].map((edge) => edge.id),
+              autoCreatedEdgeIds: autoCreatedEdges.map((edge) => edge.id),
               embeddedInNodeId: target.hostNode?.id,
             },
           },
@@ -1411,7 +1535,12 @@ export class ChatWorkflowToolExecutor {
         if ('success' in target) {
           return { result: target, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
         }
+        const previousNodes = target.nodes.map((node) => ({
+          id: node.id,
+          position: { ...node.position },
+        }))
         target.nodes = autoLayout(target.nodes, target.edges)
+        const changedNodes = getPositionChangedNodes(previousNodes, target.nodes)
         let nextNodes = ctx.nodes
         let nextEdges = ctx.edges
         if (target.hostNode) {
@@ -1419,15 +1548,15 @@ export class ChatWorkflowToolExecutor {
           nextNodes = committed.nodes
           nextEdges = committed.edges
         } else {
-          ctx.changes.upsertNodes.push(...target.nodes)
+          ctx.changes.upsertNodes.push(...changedNodes)
           nextNodes = target.nodes
           nextEdges = target.edges
         }
         return {
           result: {
             success: true,
-            message: `自动布局完成，${target.nodes.length} 个节点已重新排列`,
-            data: { nodes: target.nodes, embeddedInNodeId: target.hostNode?.id },
+            message: `自动布局完成，${changedNodes.length} 个节点已重新排列`,
+            data: { nodes: changedNodes, embeddedInNodeId: target.hostNode?.id },
           },
           mutated: true,
           nodes: nextNodes,
