@@ -556,7 +556,7 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     let nextSelectedNodeIds: string[] | null = null
     const resizingGroupIds = new Set(
       changes
-        .filter(change => change.type === 'dimensions' && store.currentWorkflow?.groups?.some(g => g.id === change.id))
+        .filter((change): change is Extract<NodeChange, { type: 'dimensions' }> => change.type === 'dimensions' && !!store.currentWorkflow?.groups?.some(g => g.id === change.id))
         .map(change => change.id),
     )
 

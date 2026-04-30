@@ -20,7 +20,7 @@ import {
 import type { createUndoRedoManager } from './undo-redo'
 import type { createGroupActions } from './group'
 
-interface AddNodeOptions {
+export interface AddNodeOptions {
   sourceNodeId?: string | null
   sourceHandle?: string | null
   scopeNodeId?: string | null

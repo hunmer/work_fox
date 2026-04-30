@@ -119,7 +119,7 @@ export function registerAppChannels(router: WSRouter, services: AppServices): vo
   router.register('agentSettings:set', ({ settings }) => agentSettingsStore.set(settings))
 
   // --- Execution Input Presets ---
-  async function getPresetMap(): Promise<Record<string, any[]>> {
+  async function getPresetMap(): Promise<Record<string, any>> {
     const data: any = await executionPresetStore.get()
     return data && typeof data === 'object' ? data : {}
   }

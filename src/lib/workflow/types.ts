@@ -137,6 +137,7 @@ export interface ArrayFieldItem {
   options?: { label: string; value: string }[]
   placeholder?: string
   rows?: number
+  tooltip?: string
 }
 
 export interface NodePropertyVisibleWhen {
@@ -238,6 +239,8 @@ export interface NodeTypeDefinition {
   /** 是否为单例节点（同一工作流中仅允许存在一个，如 start/end） */
   singleton?: boolean
   compound?: CompoundNodeDefinition
+  /** 是否支持单节点调试，默认 true */
+  debuggable?: boolean
 }
 
 /** 执行日志条目 */
