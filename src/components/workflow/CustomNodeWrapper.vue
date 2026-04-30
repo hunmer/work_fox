@@ -312,7 +312,7 @@ function deleteEmbeddedWorkflowNode() {
 
 // ── 节点内部刷新 ──
 
-function refreshNodeInternals(reason: string) {
+function refreshNodeInternals() {
   nextTick(() => {
     updateNodeInternals([props.id])
   })
@@ -484,7 +484,7 @@ function getHandleTop(index: number, total: number): string {
   if (isLoopBodyContainer.value) {
     return `${((index + 1) / (total + 1)) * 100}%`
   }
-  const nodeHeight = measuredNodeSize.value.height || 100
+  const nodeHeight = renderedNodeSize.value.height || nodeMinHeight.value || 100
   const available = nodeHeight - HEADER_HEIGHT - HANDLE_MARGIN * 2
   const step = available / (total + 1)
   return `${HEADER_HEIGHT + HANDLE_MARGIN + step * (index + 1)}px`
@@ -500,18 +500,28 @@ function getSourceHandleStyle(index: number, total: number) {
 let nodeResizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
-  refreshNodeInternals('mounted')
   updateControlBarRect()
   if (nodeRootRef.value) {
     const rect = nodeRootRef.value.getBoundingClientRect()
     measuredNodeSize.value = { width: rect.width, height: rect.height }
+    refreshNodeInternals()
     nodeResizeObserver = new ResizeObserver(([entry]) => {
-      measuredNodeSize.value = {
+      const nextSize = {
         width: entry.contentRect.width,
         height: entry.contentRect.height,
       }
+      const previousSize = measuredNodeSize.value
+      const sizeChanged = Math.abs(previousSize.width - nextSize.width) > 0.5
+        || Math.abs(previousSize.height - nextSize.height) > 0.5
+      measuredNodeSize.value = nextSize
+      if (sizeChanged) {
+        refreshNodeInternals()
+        updateControlBarRect()
+      }
     })
     nodeResizeObserver.observe(nodeRootRef.value)
+  } else {
+    refreshNodeInternals()
   }
   window.addEventListener('scroll', updateControlBarRect, true)
   window.addEventListener('resize', updateControlBarRect)

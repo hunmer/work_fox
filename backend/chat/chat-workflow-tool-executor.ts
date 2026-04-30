@@ -132,6 +132,63 @@ function previewJson(value: unknown, maxLength = 500): string {
   }
 }
 
+function normalizeHandleId(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed || trimmed === 'default') return null
+  return trimmed
+}
+
+function getEdgeId(source: string, sourceHandle: string | null, target: string, targetHandle: string | null): string {
+  return `e-${source}-${sourceHandle ?? 'default'}-${target}-${targetHandle ?? 'default'}`
+}
+
+function sameHandle(a: string | null | undefined, b: string | null | undefined): boolean {
+  return (a ?? null) === (b ?? null)
+}
+
+function validateCreateEdge(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  source: string,
+  target: string,
+  sourceHandle: string | null,
+  targetHandle: string | null,
+): ToolResult | null {
+  if (source === target) {
+    return { success: false, message: '不能创建节点到自身的连线' }
+  }
+  if (!nodes.find((n) => n.id === source)) {
+    return { success: false, message: `源节点 ${source} 不存在` }
+  }
+  if (!nodes.find((n) => n.id === target)) {
+    return { success: false, message: `目标节点 ${target} 不存在` }
+  }
+
+  const duplicate = edges.find((edge) =>
+    edge.source === source
+    && edge.target === target
+    && sameHandle(edge.sourceHandle, sourceHandle)
+    && sameHandle(edge.targetHandle, targetHandle),
+  )
+  if (duplicate) {
+    return { success: false, message: `连线已存在: ${duplicate.id}`, data: { edgeId: duplicate.id } }
+  }
+
+  const occupiedTarget = edges.find((edge) =>
+    edge.target === target && sameHandle(edge.targetHandle, targetHandle),
+  )
+  if (occupiedTarget) {
+    return {
+      success: false,
+      message: `目标节点 ${target} 的输入连接点 ${targetHandle ?? 'default'} 已被连线 ${occupiedTarget.id} 占用，请先删除旧连线或选择其他输入连接点`,
+      data: { existingEdgeId: occupiedTarget.id },
+    }
+  }
+
+  return null
+}
+
 function buildBatchOperationHelp(operation: unknown, index: number, tool: string): { message: string, data: Record<string, unknown> } {
   const operationKeys = operation && typeof operation === 'object' ? Object.keys(operation as Record<string, unknown>) : []
   const reason = !tool
@@ -945,16 +1002,18 @@ export class ChatWorkflowToolExecutor {
         }
       }],
       ['create_edge', (ctx) => {
-        const { source, target, sourceHandle, targetHandle } = ctx.args || {}
+        const { source, target } = ctx.args || {}
+        const sourceHandle = normalizeHandleId(ctx.args?.sourceHandle)
+        const targetHandle = normalizeHandleId(ctx.args?.targetHandle)
         if (!source || !target) return { result: { success: false, message: '缺少必填参数: source, target' }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
         const targetWorkflow = this.resolveWorkflowTarget(ctx)
         if ('success' in targetWorkflow) {
           return { result: targetWorkflow, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
         }
-        if (!targetWorkflow.nodes.find((n) => n.id === source)) return { result: { success: false, message: `源节点 ${source} 不存在` }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
-        if (!targetWorkflow.nodes.find((n) => n.id === target)) return { result: { success: false, message: `目标节点 ${target} 不存在` }, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
-        const edgeId = `e-${source}-${sourceHandle || 'default'}-${target}-${targetHandle || 'default'}`
-        const edge: WorkflowEdge = { id: edgeId, source, target, sourceHandle: sourceHandle || 'default', targetHandle: targetHandle || 'default' }
+        const validationError = validateCreateEdge(targetWorkflow.nodes, targetWorkflow.edges, source, target, sourceHandle, targetHandle)
+        if (validationError) return { result: validationError, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
+        const edgeId = getEdgeId(source, sourceHandle, target, targetHandle)
+        const edge: WorkflowEdge = { id: edgeId, source, target, sourceHandle, targetHandle }
         targetWorkflow.edges.push(edge)
         let nextNodes = ctx.nodes
         let nextEdges = ctx.edges
@@ -1016,8 +1075,22 @@ export class ChatWorkflowToolExecutor {
         const created = this.createNodesByDefinition(typeDef, label, ctx.args?.data)
         const nodeId = created.rootNode.id
         const remainingEdges = target.edges.filter((item) => item.id !== edgeId)
-        const edge1: WorkflowEdge = { id: `e-${edge.source}-${edge.sourceHandle || 'default'}-${nodeId}-default`, source: edge.source, target: nodeId, sourceHandle: edge.sourceHandle || 'default', targetHandle: 'default' }
-        const edge2: WorkflowEdge = { id: `e-${nodeId}-default-${edge.target}-${edge.targetHandle || 'default'}`, source: nodeId, target: edge.target, sourceHandle: 'default', targetHandle: edge.targetHandle || 'default' }
+        const edge1SourceHandle = normalizeHandleId(edge.sourceHandle)
+        const edge2TargetHandle = normalizeHandleId(edge.targetHandle)
+        const edge1: WorkflowEdge = {
+          id: getEdgeId(edge.source, edge1SourceHandle, nodeId, null),
+          source: edge.source,
+          target: nodeId,
+          sourceHandle: edge1SourceHandle,
+          targetHandle: null,
+        }
+        const edge2: WorkflowEdge = {
+          id: getEdgeId(nodeId, null, edge.target, edge2TargetHandle),
+          source: nodeId,
+          target: edge.target,
+          sourceHandle: null,
+          targetHandle: edge2TargetHandle,
+        }
         target.nodes.push(...created.nodes)
         target.edges = remainingEdges
         target.edges.push(...created.edges, edge1, edge2)

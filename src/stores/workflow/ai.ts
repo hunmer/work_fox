@@ -8,6 +8,12 @@ export function createAIActions(
   currentWorkflow: Ref<Workflow | null>,
   undoRedo: ReturnType<typeof createUndoRedoManager>,
 ) {
+  function normalizeHandleId(value: unknown): string | null {
+    if (typeof value !== 'string') return null
+    const trimmed = value.trim()
+    return trimmed && trimmed !== 'default' ? trimmed : null
+  }
+
   function mergeWorkflowChanges(changes: WorkflowChanges) {
     if (!currentWorkflow.value) return
     undoRedo.pushUndo('AI 修改: ' + summarizeChanges(changes))
@@ -23,9 +29,20 @@ export function createAIActions(
     }
 
     for (const edge of changes.upsertEdges) {
-      const idx = currentWorkflow.value.edges.findIndex(e => e.id === edge.id)
-      if (idx >= 0) currentWorkflow.value.edges[idx] = edge
-      else currentWorkflow.value.edges.push(edge)
+      const normalizedEdge = {
+        ...edge,
+        sourceHandle: normalizeHandleId(edge.sourceHandle),
+        targetHandle: normalizeHandleId(edge.targetHandle),
+      }
+      const idx = currentWorkflow.value.edges.findIndex(e => e.id === normalizedEdge.id)
+      const targetOccupied = currentWorkflow.value.edges.some((e, edgeIndex) =>
+        edgeIndex !== idx
+        && e.target === normalizedEdge.target
+        && normalizeHandleId(e.targetHandle) === normalizedEdge.targetHandle,
+      )
+      if (targetOccupied) continue
+      if (idx >= 0) currentWorkflow.value.edges[idx] = normalizedEdge
+      else currentWorkflow.value.edges.push(normalizedEdge)
     }
 
     if (changes.deleteEdgeIds.length > 0) {
