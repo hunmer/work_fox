@@ -6,7 +6,8 @@ import type { BackendWorkflowStore } from '../storage/workflow-store'
 import type { BackendPluginRegistry } from '../plugins/plugin-registry'
 import type { ConnectionManager } from '../ws/connection-manager'
 import type { ClientNodeCache } from './client-node-cache'
-import { normalizeEmbeddedWorkflow } from '../../shared/embedded-workflow'
+import { createDefaultEmbeddedWorkflow, normalizeEmbeddedWorkflow } from '../../shared/embedded-workflow'
+import { LOOP_BODY_NODE_TYPE, LOOP_BODY_ROLE } from '../../shared/workflow-composite'
 import type { BackendWorkflowExecutionManager } from '../workflow/execution-manager'
 import type { BackendExecutionLogStore } from '../storage/execution-log-store'
 
@@ -200,6 +201,7 @@ function sameHandle(a: string | null | undefined, b: string | null | undefined):
 function validateCreateEdge(
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
+  nodeDefinitions: NodeTypeDefinition[],
   source: string,
   target: string,
   sourceHandle: string | null,
@@ -208,11 +210,32 @@ function validateCreateEdge(
   if (source === target) {
     return { success: false, message: '不能创建节点到自身的连线' }
   }
-  if (!nodes.find((n) => n.id === source)) {
+  const sourceNode = nodes.find((n) => n.id === source)
+  if (!sourceNode) {
     return { success: false, message: `源节点 ${source} 不存在` }
   }
   if (!nodes.find((n) => n.id === target)) {
     return { success: false, message: `目标节点 ${target} 不存在` }
+  }
+
+  const sourceDefinition = nodeDefinitions.find((definition) => definition.type === sourceNode.type)
+  const namedSourceHandles = sourceDefinition?.handles?.sourceHandles ?? []
+  if (namedSourceHandles.length > 1) {
+    const validHandles = namedSourceHandles.map((handle) => handle.id)
+    if (!sourceHandle) {
+      return {
+        success: false,
+        message: `源节点 ${source} (${sourceNode.label || sourceNode.type}) 有多个输出连接点，必须显式指定 sourceHandle。可选值: ${namedSourceHandles.map((handle) => `${handle.id}(${handle.label})`).join(', ')}`,
+        data: { source, sourceType: sourceNode.type, sourceHandles: namedSourceHandles },
+      }
+    }
+    if (!validHandles.includes(sourceHandle)) {
+      return {
+        success: false,
+        message: `源节点 ${source} (${sourceNode.label || sourceNode.type}) 的 sourceHandle 无效: ${sourceHandle}。可选值: ${namedSourceHandles.map((handle) => `${handle.id}(${handle.label})`).join(', ')}`,
+        data: { source, sourceType: sourceNode.type, sourceHandles: namedSourceHandles },
+      }
+    }
   }
 
   const duplicate = edges.find((edge) =>
@@ -919,6 +942,66 @@ export class ChatWorkflowToolExecutor {
       }
     }
 
+    const boundaryNodes: WorkflowNode[] = []
+    const boundaryEdges: WorkflowEdge[] = []
+    const loopBodyNode = roleMap.get(LOOP_BODY_ROLE)
+    if (loopBodyNode?.type === LOOP_BODY_NODE_TYPE) {
+      loopBodyNode.data = {
+        ...loopBodyNode.data,
+        bodyWorkflow: createDefaultEmbeddedWorkflow(() => randomUUID()),
+      }
+      const startNode: WorkflowNode = {
+        id: randomUUID(),
+        type: 'start',
+        label: '开始',
+        position: { x: loopBodyNode.position.x + 80, y: loopBodyNode.position.y + 140 },
+        data: {},
+        composite: {
+          rootId: loopBodyNode.id,
+          parentId: loopBodyNode.id,
+          generated: true,
+          hidden: false,
+        },
+      }
+      const endNode: WorkflowNode = {
+        id: randomUUID(),
+        type: 'end',
+        label: '结束',
+        position: { x: loopBodyNode.position.x + 420, y: loopBodyNode.position.y + 140 },
+        data: {},
+        composite: {
+          rootId: loopBodyNode.id,
+          parentId: loopBodyNode.id,
+          generated: true,
+          hidden: false,
+        },
+      }
+      boundaryNodes.push(startNode, endNode)
+      boundaryEdges.push(
+        {
+          id: `e-${loopBodyNode.id}-default-${startNode.id}-target`,
+          source: loopBodyNode.id,
+          target: startNode.id,
+          sourceHandle: null,
+          targetHandle: 'target',
+          composite: {
+            rootId: loopBodyNode.id,
+            parentId: loopBodyNode.id,
+            generated: true,
+            hidden: true,
+            locked: true,
+          },
+        },
+        {
+          id: `e-${startNode.id}-default-${endNode.id}-target`,
+          source: startNode.id,
+          target: endNode.id,
+          sourceHandle: null,
+          targetHandle: 'target',
+        },
+      )
+    }
+
     const edges: WorkflowEdge[] = []
     for (const edgeDef of typeDef.compound.edges || []) {
       const sourceNode = roleMap.get(edgeDef.sourceRole)
@@ -939,8 +1022,9 @@ export class ChatWorkflowToolExecutor {
         },
       })
     }
+    edges.push(...boundaryEdges)
 
-    return { rootNode, nodes: Array.from(roleMap.values()), edges }
+    return { rootNode, nodes: [...Array.from(roleMap.values()), ...boundaryNodes], edges }
   }
 
   private getHandlers(): Map<string, ToolHandler> {
@@ -1116,7 +1200,7 @@ export class ChatWorkflowToolExecutor {
         if ('success' in targetWorkflow) {
           return { result: targetWorkflow, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
         }
-        const validationError = validateCreateEdge(targetWorkflow.nodes, targetWorkflow.edges, source, target, sourceHandle, targetHandle)
+        const validationError = validateCreateEdge(targetWorkflow.nodes, targetWorkflow.edges, this.getAllNodeTypeDefinitions(), source, target, sourceHandle, targetHandle)
         if (validationError) return { result: validationError, mutated: false, nodes: ctx.nodes, edges: ctx.edges }
         const edgeId = getEdgeId(source, sourceHandle, target, targetHandle)
         const edge: WorkflowEdge = { id: edgeId, source, target, sourceHandle, targetHandle }

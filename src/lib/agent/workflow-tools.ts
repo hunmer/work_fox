@@ -230,7 +230,7 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'create_edge',
     description:
-      '创建一条连线，将两个节点连接起来。source 是起始节点（上游），target 是目标节点（下游）。可选指定 sourceHandle/targetHandle 以连接到特定的连接点。',
+      '创建一条连线，将两个节点连接起来。source 是起始节点（上游），target 是目标节点（下游）。当 source 节点有多个输出连接点时必须指定 sourceHandle；例如 loop 节点连接循环体用 "loop-body"，连接“完成后”下游节点用 "loop-next"。',
     input_schema: {
       type: 'object',
       properties: {
@@ -244,7 +244,7 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
         },
         sourceHandle: {
           type: 'string',
-          description: '起始节点的连接点标识，用于条件分支等有多个输出的节点。例如 "true"、"false"、"default"。',
+          description: '起始节点的连接点标识。多输出节点必须填写，尤其 loop: "loop-body" 表示进入循环体，"loop-next" 表示循环完成后继续；条件/分支节点按其 handles.sourceHandles 或动态输出 ID 填写。普通单输出节点可省略。',
         },
         targetHandle: {
           type: 'string',
@@ -339,7 +339,7 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
         },
         createEdges: {
           type: 'array',
-          description: '旧格式兼容。要创建的连线列表。',
+          description: '旧格式兼容。要创建的连线列表。source 节点有多个输出连接点时必须指定 sourceHandle；loop 节点连接“完成后”请使用 sourceHandle="loop-next"，连接循环体请使用 "loop-body"。',
           items: {
             type: 'object',
             properties: {

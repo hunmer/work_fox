@@ -146,6 +146,7 @@ const {
   handleNodeDrag,
   handleNodeDragStop,
   syncScopeBoundaryLayout,
+  getRenderedNodeSize,
   helperLineHorizontal,
   helperLineVertical,
 } = useFlowCanvas(store, FLOW_ID)
@@ -309,6 +310,7 @@ const canvasContext: WorkflowCanvasContext = {
   onNodesInitialized: handleNodesInitialized,
   onEdgeInsertNode,
   syncScopeBoundaryLayout,
+  getRenderedNodeSize,
   fitView,
   getViewport,
   setViewport,

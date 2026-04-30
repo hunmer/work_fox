@@ -13,6 +13,12 @@ import {
 import { useWorkflowStore } from '@/stores/workflow'
 import { useAgentSettingsStore } from '@/stores/agent-settings'
 import { WORKFLOW_CANVAS_CONTEXT_KEY } from './workflowCanvasContext'
+import {
+  getCompositeParentId,
+  isHiddenWorkflowEdge,
+  isHiddenWorkflowNode,
+  isScopeBoundaryWorkflowNode,
+} from '@shared/workflow-composite'
 import dagre from '@dagrejs/dagre'
 
 const canvas = inject(WORKFLOW_CANVAS_CONTEXT_KEY)
@@ -30,19 +36,51 @@ function applyDagreLayout(direction: 'LR' | 'TB') {
   g.setDefaultEdgeLabel(() => ({}))
   g.setGraph({ rankdir: direction, nodesep: 60, ranksep: 80 })
 
-  for (const node of wf.nodes) {
-    g.setNode(node.id, { width: 200, height: 80 })
+  const layoutNodes = wf.nodes.filter((node) =>
+    !isHiddenWorkflowNode(node)
+    && !getCompositeParentId(node)
+  )
+  const layoutNodeIds = new Set(layoutNodes.map((node) => node.id))
+  const nodeSizes = new Map<string, { width: number; height: number }>()
+
+  for (const node of layoutNodes) {
+    const size = canvas?.getRenderedNodeSize(node.id, node.data)
+      ?? {
+        width: typeof node.data?.width === 'number' ? node.data.width : 220,
+        height: typeof node.data?.height === 'number' ? node.data.height : 120,
+      }
+    nodeSizes.set(node.id, size)
+    g.setNode(node.id, size)
   }
-  for (const edge of wf.edges) {
+  for (const edge of wf.edges.filter((edge) =>
+    !isHiddenWorkflowEdge(edge)
+    && layoutNodeIds.has(edge.source)
+    && layoutNodeIds.has(edge.target)
+  )) {
     g.setEdge(edge.source, edge.target)
   }
 
   dagre.layout(g)
 
-  for (const node of wf.nodes) {
+  for (const node of layoutNodes) {
     const pos = g.node(node.id)
+    const size = nodeSizes.get(node.id)
     if (pos) {
-      node.position = { x: pos.x - 100, y: pos.y - 40 }
+      const nextPosition = {
+        x: pos.x - (size?.width ?? 220) / 2,
+        y: pos.y - (size?.height ?? 120) / 2,
+      }
+      if (isScopeBoundaryWorkflowNode(node)) {
+        const dx = nextPosition.x - node.position.x
+        const dy = nextPosition.y - node.position.y
+        for (const child of wf.nodes.filter((item) => getCompositeParentId(item) === node.id)) {
+          child.position = {
+            x: child.position.x + dx,
+            y: child.position.y + dy,
+          }
+        }
+      }
+      node.position = nextPosition
     }
   }
 }

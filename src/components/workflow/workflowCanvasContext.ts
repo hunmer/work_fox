@@ -29,6 +29,7 @@ export interface WorkflowCanvasContext {
   onNodesInitialized: (nodes: any[]) => void
   onEdgeInsertNode: (edgeId: string, sourceId: string, targetId: string, sourceHandle: string | null) => void
   syncScopeBoundaryLayout: (scopeNodeId: string) => void
+  getRenderedNodeSize: (nodeId: string, data?: Record<string, unknown>) => { width: number; height: number }
   fitView: () => void
   getViewport: () => { x: number; y: number; zoom: number }
   setViewport: (viewport: { x: number; y: number; zoom: number }) => void

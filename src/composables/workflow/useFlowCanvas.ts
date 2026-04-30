@@ -808,6 +808,7 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     handleNodeDrag,
     handleNodeDragStop,
     syncScopeBoundaryLayout,
+    getRenderedNodeSize,
     activeLoopBodyDropTargetId,
     helperLineHorizontal,
     helperLineVertical,
