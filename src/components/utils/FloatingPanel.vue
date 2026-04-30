@@ -1,7 +1,24 @@
 <template>
   <Teleport to="body">
+    <!-- 悬浮球模式 -->
     <div
-      v-if="visible"
+      v-if="visible && minimized"
+      class="float-ball"
+      :class="{
+        'float-ball--hidden': ballState.hidden,
+        'float-ball--hidden-left': ballState.hidden && ballState.snapSide === 'left',
+        'float-ball--hidden-right': ballState.hidden && ballState.snapSide === 'right'
+      }"
+      :style="ballStyle"
+      @mousedown.stop="startBallDrag"
+      @click.stop="restore"
+    >
+      <span class="ball-label">{{ ballLabel }}</span>
+    </div>
+
+    <!-- 面板模式 -->
+    <div
+      v-if="visible && !minimized"
       class="panel"
       :style="panelStyle"
       @mousedown="activate"
@@ -13,6 +30,7 @@
           <button @click.stop="toggleCollapse">
             {{ collapsed ? "展开" : "折叠" }}
           </button>
+          <button @click.stop="minimize" title="最小化为悬浮球">◯</button>
           <button @click.stop="close">×</button>
         </div>
       </div>
@@ -31,7 +49,11 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, reactive, ref } from "vue"
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue"
+
+const BALL_SIZE = 44
+const BALL_SNAP_THRESHOLD = 40 // 距边缘多少像素内触发吸附
+const BALL_HIDE_RATIO = 0.6
 
 const props = defineProps({
   title: { type: String, default: "悬浮面板" },
@@ -53,17 +75,36 @@ const emit = defineEmits([
 ])
 
 const collapsed = ref(false)
+const minimized = ref(false)
 
-const drag = reactive({
-  moving: false,
-  resizing: false,
-  startX: 0,
-  startY: 0,
-  startLeft: 0,
-  startTop: 0,
-  startWidth: 0,
-  startHeight: 0
+// 悬浮球状态
+const ballState = reactive({
+  x: 0,
+  y: 0,
+  dragging: false,
+  moved: false,
+  snapX: 0,
+  hidden: false,
+  snapSide: 'right' // 'left' | 'right'
 })
+
+// 记录最小化前的面板位置
+const savedPanelPos = reactive({ x: 0, y: 0 })
+
+const ballLabel = computed(() => props.title.charAt(0))
+
+const ballStyle = computed(() => ({
+  left: ballState.snapX + "px",
+  top: ballState.y + "px",
+  width: BALL_SIZE + "px",
+  height: BALL_SIZE + "px",
+  zIndex: props.zIndex,
+  '--ball-size': BALL_SIZE + 'px',
+  '--ball-hide-ratio': BALL_HIDE_RATIO,
+  transition: ballState.dragging
+    ? 'none'
+    : 'left 0.3s ease, opacity 0.3s ease, transform 0.3s ease'
+}))
 
 const panelStyle = computed(() => ({
   left: props.x + "px",
@@ -76,6 +117,8 @@ const panelStyle = computed(() => ({
 function activate() {
   emit("update:zIndex", Date.now())
 }
+
+// ——— 面板拖拽 ———
 
 function startDrag(e) {
   drag.moving = true
@@ -103,6 +146,19 @@ function stopDrag() {
   document.removeEventListener("mouseup", stopDrag)
 }
 
+// ——— 面板缩放 ———
+
+const drag = reactive({
+  moving: false,
+  resizing: false,
+  startX: 0,
+  startY: 0,
+  startLeft: 0,
+  startTop: 0,
+  startWidth: 0,
+  startHeight: 0
+})
+
 function startResize(e) {
   drag.resizing = true
   drag.startX = e.clientX
@@ -129,6 +185,88 @@ function stopResize() {
   document.removeEventListener("mouseup", stopResize)
 }
 
+// ——— 最小化 / 恢复 ———
+
+function minimize() {
+  savedPanelPos.x = props.x
+  savedPanelPos.y = props.y
+  // 悬浮球初始位置：面板右上角附近
+  ballState.x = props.x + props.width - BALL_SIZE - 10
+  ballState.y = props.y + 10
+  snapBallToEdge()
+  minimized.value = true
+}
+
+function restore() {
+  // 如果拖拽中移动了就不恢复（防止点击穿透）
+  if (ballState.moved) return
+  minimized.value = false
+  emit("update:x", savedPanelPos.x)
+  emit("update:y", savedPanelPos.y)
+}
+
+// ——— 悬浮球拖拽 ———
+
+function startBallDrag(e) {
+  ballState.dragging = true
+  ballState.moved = false
+
+  const startX = e.clientX
+  const startY = e.clientY
+  const originX = ballState.x
+  const originY = ballState.y
+
+  function onMove(ev) {
+    ballState.x = originX + (ev.clientX - startX)
+    ballState.y = originY + (ev.clientY - startY)
+    ballState.snapX = ballState.x
+    ballState.moved = true
+  }
+
+  function onUp() {
+    ballState.dragging = false
+    document.removeEventListener("mousemove", onMove)
+    document.removeEventListener("mouseup", onUp)
+
+    // 短暂延迟重置 moved，让 click 事件先处理
+    if (ballState.moved) {
+      setTimeout(() => { ballState.moved = false }, 50)
+    }
+
+    snapBallToEdge()
+    clampBallY()
+  }
+
+  document.addEventListener("mousemove", onMove)
+  document.addEventListener("mouseup", onUp)
+}
+
+// ——— 悬浮球吸附 ———
+
+function snapBallToEdge() {
+  const vw = window.innerWidth
+  const distLeft = ballState.x
+  const distRight = vw - (ballState.x + BALL_SIZE)
+
+  if (distLeft <= BALL_SNAP_THRESHOLD) {
+    ballState.snapX = -BALL_SIZE * BALL_HIDE_RATIO
+    ballState.snapSide = 'left'
+    ballState.hidden = true
+  } else if (distRight <= BALL_SNAP_THRESHOLD) {
+    ballState.snapX = vw - BALL_SIZE * (1 - BALL_HIDE_RATIO)
+    ballState.snapSide = 'right'
+    ballState.hidden = true
+  } else {
+    ballState.snapX = ballState.x
+    ballState.hidden = false
+  }
+}
+
+function clampBallY() {
+  const vh = window.innerHeight
+  ballState.y = Math.max(0, Math.min(ballState.y, vh - BALL_SIZE))
+}
+
 function toggleCollapse() {
   collapsed.value = !collapsed.value
 }
@@ -137,9 +275,22 @@ function close() {
   emit("update:visible", false)
 }
 
+// 窗口 resize 时重新吸附
+function onWindowResize() {
+  if (minimized.value) {
+    snapBallToEdge()
+    clampBallY()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener("resize", onWindowResize)
+})
+
 onBeforeUnmount(() => {
   stopDrag()
   stopResize()
+  window.removeEventListener("resize", onWindowResize)
 })
 </script>
 
@@ -180,6 +331,10 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+.actions button:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
 .body {
   height: calc(100% - 40px);
   padding: 12px;
@@ -195,5 +350,53 @@ onBeforeUnmount(() => {
   height: 16px;
   cursor: se-resize;
   background: linear-gradient(135deg, transparent 50%, #1677ff 50%);
+}
+
+/* 悬浮球 */
+.float-ball {
+  position: fixed;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1677ff, #4096ff);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  box-shadow: 0 4px 12px rgba(22, 119, 255, 0.4);
+  user-select: none;
+}
+
+.float-ball:hover {
+  box-shadow: 0 4px 20px rgba(22, 119, 255, 0.6);
+}
+
+/* 隐藏态：悬浮时展开完整球体 */
+.float-ball--hidden {
+  opacity: 0.85;
+  transition: left 0.3s ease, opacity 0.3s ease, transform 0.3s ease;
+}
+
+.float-ball--hidden:hover {
+  opacity: 1;
+}
+
+/* 靠左隐藏时 hover 向右展开 */
+.float-ball--hidden-left:hover {
+  transform: translateX(calc(var(--ball-size) * var(--ball-hide-ratio)));
+}
+
+/* 靠右隐藏时 hover 向左展开 */
+.float-ball--hidden-right:hover {
+  transform: translateX(calc(var(--ball-size) * var(--ball-hide-ratio) * -1));
+}
+
+.float-ball:active {
+  cursor: grabbing;
+}
+
+.ball-label {
+  font-size: 16px;
+  font-weight: 700;
+  pointer-events: none;
 }
 </style>
