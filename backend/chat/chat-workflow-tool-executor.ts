@@ -1583,11 +1583,17 @@ export class ChatWorkflowToolExecutor {
           nextNodes = target.nodes
           nextEdges = target.edges
         }
+        const scopeLabel = target.hostNode ? '内嵌子工作流' : '顶层工作流'
         return {
           result: {
             success: true,
-            message: `自动布局完成，${changedNodes.length} 个节点已重新排列`,
-            data: { nodes: changedNodes, embeddedInNodeId: target.hostNode?.id },
+            message: `自动布局完成，${scopeLabel}中 ${changedNodes.length} 个节点已重新排列`,
+            data: {
+              nodes: changedNodes,
+              scope: target.hostNode ? 'embedded' : 'root',
+              scopeNodeCount: target.nodes.length,
+              embeddedInNodeId: target.hostNode?.id,
+            },
           },
           mutated: true,
           nodes: nextNodes,

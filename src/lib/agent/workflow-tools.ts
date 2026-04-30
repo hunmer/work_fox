@@ -362,7 +362,7 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'auto_layout',
     description:
-      '使用 dagre 算法对工作流进行自动布局。会自动计算所有节点的位置，使图结构清晰、美观、无重叠。适合在添加/删除节点后整理画布，或在初始创建工作流后一键排列。',
+      '使用 dagre 算法对当前作用范围的工作流进行自动布局。未传 embeddedInNodeId 时整理顶层画布；传入 embeddedInNodeId 时只整理该宿主节点的内嵌子工作流。返回的 nodes 仅表示本次作用范围内位置发生变化的节点；内嵌子工作流只有 start/end 两个节点是正常有效状态，不应因此判断布局异常。',
     input_schema: {
       type: 'object',
       properties: {
