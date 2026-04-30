@@ -8,11 +8,13 @@ function matchPattern(name: string, pattern: string): boolean {
 
 export function createBuiltinFsApi() {
   return {
-    writeFile(filePath: string, content: string, encoding = 'utf-8') {
+    async writeFile(filePath: string, content: string, encoding = 'utf-8') {
+      await fs.mkdir(path.dirname(filePath), { recursive: true })
       return fs.writeFile(filePath, content, encoding as BufferEncoding)
     },
 
-    writeBinaryFile(filePath: string, data: Buffer) {
+    async writeBinaryFile(filePath: string, data: Buffer) {
+      await fs.mkdir(path.dirname(filePath), { recursive: true })
       const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data)
       return fs.writeFile(filePath, buffer)
     },

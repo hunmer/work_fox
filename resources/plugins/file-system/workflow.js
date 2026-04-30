@@ -1,7 +1,7 @@
 module.exports = {
   nodes: [
     {
-      type: '写入文本文件',
+      type: 'write_file',
       label: '写入文本文件',
       category: '文件操作',
       icon: 'FilePen',
@@ -20,7 +20,7 @@ module.exports = {
       },
     },
     {
-      type: '写入二进制文件',
+      type: 'write_binary_file',
       label: '写入二进制文件',
       category: '文件操作',
       icon: 'Binary',

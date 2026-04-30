@@ -118,8 +118,10 @@ const stepTabs = ref<Record<string, string>>({})
 const copiedNodeId = ref<string | null>(null)
 
 function copyNodeInfo(step: ExecutionLog['steps'][number]) {
+  const node = snapshotNodeMap.value.get(step.nodeId)
   const parts = [
     `# ${step.nodeLabel}`,
+    node?.type ? `节点类型: ${node.type}` : '',
     '',
     '## 输入',
     step.input !== undefined && step.input !== null ? JSON.stringify(step.input, null, 2) : '无',
@@ -534,6 +536,9 @@ function setExpanded(nextExpanded: boolean) {
                     class="w-3 h-3 text-muted-foreground shrink-0"
                   />
                   <span class="text-xs font-medium truncate flex-1">{{ step.nodeLabel }}</span>
+                  <span class="text-[10px] text-muted-foreground/60 shrink-0 font-mono">
+                    {{ snapshotNodeMap.get(step.nodeId)?.type || '' }}
+                  </span>
                   <span class="text-[10px] text-muted-foreground shrink-0">
                     {{ step.finishedAt ? formatDuration(step.startedAt, step.finishedAt) : '...' }}
                   </span>
