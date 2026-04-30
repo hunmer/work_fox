@@ -1,6 +1,9 @@
 import type { EmbeddedWorkflow, WorkflowNode } from './workflow-types'
 
 type CreateId = () => string
+interface DefaultEmbeddedWorkflowOptions {
+  boundaryLabelPrefix?: string
+}
 
 function defaultCreateId(): string {
   return `node_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
@@ -21,9 +24,17 @@ function createBoundaryNode(
   }
 }
 
-export function createDefaultEmbeddedWorkflow(createId: CreateId = defaultCreateId): EmbeddedWorkflow {
-  const startNode = createBoundaryNode('start', '开始', { x: 80, y: 140 }, createId)
-  const endNode = createBoundaryNode('end', '结束', { x: 420, y: 140 }, createId)
+function createBoundaryLabel(type: 'start' | 'end', prefix?: string): string {
+  const suffix = type === 'start' ? '开始' : '结束'
+  return prefix ? `${prefix}${suffix}` : suffix
+}
+
+export function createDefaultEmbeddedWorkflow(
+  createId: CreateId = defaultCreateId,
+  options: DefaultEmbeddedWorkflowOptions = {},
+): EmbeddedWorkflow {
+  const startNode = createBoundaryNode('start', createBoundaryLabel('start', options.boundaryLabelPrefix), { x: 80, y: 140 }, createId)
+  const endNode = createBoundaryNode('end', createBoundaryLabel('end', options.boundaryLabelPrefix), { x: 420, y: 140 }, createId)
 
   return {
     nodes: [startNode, endNode],

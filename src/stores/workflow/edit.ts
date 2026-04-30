@@ -342,12 +342,18 @@ export function createEditActions(
     return result
   }
 
+  function getLoopBoundaryLabel(bodyNode: WorkflowNode, type: 'start' | 'end'): string {
+    const suffix = type === 'start' ? '开始' : '结束'
+    const loopNode = currentWorkflow.value?.nodes.find((node) => node.id === bodyNode.composite?.rootId && node.type === LOOP_NODE_TYPE)
+    return `${loopNode?.label || '循环'}${suffix}`
+  }
+
   function createLoopBodyBoundaryNodes(bodyNode: WorkflowNode): void {
     if (!currentWorkflow.value || bodyNode.type !== LOOP_BODY_NODE_TYPE) return
     const startNode: WorkflowNode = {
       id: crypto.randomUUID(),
       type: 'start',
-      label: '开始',
+      label: getLoopBoundaryLabel(bodyNode, 'start'),
       position: { x: bodyNode.position.x + 80, y: bodyNode.position.y + 140 },
       data: {},
       composite: {
@@ -360,7 +366,7 @@ export function createEditActions(
     const endNode: WorkflowNode = {
       id: crypto.randomUUID(),
       type: 'end',
-      label: '结束',
+      label: getLoopBoundaryLabel(bodyNode, 'end'),
       position: { x: bodyNode.position.x + 420, y: bodyNode.position.y + 140 },
       data: {},
       composite: {

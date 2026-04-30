@@ -52,6 +52,11 @@ function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
 
+function createLoopBoundaryLabel(loopNode: WorkflowNode, type: 'start' | 'end'): string {
+  const suffix = type === 'start' ? '开始' : '结束'
+  return `${loopNode.label || '循环'}${suffix}`
+}
+
 function normalizeText(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
 }
@@ -1086,12 +1091,15 @@ export class ChatWorkflowToolExecutor {
     if (loopBodyNode?.type === LOOP_BODY_NODE_TYPE) {
       loopBodyNode.data = {
         ...loopBodyNode.data,
-        bodyWorkflow: createDefaultEmbeddedWorkflow(() => randomUUID()),
+        bodyWorkflow: createDefaultEmbeddedWorkflow(
+          () => randomUUID(),
+          { boundaryLabelPrefix: rootNode.label || '循环' },
+        ),
       }
       const startNode: WorkflowNode = {
         id: randomUUID(),
         type: 'start',
-        label: '开始',
+        label: createLoopBoundaryLabel(rootNode, 'start'),
         position: { x: loopBodyNode.position.x + 80, y: loopBodyNode.position.y + 140 },
         data: {},
         composite: {
@@ -1104,7 +1112,7 @@ export class ChatWorkflowToolExecutor {
       const endNode: WorkflowNode = {
         id: randomUUID(),
         type: 'end',
-        label: '结束',
+        label: createLoopBoundaryLabel(rootNode, 'end'),
         position: { x: loopBodyNode.position.x + 420, y: loopBodyNode.position.y + 140 },
         data: {},
         composite: {

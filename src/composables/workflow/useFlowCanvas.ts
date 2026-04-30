@@ -11,6 +11,7 @@ import {
   getCompositeParentId,
   LOOP_BODY_ROLE,
   LOOP_BODY_NODE_TYPE,
+  LOOP_NODE_TYPE,
 } from '@shared/workflow-composite'
 import { getHelperLines } from '@/components/workflow/helper-line-utils'
 
@@ -53,6 +54,12 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
   const helperLineHorizontal = ref<number | undefined>(undefined)
   const helperLineVertical = ref<number | undefined>(undefined)
   const activeLoopBodyDropTargetId = ref<string | null>(null)
+
+  function getLoopBoundaryLabel(bodyNode: WorkflowNode, type: 'start' | 'end'): string {
+    const suffix = type === 'start' ? '开始' : '结束'
+    const loopNode = store.currentWorkflow?.nodes.find((node) => node.id === bodyNode.composite?.rootId && node.type === LOOP_NODE_TYPE)
+    return `${loopNode?.label || '循环'}${suffix}`
+  }
 
   function syncScopeBoundaryLayout(scopeNodeId: string): void {
     const workflow = store.currentWorkflow
@@ -100,6 +107,9 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
       const migratedNodes = normalized.nodes
         .map((node): WorkflowNode => ({
           ...JSON.parse(JSON.stringify(node)),
+          label: node.type === 'start' || node.type === 'end'
+            ? getLoopBoundaryLabel(bodyNode, node.type)
+            : node.label,
           position: {
             x: bodyNode.position.x + node.position.x,
             y: bodyNode.position.y + node.position.y,
@@ -178,7 +188,7 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
       const startNode: WorkflowNode = {
         id: crypto.randomUUID(),
         type: 'start',
-        label: '开始',
+        label: getLoopBoundaryLabel(bodyNode, 'start'),
         position: { x: bodyNode.position.x + 80, y: bodyNode.position.y + 140 },
         data: {},
         composite: {
@@ -191,7 +201,7 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
       const endNode: WorkflowNode = {
         id: crypto.randomUUID(),
         type: 'end',
-        label: '结束',
+        label: getLoopBoundaryLabel(bodyNode, 'end'),
         position: { x: bodyNode.position.x + 420, y: bodyNode.position.y + 140 },
         data: {},
         composite: {
