@@ -190,8 +190,16 @@ const categories = computed(() => {
   return grouped
 })
 
+function isBoundaryNodeType(nodeType: string): boolean {
+  return nodeType === 'start' || nodeType === 'end'
+}
+
+function isCreateDisabled(nodeType: string): boolean {
+  return isBoundaryNodeType(nodeType) && workflowStore.hasNodeOfType(nodeType)
+}
+
 function onDragStart(event: DragEvent, nodeType: string) {
-  if (workflowStore.hasNodeOfType(nodeType)) {
+  if (isCreateDisabled(nodeType)) {
     event.preventDefault()
     return
   }
@@ -304,9 +312,9 @@ function getIcon(name: string) {
                 >
                   <HoverCardTrigger as-child>
                     <div
-                      :draggable="!workflowStore.hasNodeOfType(node.type)"
+                      :draggable="!isCreateDisabled(node.type)"
                       class="flex items-center gap-2 px-2 py-1.5 text-xs rounded"
-                      :class="workflowStore.hasNodeOfType(node.type)
+                      :class="isCreateDisabled(node.type)
                         ? 'opacity-40 cursor-not-allowed'
                         : 'cursor-grab hover:bg-muted/50 active:cursor-grabbing'"
                       @dragstart="onDragStart($event, node.type)"

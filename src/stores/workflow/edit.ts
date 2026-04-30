@@ -200,6 +200,7 @@ export function createEditActions(
   function canDeleteNode(nodeId: string): boolean {
     const node = getNode(nodeId)
     if (!node) return false
+    if (isScopeBoundaryWorkflowNode(node)) return false
     const parentNode = node.composite?.parentId ? getNode(node.composite.parentId) : null
     if (parentNode && isScopeBoundaryWorkflowNode(parentNode)) {
       return node.type !== 'start' && node.type !== 'end'
