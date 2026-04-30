@@ -885,6 +885,7 @@ function onConnect(params: any) {
 
     <!-- 分组管理面板 -->
     <FloatingPanel
+      id="group-manage"
       v-model:visible="groupPanelVisible"
       title="分组管理"
       :x="groupPanelX"

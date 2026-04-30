@@ -49,13 +49,16 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue"
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 
 const BALL_SIZE = 44
 const BALL_SNAP_THRESHOLD = 40 // 距边缘多少像素内触发吸附
 const BALL_HIDE_RATIO = 0.6
 
+const LS_PREFIX = 'floating-panel:'
+
 const props = defineProps({
+  id: { type: String, required: true },
   title: { type: String, default: "悬浮面板" },
   visible: { type: Boolean, default: true },
   x: { type: Number, default: 100 },
@@ -75,19 +78,46 @@ const emit = defineEmits([
   "update:zIndex"
 ])
 
-const collapsed = ref(false)
-const minimized = ref(props.initialMinimized)
+function loadState() {
+  try {
+    const raw = localStorage.getItem(LS_PREFIX + props.id)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
+function saveState() {
+  if (!props.id) return
+  const state = {
+    x: curX.value, y: curY.value,
+    width: curW.value, height: curH.value,
+    collapsed: collapsed.value,
+    minimized: minimized.value,
+    ballX: ballState.x, ballY: ballState.y,
+  }
+  localStorage.setItem(LS_PREFIX + props.id, JSON.stringify(state))
+}
+
+const saved = loadState()
+const curX = ref(saved?.x ?? props.x)
+const curY = ref(saved?.y ?? props.y)
+const curW = ref(saved?.width ?? props.width)
+const curH = ref(saved?.height ?? props.height)
+
+const collapsed = ref(saved?.collapsed ?? false)
+const minimized = ref(saved?.minimized ?? props.initialMinimized)
 
 // 悬浮球状态
 const ballState = reactive({
-  x: 0,
-  y: 0,
+  x: saved?.ballX ?? 0,
+  y: saved?.ballY ?? 0,
   dragging: false,
   moved: false,
   snapX: 0,
   hidden: false,
-  snapSide: 'right' // 'left' | 'right'
+  snapSide: 'right'
 })
+
+watch([curX, curY, curW, curH, collapsed, minimized, () => ballState.x, () => ballState.y], saveState)
 
 // 记录最小化前的面板位置
 const savedPanelPos = reactive({ x: 0, y: 0 })
@@ -108,10 +138,10 @@ const ballStyle = computed(() => ({
 }))
 
 const panelStyle = computed(() => ({
-  left: props.x + "px",
-  top: props.y + "px",
-  width: props.width + "px",
-  height: collapsed.value ? "40px" : props.height + "px",
+  left: curX.value + "px",
+  top: curY.value + "px",
+  width: curW.value + "px",
+  height: collapsed.value ? "40px" : curH.value + "px",
   zIndex: props.zIndex
 }))
 
@@ -125,8 +155,8 @@ function startDrag(e) {
   drag.moving = true
   drag.startX = e.clientX
   drag.startY = e.clientY
-  drag.startLeft = props.x
-  drag.startTop = props.y
+  drag.startLeft = curX.value
+  drag.startTop = curY.value
 
   document.addEventListener("mousemove", onDrag)
   document.addEventListener("mouseup", stopDrag)
@@ -137,8 +167,8 @@ function onDrag(e) {
   const dx = e.clientX - drag.startX
   const dy = e.clientY - drag.startY
 
-  emit("update:x", drag.startLeft + dx)
-  emit("update:y", drag.startTop + dy)
+  curX.value = drag.startLeft + dx
+  curY.value = drag.startTop + dy
 }
 
 function stopDrag() {
@@ -164,8 +194,8 @@ function startResize(e) {
   drag.resizing = true
   drag.startX = e.clientX
   drag.startY = e.clientY
-  drag.startWidth = props.width
-  drag.startHeight = props.height
+  drag.startWidth = curW.value
+  drag.startHeight = curH.value
 
   document.addEventListener("mousemove", onResize)
   document.addEventListener("mouseup", stopResize)
@@ -176,8 +206,8 @@ function onResize(e) {
   const dx = e.clientX - drag.startX
   const dy = e.clientY - drag.startY
 
-  emit("update:width", Math.max(200, drag.startWidth + dx))
-  emit("update:height", Math.max(120, drag.startHeight + dy))
+  curW.value = Math.max(200, drag.startWidth + dx)
+  curH.value = Math.max(120, drag.startHeight + dy)
 }
 
 function stopResize() {
@@ -189,11 +219,11 @@ function stopResize() {
 // ——— 最小化 / 恢复 ———
 
 function minimize() {
-  savedPanelPos.x = props.x
-  savedPanelPos.y = props.y
+  savedPanelPos.x = curX.value
+  savedPanelPos.y = curY.value
   // 悬浮球初始位置：面板右上角附近
-  ballState.x = props.x + props.width - BALL_SIZE - 10
-  ballState.y = props.y + 10
+  ballState.x = curX.value + curW.value - BALL_SIZE - 10
+  ballState.y = curY.value + 10
   snapBallToEdge()
   minimized.value = true
 }
@@ -202,8 +232,8 @@ function restore() {
   // 如果拖拽中移动了就不恢复（防止点击穿透）
   if (ballState.moved) return
   minimized.value = false
-  emit("update:x", savedPanelPos.x)
-  emit("update:y", savedPanelPos.y)
+  curX.value = savedPanelPos.x
+  curY.value = savedPanelPos.y
 }
 
 // ——— 悬浮球拖拽 ———
@@ -289,13 +319,15 @@ onMounted(() => {
   window.addEventListener("resize", onWindowResize)
 
   // 如果初始就是悬浮球模式，设置初始位置并吸附
-  if (props.initialMinimized) {
-    ballState.x = props.x + props.width - BALL_SIZE - 10
-    ballState.y = props.y + 10
+  if (minimized.value) {
+    if (!saved?.ballX) {
+      ballState.x = curX.value + curW.value - BALL_SIZE - 10
+      ballState.y = curY.value + 10
+    }
     snapBallToEdge()
     clampBallY()
-    savedPanelPos.x = props.x
-    savedPanelPos.y = props.y
+    savedPanelPos.x = curX.value
+    savedPanelPos.y = curY.value
   }
 })
 

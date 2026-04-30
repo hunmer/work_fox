@@ -153,6 +153,7 @@ onUnmounted(() => {
     <WsMessageMonitor />
     <DialogHost />
     <FloatingPanel
+      id="workflow-agent"
       v-model:visible="workflowAgentVisible"
       v-model:x="workflowAgentX"
       v-model:y="workflowAgentY"

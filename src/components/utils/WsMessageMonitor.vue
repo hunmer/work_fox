@@ -1,5 +1,6 @@
 <template>
   <FloatingPanel
+    id="ws-message-monitor"
     :visible="state.visible"
     :x="state.x"
     :y="state.y"
