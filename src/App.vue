@@ -160,6 +160,7 @@ onUnmounted(() => {
       v-model:height="workflowAgentHeight"
       v-model:zIndex="workflowAgentZIndex"
       title="AI"
+      :initial-minimized="true"
     >
       <div class="h-full min-h-0 -m-3">
         <ChatPanel :chat="workflowAgentChat" />

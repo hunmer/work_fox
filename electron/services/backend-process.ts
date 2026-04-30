@@ -45,7 +45,7 @@ class BackendProcessManager {
           ...process.env,
           WORKFOX_BACKEND_PORT: process.env.WORKFOX_BACKEND_PORT || '0',
           WORKFOX_BACKEND_HOST: '127.0.0.1',
-          WORKFOX_USER_DATA_DIR: app.getPath('userData'),
+          WORKFOX_USER_DATA_DIR: resolveUserDataDir(),
           WORKFOX_PLUGIN_DIR: resolvePluginDir(),
           WORKFOX_LOG_LEVEL: process.env.WORKFOX_LOG_LEVEL || 'info',
           WORKFOX_DEV: app.isPackaged ? '0' : '1',
@@ -147,6 +147,16 @@ class BackendProcessManager {
 function resolveBackendEntry(): string | null {
   const entry = join(app.getAppPath(), 'out', 'backend', 'main.js')
   return existsSync(entry) ? entry : null
+}
+
+function resolveUserDataDir(): string {
+  if (process.env.WORKFOX_USER_DATA_DIR) {
+    return process.env.WORKFOX_USER_DATA_DIR
+  }
+
+  return app.isPackaged
+    ? app.getPath('userData')
+    : join(app.getAppPath(), 'backend', 'data')
 }
 
 function resolvePluginDir(): string {

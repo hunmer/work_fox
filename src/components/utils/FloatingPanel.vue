@@ -62,7 +62,8 @@ const props = defineProps({
   y: { type: Number, default: 100 },
   width: { type: Number, default: 320 },
   height: { type: Number, default: 220 },
-  zIndex: { type: Number, default: 9999 }
+  zIndex: { type: Number, default: 9999 },
+  initialMinimized: { type: Boolean, default: false }
 })
 
 const emit = defineEmits([
@@ -75,7 +76,7 @@ const emit = defineEmits([
 ])
 
 const collapsed = ref(false)
-const minimized = ref(false)
+const minimized = ref(props.initialMinimized)
 
 // 悬浮球状态
 const ballState = reactive({
@@ -286,6 +287,16 @@ function onWindowResize() {
 
 onMounted(() => {
   window.addEventListener("resize", onWindowResize)
+
+  // 如果初始就是悬浮球模式，设置初始位置并吸附
+  if (props.initialMinimized) {
+    ballState.x = props.x + props.width - BALL_SIZE - 10
+    ballState.y = props.y + 10
+    snapBallToEdge()
+    clampBallY()
+    savedPanelPos.x = props.x
+    savedPanelPos.y = props.y
+  }
 })
 
 onBeforeUnmount(() => {
