@@ -31,6 +31,9 @@ export function createStoragePaths(config: BackendConfig) {
     operationHistoryPath(workflowId: string) {
       return join(baseDir, workflowId, 'operation_history.json')
     },
+    stagingPath(workflowId: string) {
+      return join(baseDir, workflowId, 'staging.json')
+    },
   }
 }
 

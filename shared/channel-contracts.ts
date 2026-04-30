@@ -10,6 +10,7 @@ import type {
 import type {
   ExecutionLog,
   OperationEntry,
+  StagedNode,
   Workflow,
   WorkflowFolder,
   WorkflowVersion,
@@ -407,6 +408,11 @@ export interface BackendChannelMap {
     { hookName: string; excludeWorkflowId?: string },
     { conflictWorkflowIds: string[]; hookUrl: string }
   >
+
+  // --- Staging ---
+  'staging:load': ChannelContract<{ workflowId: string }, StagedNode[]>
+  'staging:save': ChannelContract<{ workflowId: string; nodes: StagedNode[] }, EmptyResponse>
+  'staging:clear': ChannelContract<{ workflowId: string }, EmptyResponse>
 }
 
 export type BackendChannel = keyof BackendChannelMap

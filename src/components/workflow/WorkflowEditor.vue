@@ -48,6 +48,7 @@ import RightOperations from './RightOperations.vue'
 import GroupManagePanel from './GroupManagePanel.vue'
 import FloatingPanel from '@/components/utils/FloatingPanel.vue'
 import RightAssistant from './RightAssistant.vue'
+import RightStaging from './RightStaging.vue'
 import ExecutionBar from './ExecutionBar.vue'
 import WorkflowListDialog from './WorkflowListDialog.vue'
 import NodeSelectDialog from './NodeSelectDialog.vue'
@@ -108,6 +109,7 @@ const FLOW_ID = `workflow-editor-flow-${props.tab.id}`
 
 const {
   project,
+  getViewport,
   setViewport,
   vueFlowRef,
   zoomIn,
@@ -219,6 +221,7 @@ const RIGHT_TAB_MAP: Record<string, string> = {
   version: 'right-version',
   operations: 'right-operations',
   'ai-assistant': 'right-assistant',
+  staging: 'right-staging',
 }
 
 function activateRightPanelTab(tab: string) {
@@ -241,6 +244,7 @@ const componentRegistry: ComponentRegistry = {
   'right-version': RightVersion,
   'right-operations': RightOperations,
   'right-assistant': RightAssistant,
+  'right-staging': RightStaging,
   'exec-bar': ExecutionBar,
 }
 
@@ -301,6 +305,8 @@ const canvasContext: WorkflowCanvasContext = {
   onNodesInitialized: handleNodesInitialized,
   onEdgeInsertNode,
   fitView,
+  getViewport,
+  setViewport,
   openNodeSelectAtPosition,
   openNodeInfoDialog,
   openGroupPickerDialog,

@@ -2,11 +2,12 @@
 import { ref, computed, watch } from 'vue'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Settings2, GitBranch, History, Bot } from 'lucide-vue-next'
+import { Settings2, GitBranch, History, Bot, Archive } from 'lucide-vue-next'
 import NodeProperties from './NodeProperties.vue'
 import VersionControl from './VersionControl.vue'
 import OperationHistory from './OperationHistory.vue'
 import ChatPanel from '@/components/chat/ChatPanel.vue'
+import StagingPanel from './StagingPanel.vue'
 import { createChatStore } from '@/stores/chat'
 import { useWorkflowStore } from '@/stores/workflow'
 
@@ -106,6 +107,23 @@ watch(activeTab, async (tab) => {
                 AI 助手
               </TooltipContent>
             </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <TabsTrigger
+                  value="staging"
+                  class="text-xs h-5"
+                >
+                  <Archive class="w-3.5 h-3.5" />
+                </TabsTrigger>
+              </TooltipTrigger>
+              <TooltipContent
+                side="bottom"
+                class="text-xs"
+              >
+                暂存箱
+              </TooltipContent>
+            </Tooltip>
           </TabsList>
         </TooltipProvider>
       </div>
@@ -139,6 +157,13 @@ watch(activeTab, async (tab) => {
           :chat="workflowChat"
           :enabled-plugins="workflowStore.currentWorkflow?.enabledPlugins || []"
         />
+      </TabsContent>
+
+      <TabsContent
+        value="staging"
+        class="flex-1 min-h-0 mt-0"
+      >
+        <StagingPanel />
       </TabsContent>
     </Tabs>
   </div>

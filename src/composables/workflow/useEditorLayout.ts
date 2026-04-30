@@ -42,6 +42,7 @@ const DEFAULT_LAYOUT: LayoutConfig = {
               { type: 'component', componentType: 'right-version', title: '版本控制' },
               { type: 'component', componentType: 'right-operations', title: '操作历史' },
               { type: 'component', componentType: 'right-assistant', title: 'AI 助手' },
+              { type: 'component', componentType: 'right-staging', title: '暂存箱' },
             ],
           },
         ],

@@ -24,6 +24,8 @@ import { ClientNodeCache } from './chat/client-node-cache'
 import { DashboardStatsStore } from './dashboard/stats-store'
 import { registerDashboardChannels } from './ws/dashboard-channels'
 import { registerTriggerChannels } from './ws/trigger-channels'
+import { BackendStagingStore } from './storage/staging-store'
+import { registerStagingChannels } from './ws/staging-channels'
 
 async function main(): Promise<void> {
   const config = loadBackendConfig()
@@ -34,6 +36,7 @@ async function main(): Promise<void> {
   const workflowVersionStore = new BackendWorkflowVersionStore(paths)
   const executionLogStore = new BackendExecutionLogStore(paths)
   const operationHistoryStore = new BackendOperationHistoryStore(paths)
+  const stagingStore = new BackendStagingStore(paths)
   const aiProviderStore = new BackendAIProviderStore(paths.userDataDir)
   const chatHistoryStore = new BackendChatHistoryStore(paths.userDataDir)
   const agentSettingsStore = new BackendSettingsStore(paths.userDataDir, 'agent-settings.json')
@@ -89,6 +92,7 @@ async function main(): Promise<void> {
   )
   registerDashboardChannels(backend.router, { dashboardStatsStore })
   registerTriggerChannels(backend.router, triggerService)
+  registerStagingChannels(backend.router, { stagingStore })
   backend.connections.onClientDisconnected((clientId) => {
     clientNodeCache.unregisterClient(clientId)
   })

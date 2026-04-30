@@ -4,7 +4,7 @@ import { VueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { MiniMap } from '@vue-flow/minimap'
 import { Controls } from '@vue-flow/controls'
-import { Plus, Maximize, CircleCheck, CircleSlash, SkipForward, Info, Group, Trash2, Flag, FlagOff, Settings, Copy, FolderTree, Workflow, Palette } from 'lucide-vue-next'
+import { Plus, Maximize, CircleCheck, CircleSlash, SkipForward, Info, Group, Trash2, Flag, FlagOff, Settings, Copy, FolderTree, Workflow, Palette, Archive, ArchiveRestore } from 'lucide-vue-next'
 import CustomEdge from './CustomEdge.vue'
 import HelperLines from './HelperLines.vue'
 import CanvasToolbar from './CanvasToolbar.vue'
@@ -224,6 +224,20 @@ function handleCloneNode() {
   const id = targetNodeIds.value[0]
   if (id && store.canCloneNode(id)) {
     store.cloneNode(id)
+  }
+}
+
+function handleCopyToStaging() {
+  const id = targetNodeIds.value[0]
+  if (id) {
+    store.copyNodeToStaging(id)
+  }
+}
+
+function handleMoveToStaging() {
+  const id = targetNodeIds.value[0]
+  if (id && store.canDeleteNode(id)) {
+    store.moveNodeToStaging(id, store.removeNode)
   }
 }
 
@@ -527,6 +541,19 @@ async function handleMergeToWorkflow() {
                 <Copy class="w-4 h-4 mr-2" />
                 复制节点
               </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem @click="handleCopyToStaging">
+                <Archive class="w-4 h-4 mr-2" />
+                复制到暂存
+              </ContextMenuItem>
+              <ContextMenuItem
+                v-if="targetNodeIds[0] && store.canDeleteNode(targetNodeIds[0])"
+                @click="handleMoveToStaging"
+              >
+                <ArchiveRestore class="w-4 h-4 mr-2" />
+                移动到暂存
+              </ContextMenuItem>
+              <ContextMenuSeparator />
               <ContextMenuItem
                 v-if="targetNodeIds[0] && store.canDeleteNode(targetNodeIds[0])"
                 class="text-destructive"

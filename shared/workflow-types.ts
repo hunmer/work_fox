@@ -272,3 +272,14 @@ export interface OperationEntry {
   timestamp: number
   snapshot?: string
 }
+
+/** 暂存箱节点条目 */
+export interface StagedNode {
+  id: string
+  sourceNodeId: string
+  type: string
+  label: string
+  data: Record<string, any>
+  composite?: WorkflowNodeCompositeMeta
+  stagedAt: number
+}

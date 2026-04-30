@@ -15,6 +15,7 @@ import { createExecutionActions } from './execution'
 import { createDebugActions } from './debug'
 import { createGroupActions } from './group'
 import { createAIActions } from './ai'
+import { createStagingManager } from './staging'
 
 export type WorkflowStore = ReturnType<typeof createWorkflowStore>
 export type { WorkflowChanges }
@@ -84,6 +85,7 @@ export function createWorkflowStore(tabId: string) {
     )
     const debugActions = createDebugActions(currentWorkflow, executionContext)
     const aiActions = createAIActions(currentWorkflow, undoRedo)
+    const stagingMgr = createStagingManager(currentWorkflow, api)
 
     const isPreview = ref(false)
     let _prePreviewWorkflow: Workflow | null = null
@@ -120,6 +122,7 @@ export function createWorkflowStore(tabId: string) {
       versionMgr.loadVersions()
       undoRedo.reset()
       undoRedo.loadOperationHistory()
+      stagingMgr.loadStagedNodes()
     })
 
     return {
@@ -187,6 +190,28 @@ export function createWorkflowStore(tabId: string) {
       listenForUIInteractions,
       ...aiActions,
       ...groupActions,
+      stagedNodes: stagingMgr.stagedNodes,
+      loadStagedNodes: stagingMgr.loadStagedNodes,
+      copyNodeToStaging: stagingMgr.copyNodeToStaging,
+      moveNodeToStaging: stagingMgr.moveNodeToStaging,
+      removeStagedNode: stagingMgr.removeStagedNode,
+      clearStagedNodes: stagingMgr.clearStagedNodes,
+      pasteStagedNode(stagedNode: import('@shared/workflow-types').StagedNode) {
+        const wf = currentWorkflow.value
+        if (!wf) return
+        const nodes = wf.nodes
+        let position = { x: 200, y: 200 }
+        if (nodes.length > 0) {
+          const avgX = nodes.reduce((s: number, n: any) => s + n.position.x, 0) / nodes.length
+          const avgY = nodes.reduce((s: number, n: any) => s + n.position.y, 0) / nodes.length
+          position = { x: Math.round(avgX) + 30, y: Math.round(avgY) + 30 }
+        }
+        const newNode = editActions.addNode(stagedNode.type, position)
+        if (newNode) {
+          newNode.data = JSON.parse(JSON.stringify(stagedNode.data))
+          newNode.label = stagedNode.label
+        }
+      },
     }
   })
   return useStore()

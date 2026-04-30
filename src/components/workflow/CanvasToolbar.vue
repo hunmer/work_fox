@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, inject, nextTick } from 'vue'
 import { RotateCcw, RotateCw, LayoutGrid, EyeOff, Map, Download, Image, FileImage } from 'lucide-vue-next'
-import { toPng, toJpeg } from 'html-to-image'
+import { domToPng, domToJpeg } from 'modern-screenshot'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -12,8 +12,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useWorkflowStore } from '@/stores/workflow'
 import { useAgentSettingsStore } from '@/stores/agent-settings'
+import { WORKFLOW_CANVAS_CONTEXT_KEY } from './workflowCanvasContext'
 import dagre from '@dagrejs/dagre'
 
+const canvas = inject(WORKFLOW_CANVAS_CONTEXT_KEY)
 const store = useWorkflowStore()
 const agentSettings = useAgentSettingsStore()
 const isExporting = ref(false)
@@ -51,16 +53,27 @@ function getVueFlowElement(): HTMLElement | null {
 
 async function exportCanvas(format: 'png' | 'jpeg') {
   const el = getVueFlowElement()
-  if (!el || isExporting.value) return
+  if (!el || isExporting.value || !canvas) return
 
   isExporting.value = true
   try {
+    // 保存当前视口状态
+    const savedViewport = canvas.getViewport()
+
+    // 适配到所有节点可见
+    canvas.fitView()
+    await nextTick()
+    await new Promise(r => setTimeout(r, 150))
+
     const workflowName = store.currentWorkflow?.label || 'workflow'
     const fileName = `${workflowName}-${Date.now()}`
 
     const dataUrl = format === 'jpeg'
-      ? await toJpeg(el, { quality: 0.95, backgroundColor: '#ffffff' })
-      : await toPng(el)
+      ? await domToJpeg(el, { quality: 0.95, backgroundColor: '#ffffff', scale: 2 })
+      : await domToPng(el, { backgroundColor: null, scale: 2 })
+
+    // 恢复原始视口
+    canvas.setViewport(savedViewport)
 
     const link = document.createElement('a')
     link.download = `${fileName}.${format}`
@@ -165,21 +178,16 @@ async function exportCanvas(format: 'png' | 'jpeg') {
         </TooltipContent>
       </Tooltip>
       <DropdownMenu>
-        <Tooltip>
-          <TooltipTrigger as-child>
-            <DropdownMenuTrigger as-child>
-              <Button
-                variant="ghost"
-                size="sm"
-                class="h-7 w-7 p-0"
-                :disabled="!store.currentWorkflow?.nodes.length || isExporting"
-              >
-                <Download class="w-3.5 h-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="top" class="text-xs">导出画布</TooltipContent>
-        </Tooltip>
+        <DropdownMenuTrigger as-child>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-7 w-7 p-0"
+            :disabled="!store.currentWorkflow?.nodes.length || isExporting"
+          >
+            <Download class="w-3.5 h-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
         <DropdownMenuContent align="center" side="top">
           <DropdownMenuItem @click="exportCanvas('png')">
             <FileImage class="w-4 h-4 mr-2" />

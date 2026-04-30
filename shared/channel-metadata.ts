@@ -162,6 +162,11 @@ export const backendChannelMetadata: Record<BackendChannel, ChannelMetadata> = {
   // --- Trigger ---
   'trigger:validate-cron': crud('trigger:validate-cron', 'Validate cron expression'),
   'trigger:check-hook-name': crud('trigger:check-hook-name', 'Check hook name bindings'),
+
+  // --- Staging ---
+  'staging:load': crud('staging:load', 'Load workflow staging box'),
+  'staging:save': mutation('staging:save', 'Save workflow staging box'),
+  'staging:clear': mutation('staging:clear', 'Clear workflow staging box'),
 }
 
 function crud(channel: BackendChannel, description: string): ChannelMetadata {
