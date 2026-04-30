@@ -223,28 +223,6 @@ function formatTime(timestamp: number): string {
           >
             + 新建对话
           </Button>
-          <div class="flex gap-1 px-2">
-            <Button
-              v-if="isElectron"
-              variant="ghost"
-              size="sm"
-              class="flex-1 justify-start text-[11px] h-6 text-muted-foreground"
-              @click="openSessionFile"
-            >
-              <FolderOpen class="w-3 h-3 mr-1" />
-              打开文件位置
-            </Button>
-            <Button
-              v-else
-              variant="ghost"
-              size="sm"
-              class="flex-1 justify-start text-[11px] h-6 text-muted-foreground"
-              @click="copySessionPath"
-            >
-              <FolderOpen class="w-3 h-3 mr-1" />
-              复制文件路径
-            </Button>
-          </div>
           <div
             v-for="session in recentSessions"
             :key="session.id"
@@ -257,6 +235,14 @@ function formatTime(timestamp: number): string {
               <div class="truncate">{{ session.title || '未命名对话' }}</div>
               <div class="text-[10px] text-muted-foreground">{{ formatTime(session.updatedAt) }}</div>
             </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              class="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100"
+              @click.stop="isElectron ? openSessionFile() : copySessionPath()"
+            >
+              <FolderOpen class="h-3 w-3" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"

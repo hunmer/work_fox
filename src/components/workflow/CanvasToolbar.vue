@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, inject, nextTick } from 'vue'
-import { RotateCcw, RotateCw, LayoutGrid, EyeOff, Map, Download, Image, FileImage } from 'lucide-vue-next'
+import { RotateCcw, RotateCw, LayoutGrid, EyeOff, Map as MapIcon, Download, Image, FileImage } from 'lucide-vue-next'
 import { domToPng, domToJpeg } from 'modern-screenshot'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -209,7 +209,7 @@ async function exportCanvas(format: 'png' | 'jpeg') {
             :class="{ 'text-blue-500': agentSettings.minimapVisible }"
             @click="agentSettings.toggleMinimap()"
           >
-            <Map class="w-3.5 h-3.5" />
+            <MapIcon class="w-3.5 h-3.5" />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="top" class="text-xs">
