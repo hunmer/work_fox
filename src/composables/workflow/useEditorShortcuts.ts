@@ -10,7 +10,7 @@ interface WorkflowShortcutHandlerOptions {
   copySelectedNodes: () => void
   pasteClipboardNodes: () => void | Promise<void>
   deleteSelected: () => void
-  selectAllNodes: () => void
+  selectAllNodes?: () => void
 }
 
 export function createWorkflowShortcutHandler(options: WorkflowShortcutHandlerOptions) {
@@ -39,6 +39,7 @@ export function createWorkflowShortcutHandler(options: WorkflowShortcutHandlerOp
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
       if (isInputElement(e.target as HTMLElement)) return
+      if (hasTextSelection()) return
       e.preventDefault()
       options.copySelectedNodes()
       return
@@ -52,6 +53,7 @@ export function createWorkflowShortcutHandler(options: WorkflowShortcutHandlerOp
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
       if (isInputElement(e.target as HTMLElement)) return
+      if (!options.selectAllNodes) return
       e.preventDefault()
       options.selectAllNodes()
       return
@@ -70,6 +72,11 @@ function isInputElement(el: HTMLElement | null): boolean {
   if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return true
   if (el.isContentEditable) return true
   return false
+}
+
+function hasTextSelection(): boolean {
+  const selection = window.getSelection()
+  return !!selection && selection.type === 'Range' && selection.toString().length > 0
 }
 
 export function useEditorShortcuts(
