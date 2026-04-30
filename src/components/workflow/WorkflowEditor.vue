@@ -142,6 +142,8 @@ const {
   handleConnect,
   handleNodesInitialized,
   syncScopeBoundaryLayout,
+  helperLineHorizontal,
+  helperLineVertical,
 } = useFlowCanvas(store, FLOW_ID)
 
 const {
@@ -287,6 +289,8 @@ const canvasContext: WorkflowCanvasContext = {
   nodesConnectable: computed(() => !store.isPreview),
   edgesUpdatable: computed(() => !store.isPreview),
   minimapVisible: computed(() => agentSettings.minimapVisible),
+  helperLineHorizontal,
+  helperLineVertical,
   onConnect,
   onConnectStart,
   onConnectEnd,

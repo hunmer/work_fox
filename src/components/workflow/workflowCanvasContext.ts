@@ -1,4 +1,4 @@
-import type { ComputedRef, InjectionKey, Raw } from 'vue'
+import type { ComputedRef, InjectionKey, Raw, Ref } from 'vue'
 import type { ConnectionMode } from '@vue-flow/core'
 import type CustomNodeWrapper from './CustomNodeWrapper.vue'
 import type GroupNode from './GroupNode.vue'
@@ -15,6 +15,8 @@ export interface WorkflowCanvasContext {
   nodesConnectable: ComputedRef<boolean>
   edgesUpdatable: ComputedRef<boolean>
   minimapVisible: ComputedRef<boolean>
+  helperLineHorizontal: Ref<number | undefined>
+  helperLineVertical: Ref<number | undefined>
   onConnect: (params: any) => void
   onConnectStart: (params: { nodeId?: string; handleId?: string | null }) => void
   onConnectEnd: (event?: MouseEvent) => void

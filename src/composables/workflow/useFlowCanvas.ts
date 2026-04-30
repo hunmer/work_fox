@@ -1,5 +1,6 @@
-import { computed, watch, nextTick, onUnmounted } from 'vue'
+import { computed, ref, watch, nextTick, onUnmounted } from 'vue'
 import { useVueFlow, MarkerType } from '@vue-flow/core'
+import type { GraphNode, NodeChange } from '@vue-flow/core'
 import type { WorkflowStore } from '@/stores/workflow'
 import type { WorkflowGroup, WorkflowNode } from '@/lib/workflow/types'
 import { normalizeEmbeddedWorkflow } from '@shared/embedded-workflow'
@@ -11,6 +12,7 @@ import {
   LOOP_BODY_ROLE,
   LOOP_BODY_NODE_TYPE,
 } from '@shared/workflow-composite'
+import { getHelperLines } from '@/components/workflow/helper-line-utils'
 
 const CONTAINER_PADDING = {
   top: 56,
@@ -44,7 +46,12 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     setViewport,
     fitView,
     updateNodeInternals,
+    getNodes,
   } = flowStore
+
+  // ── 对齐辅助线状态 ──
+  const helperLineHorizontal = ref<number | undefined>(undefined)
+  const helperLineVertical = ref<number | undefined>(undefined)
 
   function syncScopeBoundaryLayout(scopeNodeId: string): void {
     const workflow = store.currentWorkflow
@@ -465,6 +472,26 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
 
   onNodesChange((changes) => {
     if (store.isPreview) return
+
+    // ── 对齐线：单节点拖拽时计算 snap 并覆写 position ──
+    helperLineHorizontal.value = undefined
+    helperLineVertical.value = undefined
+    if (
+      changes.length === 1
+      && changes[0].type === 'position'
+      && changes[0].dragging
+      && changes[0].position
+    ) {
+      const helperLines = getHelperLines(
+        changes[0],
+        getNodes.value as GraphNode[],
+      )
+      changes[0].position.x = helperLines.snapPosition.x ?? changes[0].position.x
+      changes[0].position.y = helperLines.snapPosition.y ?? changes[0].position.y
+      helperLineHorizontal.value = helperLines.horizontal
+      helperLineVertical.value = helperLines.vertical
+    }
+
     let nextSelectedNodeIds: string[] | null = null
     const resizingGroupIds = new Set(
       changes
@@ -718,5 +745,7 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     handleConnect,
     handleNodesInitialized,
     syncScopeBoundaryLayout,
+    helperLineHorizontal,
+    helperLineVertical,
   }
 }

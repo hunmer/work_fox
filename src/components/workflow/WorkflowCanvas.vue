@@ -6,6 +6,7 @@ import { MiniMap } from '@vue-flow/minimap'
 import { Controls } from '@vue-flow/controls'
 import { Plus, Maximize, CircleCheck, CircleSlash, SkipForward, Info, Group, Trash2, Flag, FlagOff, Settings, Copy, FolderTree, Workflow, Palette } from 'lucide-vue-next'
 import CustomEdge from './CustomEdge.vue'
+import HelperLines from './HelperLines.vue'
 import CanvasToolbar from './CanvasToolbar.vue'
 import { WORKFLOW_CANVAS_CONTEXT_KEY } from './workflowCanvasContext'
 import { useWorkflowStore } from '@/stores/workflow'
@@ -311,6 +312,10 @@ async function handleMergeToWorkflow() {
           @pane-contextmenu="onPaneContextMenu"
         >
           <Background />
+          <HelperLines
+            :horizontal="canvas.helperLineHorizontal.value"
+            :vertical="canvas.helperLineVertical.value"
+          />
           <MiniMap v-if="canvas.minimapVisible.value" />
           <template #edge-custom="edgeProps">
             <CustomEdge
