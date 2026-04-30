@@ -399,6 +399,8 @@ export interface BackendChannelMap {
   'executionPreset:list': ChannelContract<{ workflowId: string }, ExecutionInputPreset[]>
   'executionPreset:save': ChannelContract<{ workflowId: string; preset: ExecutionInputPreset }, EmptyResponse>
   'executionPreset:delete': ChannelContract<{ workflowId: string; presetId: string }, EmptyResponse>
+  'executionPreset:get-default': ChannelContract<{ workflowId: string }, { presetId: string | null }>
+  'executionPreset:set-default': ChannelContract<{ workflowId: string; presetId: string | null }, EmptyResponse>
 
   // --- Trigger ---
   'trigger:validate-cron': ChannelContract<

@@ -11,4 +11,10 @@ export const executionPresetApi = {
   delete(workflowId: string, presetId: string): Promise<void> {
     return wsBridge.invoke('executionPreset:delete', { workflowId, presetId })
   },
+  getDefault(workflowId: string): Promise<string | null> {
+    return wsBridge.invoke('executionPreset:get-default', { workflowId }).then(r => r.presetId)
+  },
+  setDefault(workflowId: string, presetId: string | null): Promise<void> {
+    return wsBridge.invoke('executionPreset:set-default', { workflowId, presetId })
+  },
 }

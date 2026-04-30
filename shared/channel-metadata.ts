@@ -159,6 +159,8 @@ export const backendChannelMetadata: Record<BackendChannel, ChannelMetadata> = {
   'executionPreset:list': crud('executionPreset:list', 'List execution input presets'),
   'executionPreset:save': mutation('executionPreset:save', 'Save execution input preset'),
   'executionPreset:delete': mutation('executionPreset:delete', 'Delete execution input preset'),
+  'executionPreset:get-default': crud('executionPreset:get-default', 'Get default execution preset'),
+  'executionPreset:set-default': mutation('executionPreset:set-default', 'Set default execution preset'),
 
   // --- Trigger ---
   'trigger:validate-cron': crud('trigger:validate-cron', 'Validate cron expression'),

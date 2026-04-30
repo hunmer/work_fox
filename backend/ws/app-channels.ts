@@ -145,6 +145,29 @@ export function registerAppChannels(router: WSRouter, services: AppServices): vo
     const map = await getPresetMap()
     const list = map[workflowId] ?? []
     map[workflowId] = list.filter((p: any) => p.id !== presetId)
+    // clear default if the deleted preset was the default
+    const defaults = map._defaults ?? {}
+    if (defaults[workflowId] === presetId) {
+      delete defaults[workflowId]
+      map._defaults = defaults
+    }
+    await executionPresetStore.set(map)
+    return undefined
+  })
+  router.register('executionPreset:get-default', async ({ workflowId }) => {
+    const map = await getPresetMap()
+    const defaults = map._defaults ?? {}
+    return { presetId: defaults[workflowId] ?? null }
+  })
+  router.register('executionPreset:set-default', async ({ workflowId, presetId }) => {
+    const map = await getPresetMap()
+    const defaults = map._defaults ?? {}
+    if (presetId) {
+      defaults[workflowId] = presetId
+    } else {
+      delete defaults[workflowId]
+    }
+    map._defaults = defaults
     await executionPresetStore.set(map)
     return undefined
   })

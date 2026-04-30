@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter, SheetDescription } from '@/components/ui/sheet'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Play, BookmarkPlus, Trash2, Bookmark } from 'lucide-vue-next'
+import { Play, BookmarkPlus, Trash2, Bookmark, Pin, X } from 'lucide-vue-next'
 import type { OutputField } from '@shared/workflow-types'
 import type { ExecutionInputPreset } from '@shared/channel-contracts'
 import { executionPresetApi } from '@/lib/backend-api/execution-preset'
@@ -25,6 +25,7 @@ const formValues = ref<Record<string, string>>({})
 const presets = ref<ExecutionInputPreset[]>([])
 const presetName = ref('')
 const presetPopoverOpen = ref(false)
+const defaultPresetId = ref<string | null>(null)
 
 watch(() => props.open, async (open) => {
   if (!open) return
@@ -35,6 +36,13 @@ watch(() => props.open, async (open) => {
   formValues.value = defaults
   presetName.value = ''
   await loadPresets()
+  // auto-apply default preset
+  const savedDefault = await executionPresetApi.getDefault(props.workflowId)
+  defaultPresetId.value = savedDefault
+  if (savedDefault) {
+    const preset = presets.value.find(p => p.id === savedDefault)
+    if (preset) applyPreset(preset, true)
+  }
 })
 
 async function loadPresets() {
@@ -46,7 +54,7 @@ async function loadPresets() {
   }
 }
 
-function applyPreset(preset: ExecutionInputPreset) {
+function applyPreset(preset: ExecutionInputPreset, silent = false) {
   const filled: Record<string, string> = {}
   for (const field of props.fields) {
     if (!field.key) continue
@@ -54,7 +62,14 @@ function applyPreset(preset: ExecutionInputPreset) {
     filled[field.key] = v !== undefined ? String(v) : (formValues.value[field.key] ?? '')
   }
   formValues.value = filled
-  presetPopoverOpen.value = false
+  defaultPresetId.value = preset.id
+  if (!silent) presetPopoverOpen.value = false
+  executionPresetApi.setDefault(props.workflowId, preset.id)
+}
+
+async function clearDefault() {
+  defaultPresetId.value = null
+  await executionPresetApi.setDefault(props.workflowId, null)
 }
 
 async function savePreset() {
@@ -85,6 +100,9 @@ async function savePreset() {
 async function deletePreset(presetId: string) {
   if (!props.workflowId) return
   await executionPresetApi.delete(props.workflowId, presetId)
+  if (defaultPresetId.value === presetId) {
+    defaultPresetId.value = null
+  }
   await loadPresets()
 }
 
@@ -131,10 +149,21 @@ const hasFormValues = computed(() => {
                   v-for="preset in presets"
                   :key="preset.id"
                   class="group flex items-center gap-1 rounded px-2 py-1.5 hover:bg-accent cursor-pointer text-sm"
+                  :class="{ 'bg-accent/50': defaultPresetId === preset.id }"
                   @click="applyPreset(preset)"
                 >
                   <Bookmark class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   <span class="flex-1 truncate">{{ preset.name }}</span>
+                  <Pin v-if="defaultPresetId === preset.id" class="h-3 w-3 shrink-0 text-primary" />
+                  <Button
+                    v-if="defaultPresetId === preset.id"
+                    variant="ghost"
+                    size="icon"
+                    class="h-5 w-5 shrink-0"
+                    @click.stop="clearDefault"
+                  >
+                    <X class="h-3 w-3 text-muted-foreground" />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"
