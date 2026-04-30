@@ -213,13 +213,15 @@ function startBallDrag(e) {
 
   const startX = e.clientX
   const startY = e.clientY
-  const originX = ballState.x
+  // 用 snapX（视觉位置）而非 x（吸附前位置）作为起点，避免跳动
+  const originX = ballState.snapX
   const originY = ballState.y
 
   function onMove(ev) {
     ballState.x = originX + (ev.clientX - startX)
     ballState.y = originY + (ev.clientY - startY)
     ballState.snapX = ballState.x
+    ballState.hidden = false
     ballState.moved = true
   }
 
@@ -228,7 +230,6 @@ function startBallDrag(e) {
     document.removeEventListener("mousemove", onMove)
     document.removeEventListener("mouseup", onUp)
 
-    // 短暂延迟重置 moved，让 click 事件先处理
     if (ballState.moved) {
       setTimeout(() => { ballState.moved = false }, 50)
     }
