@@ -43,16 +43,19 @@ function buildStreamUpdates(
   streamingThinkingBlocks: { value: ChatThinkingBlock[] },
   streamingUsage: { value: { inputTokens: number; outputTokens: number } | null },
 ): Partial<ChatMessage> {
-  return {
+  const updates: Partial<ChatMessage> = {
     content: streamingToken.value,
-    thinkingBlocks: streamingThinkingBlocks.value.length > 0
-      ? JSON.parse(JSON.stringify(streamingThinkingBlocks.value))
-      : undefined,
-    toolCalls: streamingToolCalls.value.length > 0
-      ? JSON.parse(JSON.stringify(toRaw(streamingToolCalls.value)))
-      : undefined,
-    usage: streamingUsage.value ? { ...toRaw(streamingUsage.value) } : undefined,
   }
+  if (streamingThinkingBlocks.value.length > 0) {
+    updates.thinkingBlocks = JSON.parse(JSON.stringify(streamingThinkingBlocks.value))
+  }
+  if (streamingToolCalls.value.length > 0) {
+    updates.toolCalls = JSON.parse(JSON.stringify(toRaw(streamingToolCalls.value)))
+  }
+  if (streamingUsage.value) {
+    updates.usage = { ...toRaw(streamingUsage.value) }
+  }
+  return updates
 }
 
 function isAskUserQuestionToolName(name: string): boolean {
@@ -524,7 +527,6 @@ export function createChatStore(scope: string) {
       const msgId = streamingMessageId.value
       if (msgId) {
         const updates = buildStreamUpdates(streamingToken, streamingToolCalls, streamingThinkingBlocks, streamingUsage)
-        delete updates.usage
         const sk = getScopeKey()
         const sid = currentSessionId.value
         if (sk && sid) await persistMessageUpdate(msgId, messages, updates, sk, sid)
@@ -622,7 +624,6 @@ export function createChatStore(scope: string) {
       const msgId = streamingMessageId.value
       if (msgId) {
         const updates = buildStreamUpdates(streamingToken, streamingToolCalls, streamingThinkingBlocks, streamingUsage)
-        delete updates.usage
         const sk = getScopeKey()
         const sid = currentSessionId.value
         if (sk && sid) await persistMessageUpdate(msgId, messages, updates, sk, sid)
@@ -664,6 +665,7 @@ export function createChatStore(scope: string) {
       retryMessage: (messageId: string) => messageActions.retryMessage(messageId, streamAssistantReply),
       editMessage: (messageId: string, newContent: string) => messageActions.editMessage(messageId, newContent, streamAssistantReply),
       rerunTool: messageActions.rerunTool,
+      scopeKey,
       switchToWorkflowSession: sessionActions.switchToWorkflowSession,
       init,
     }

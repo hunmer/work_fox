@@ -266,13 +266,6 @@ const outputRawText = computed(() => props.message.content || '')
 /** 是否显示统计栏（时间或 token） */
 const showStats = computed(() => !isUser.value && (durationMs.value !== null || displayUsage.value !== null))
 
-/** 最后一个文本段的索引 */
-const lastTextSegmentIndex = computed(() => {
-  let last = -1
-  segments.value.forEach((seg, i) => { if (seg.type === 'text' && seg.content) last = i })
-  return last
-})
-
 function formatTokenCount(n: number): string {
   if (n < 1000) return String(n)
   return `${(n / 1000).toFixed(1)}k`
@@ -409,14 +402,6 @@ const segments = computed<ContentSegment[]>(() => {
         >
       </div>
 
-      <!-- 正在思考占位：streaming 期间、无文本内容时始终显示 -->
-      <div
-        v-if="isStreaming && !displayContent"
-        class="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm text-muted-foreground bg-muted"
-      >
-        <span class="thinking-dots">正在思考</span>
-      </div>
-
       <!-- 编辑模式 -->
       <div
         v-if="isEditing"
@@ -470,30 +455,6 @@ const segments = computed<ContentSegment[]>(() => {
               :mode="isStreaming ? 'streaming' : 'static'"
               :is-dark="themeStore.theme === 'dark'"
             />
-            <!-- 统计信息嵌入最后一个文本气泡右下角 -->
-            <div
-              v-if="i === lastTextSegmentIndex && showStats"
-              class="flex items-center justify-end gap-2 mt-1 pt-1 border-t border-border/10 text-[11px] text-muted-foreground/50 cursor-pointer hover:text-muted-foreground/80 transition-colors"
-              @click="showRawDialog = true"
-            >
-              <span
-                v-if="durationMs !== null"
-                class="inline-flex items-center gap-1"
-              >
-                <span
-                  v-if="isStreaming"
-                  class="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"
-                />
-                {{ formatDuration(durationMs) }}
-              </span>
-              <span
-                v-if="displayUsage"
-                class="inline-flex items-center gap-1.5"
-              >
-                <span title="输入 tokens">↑ {{ formatTokenCount(displayUsage.inputTokens) }}</span>
-                <span title="输出 tokens">↓ {{ formatTokenCount(displayUsage.outputTokens) }}</span>
-              </span>
-            </div>
           </div>
           <div
             v-else-if="seg.type === 'tool-call'"
@@ -506,6 +467,43 @@ const segments = computed<ContentSegment[]>(() => {
             />
           </div>
         </template>
+
+        <!-- 流式状态与统计信息：固定在最新消息内容最下方单独展示 -->
+        <div
+          v-if="isStreaming || showStats"
+          class="flex items-center gap-2 max-w-[85%] text-left"
+          :class="isUser ? 'ml-auto justify-end' : ''"
+        >
+          <div
+            v-if="isStreaming"
+            class="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm text-muted-foreground bg-muted"
+          >
+            <span class="thinking-dots">正在思考</span>
+          </div>
+          <div
+            v-if="showStats"
+            class="inline-flex items-center gap-2 text-[11px] text-muted-foreground/50 cursor-pointer hover:text-muted-foreground/80 transition-colors"
+            @click="showRawDialog = true"
+          >
+            <span
+              v-if="durationMs !== null"
+              class="inline-flex items-center gap-1"
+            >
+              <span
+                v-if="isStreaming"
+                class="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"
+              />
+              {{ formatDuration(durationMs) }}
+            </span>
+            <span
+              v-if="displayUsage"
+              class="inline-flex items-center gap-1.5"
+            >
+              <span title="输入 tokens">↑ {{ formatTokenCount(displayUsage.inputTokens) }}</span>
+              <span title="输出 tokens">↓ {{ formatTokenCount(displayUsage.outputTokens) }}</span>
+            </span>
+          </div>
+        </div>
       </template>
 
       <!-- 时间 + 操作按钮（同行，避免高度跳动） -->

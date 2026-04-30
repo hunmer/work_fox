@@ -15,8 +15,9 @@ import WorkspaceFileTree from './WorkspaceFileTree.vue'
 import WorkflowWorkspaceDialog from './WorkflowWorkspaceDialog.vue'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Settings, X, MessageSquare, History, FolderTree } from 'lucide-vue-next'
+import { Settings, X, MessageSquare, History, FolderTree, FolderOpen } from 'lucide-vue-next'
 import SettingsDialog from '@/components/settings/SettingsDialog.vue'
+import { getChatHistoryPath } from '@/lib/chat-db'
 
 const props = defineProps<{
   chat: ChatStoreInstance
@@ -31,6 +32,22 @@ const showSettings = ref(false)
 const showWorkflowWorkspaceDialog = ref(false)
 const pluginTools = ref<ToolDisplayItem[]>([])
 const activeTab = ref<string>('messages')
+
+const isElectron = navigator.userAgent.includes('Electron')
+
+async function openSessionFile() {
+  const sk = props.chat.scopeKey.value
+  if (!sk) return
+  const path = await getChatHistoryPath(sk)
+  window.api.fs.openInExplorer(path)
+}
+
+async function copySessionPath() {
+  const sk = props.chat.scopeKey.value
+  if (!sk) return
+  const path = await getChatHistoryPath(sk)
+  navigator.clipboard.writeText(path)
+}
 
 async function loadPluginTools(pluginIds: string[]) {
   if (!pluginIds?.length) {
@@ -206,6 +223,28 @@ function formatTime(timestamp: number): string {
           >
             + 新建对话
           </Button>
+          <div class="flex gap-1 px-2">
+            <Button
+              v-if="isElectron"
+              variant="ghost"
+              size="sm"
+              class="flex-1 justify-start text-[11px] h-6 text-muted-foreground"
+              @click="openSessionFile"
+            >
+              <FolderOpen class="w-3 h-3 mr-1" />
+              打开文件位置
+            </Button>
+            <Button
+              v-else
+              variant="ghost"
+              size="sm"
+              class="flex-1 justify-start text-[11px] h-6 text-muted-foreground"
+              @click="copySessionPath"
+            >
+              <FolderOpen class="w-3 h-3 mr-1" />
+              复制文件路径
+            </Button>
+          </div>
           <div
             v-for="session in recentSessions"
             :key="session.id"

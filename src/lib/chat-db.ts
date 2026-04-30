@@ -85,3 +85,7 @@ export async function clearMessages(sessionId: string, scopeKey: string): Promis
   await wsBridge.invoke('chatHistory:clearMessages', { scopeKey, sessionId })
 }
 
+export async function getChatHistoryPath(scopeKey: string): Promise<string> {
+  return wsBridge.invoke('chatHistory:getPath', { scopeKey })
+}
+

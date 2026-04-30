@@ -249,9 +249,11 @@ async function loadRuleInstructions(runtime: ChatRuntimeOptions | undefined, cwd
 
 function toUsage(value: unknown, previous: UsageState): UsageState {
   if (!isRecord(value)) return previous
+  const inputTokens = value.input_tokens ?? value.inputTokens ?? value.input
+  const outputTokens = value.output_tokens ?? value.outputTokens ?? value.output
   return {
-    inputTokens: typeof value.input_tokens === 'number' ? value.input_tokens : previous.inputTokens,
-    outputTokens: typeof value.output_tokens === 'number' ? value.output_tokens : previous.outputTokens,
+    inputTokens: typeof inputTokens === 'number' ? inputTokens : previous.inputTokens,
+    outputTokens: typeof outputTokens === 'number' ? outputTokens : previous.outputTokens,
   }
 }
 

@@ -110,6 +110,9 @@ export function registerAppChannels(router: WSRouter, services: AppServices): vo
   router.register('chatHistory:listAllScopeKeys', () =>
     chatHistoryStore.listAllScopeKeys(),
   )
+  router.register('chatHistory:getPath', ({ scopeKey }) =>
+    chatHistoryStore.getPath(scopeKey),
+  )
 
   // --- Agent Settings ---
   router.register('agentSettings:get', () => agentSettingsStore.get())

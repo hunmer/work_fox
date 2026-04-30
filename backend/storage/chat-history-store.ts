@@ -41,6 +41,10 @@ export class BackendChatHistoryStore {
     return join(this.userDataDir, 'chat-history')
   }
 
+  getPath(scopeKey: string): string {
+    return this.filePath(scopeKey)
+  }
+
   /** 将旧格式文件（纯 UUID 名，无 workflow- 前缀）重命名为新格式 */
   private async migrateLegacyFiles(): Promise<void> {
     try {

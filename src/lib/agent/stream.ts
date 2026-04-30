@@ -35,6 +35,21 @@ export interface StreamCallbacks {
   onError: (error: Error) => void
 }
 
+function normalizeUsage(data: any): { inputTokens: number; outputTokens: number } {
+  return {
+    inputTokens: typeof data?.inputTokens === 'number'
+      ? data.inputTokens
+      : typeof data?.input_tokens === 'number'
+        ? data.input_tokens
+        : 0,
+    outputTokens: typeof data?.outputTokens === 'number'
+      ? data.outputTokens
+      : typeof data?.output_tokens === 'number'
+        ? data.output_tokens
+        : 0,
+  }
+}
+
 /**
  * 监听聊天流事件。WS 优先，Electron IPC 作为 fallback。
  * 返回清理函数用于移除监听。
@@ -64,7 +79,7 @@ export function listenToChatStream(requestId: string, callbacks: StreamCallbacks
   subscribe('chat:thinking', (data) => callbacks.onThinking(data.content, data.index))
 
   subscribe('chat:done', (data) => {
-    if (data.usage) callbacks.onUsage(data.usage)
+    if (data.usage) callbacks.onUsage(normalizeUsage(data.usage))
     callbacks.onDone()
     unsubscribers.forEach((fn) => fn())
   })
@@ -76,7 +91,7 @@ export function listenToChatStream(requestId: string, callbacks: StreamCallbacks
 
   subscribe('chat:retry', (data) => callbacks.onRetry?.(data))
 
-  subscribe('chat:usage', (data) => callbacks.onUsage({ inputTokens: data.inputTokens, outputTokens: data.outputTokens }))
+  subscribe('chat:usage', (data) => callbacks.onUsage(normalizeUsage(data)))
 
   return () => unsubscribers.forEach((fn) => fn())
 }

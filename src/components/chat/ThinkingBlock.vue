@@ -29,7 +29,7 @@ const open = ref(false)
       💭 思考过程
     </CollapsibleTrigger>
     <CollapsibleContent>
-      <div class="mt-1 pl-4 text-xs text-muted-foreground border-l-2 border-muted whitespace-pre-wrap break-words select-text">
+      <div class="mt-1 max-h-[300px] overflow-y-auto pl-4 pr-2 text-xs text-muted-foreground border-l-2 border-muted whitespace-pre-wrap break-words select-text">
         {{ content }}
       </div>
     </CollapsibleContent>

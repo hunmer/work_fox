@@ -356,6 +356,7 @@ export interface BackendChannelMap {
   'chatHistory:clearMessages': ChannelContract<{ scopeKey: string; sessionId: string }, EmptyResponse>
   'chatHistory:importData': ChannelContract<{ scopeKey: string; data: { sessions: any[]; messages: any[] } }, EmptyResponse>
   'chatHistory:listAllScopeKeys': ChannelContract<EmptyRequest, string[]>
+  'chatHistory:getPath': ChannelContract<{ scopeKey: string }, string>
 
   // --- Agent Settings ---
   'agentSettings:get': ChannelContract<EmptyRequest, any>
