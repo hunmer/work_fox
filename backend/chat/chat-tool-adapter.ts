@@ -186,6 +186,7 @@ export async function createChatToolAdapter(
       'execute_workflow_sync',
       'execute_workflow_async',
       'get_workflow_result',
+      'get_workflow_latest_result',
     ])
     const workflowTools = WORKFLOW_TOOL_DEFINITIONS.map((definition: any) => {
       const mcpToolName = sanitizeToolName(definition.name)

@@ -78,7 +78,6 @@ export class ConnectionManager {
     }
     this.clients.set(socket, session)
     this.clientsById.set(clientId, session)
-    this.logger.info('WS client connected', { clientId })
     for (const handler of this.connectHandlers) handler(clientId)
 
     this.send(socket, {
@@ -99,7 +98,6 @@ export class ConnectionManager {
       this.clients.delete(socket)
       this.clientsById.delete(clientId)
       for (const handler of this.disconnectHandlers) handler(clientId)
-      this.logger.info('WS client disconnected', { clientId })
     })
     socket.on('error', (error) => {
       this.logger.warn('WS client error', { clientId, error: error.message })

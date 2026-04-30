@@ -407,4 +407,23 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
       required: ['execution_id'],
     },
   },
+  {
+    name: 'get_workflow_latest_result',
+    description:
+      '获取指定工作流最近一次执行结果。只需传入 workflow_id，会自动读取该工作流最新的执行日志；可选传入 node_id 仅返回指定节点的结果。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        workflow_id: {
+          type: 'string',
+          description: '要查询最近一次执行结果的工作流 ID，必须显式传入。',
+        },
+        node_id: {
+          type: 'string',
+          description: '可选，指定节点 ID，仅返回该节点的执行结果。不传则返回所有节点的结果。',
+        },
+      },
+      required: ['workflow_id'],
+    },
+  },
 ]

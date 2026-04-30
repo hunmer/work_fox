@@ -399,6 +399,8 @@ export class ChatWorkflowToolExecutor {
         return this.executeWorkflowByIdAsync(args, ownerClientId)
       case 'get_workflow_result':
         return this.getWorkflowExecutionResult(args)
+      case 'get_workflow_latest_result':
+        return this.getWorkflowLatestExecutionResult(args)
       default:
         return { success: false, message: `未知工作流执行工具: ${name}` }
     }
@@ -593,6 +595,36 @@ export class ChatWorkflowToolExecutor {
     }
 
     return { success: false, message: `未找到执行记录: ${executionId}` }
+  }
+
+  private async getWorkflowLatestExecutionResult(args: any): Promise<ToolResult> {
+    const workflowId = this.resolveWorkflowId(args)
+    if (!workflowId) {
+      return { success: false, message: '缺少必填参数: workflow_id' }
+    }
+    const workflow = this.workflowStore.getWorkflow(workflowId)
+    if (!workflow) {
+      return { success: false, message: `工作流不存在: ${workflowId}` }
+    }
+
+    const log = this.executionLogStore.list(workflowId)[0] ?? null
+    if (!log) {
+      return { success: false, message: `工作流 ${workflowId} 暂无执行记录` }
+    }
+
+    const nodeId = typeof args?.node_id === 'string' ? args.node_id : undefined
+    return {
+      success: true,
+      message: `最近一次执行状态: ${log.status}`,
+      data: {
+        workflow_id: workflowId,
+        executionId: log.id,
+        status: log.status,
+        startedAt: log.startedAt,
+        finishedAt: log.finishedAt,
+        steps: this.formatExecutionSteps(log, nodeId),
+      },
+    }
   }
 
   private resolveWorkflowId(args: any): string {

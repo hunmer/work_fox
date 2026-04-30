@@ -118,6 +118,9 @@ export function executeRendererWorkflowTool(
     case 'get_workflow_result':
       return getWorkflowResult(args)
 
+    case 'get_workflow_latest_result':
+      return getWorkflowLatestResult(args)
+
     default:
       return { success: false, message: `未知渲染进程工作流工具: ${name}` }
   }
@@ -313,6 +316,62 @@ async function getWorkflowResult(args: Record<string, unknown>): Promise<ToolRes
       executionId,
       status: record.log.status,
       steps,
+    },
+  }
+}
+
+async function getWorkflowLatestResult(args: Record<string, unknown>): Promise<ToolResult> {
+  const workflowId = typeof args.workflow_id === 'string'
+    ? args.workflow_id
+    : (typeof args.workflowId === 'string' ? args.workflowId : '')
+  if (!workflowId) {
+    return { success: false, message: '缺少必填参数: workflow_id' }
+  }
+
+  const workflowStore = useTabStore().activeStore
+  const nodeId = args.node_id as string | undefined
+  if (
+    workflowStore
+    && workflowStore.currentWorkflow?.id === workflowId
+    && workflowStore.executionLog
+    && (workflowStore.executionStatus === 'running' || workflowStore.executionStatus === 'paused')
+  ) {
+    return {
+      success: true,
+      message: workflowStore.executionStatus === 'paused' ? '最近一次工作流执行已暂停' : '最近一次工作流执行中',
+      data: {
+        workflow_id: workflowId,
+        executionId: workflowStore.executionLog.id,
+        status: workflowStore.executionStatus,
+        startedAt: workflowStore.executionLog.startedAt,
+        finishedAt: workflowStore.executionLog.finishedAt,
+        steps: formatExecutionResult(workflowStore.executionLog, nodeId),
+      },
+    }
+  }
+
+  let logs: ExecutionLog[]
+  try {
+    logs = await createWorkflowDomainApi().executionLog.list(workflowId)
+  } catch {
+    return { success: false, message: `读取工作流 ${workflowId} 的执行记录失败` }
+  }
+
+  const latestLog = logs[0]
+  if (!latestLog) {
+    return { success: false, message: `工作流 ${workflowId} 暂无执行记录` }
+  }
+
+  return {
+    success: true,
+    message: `最近一次执行状态: ${latestLog.status}`,
+    data: {
+      workflow_id: workflowId,
+      executionId: latestLog.id,
+      status: latestLog.status,
+      startedAt: latestLog.startedAt,
+      finishedAt: latestLog.finishedAt,
+      steps: formatExecutionResult(latestLog, nodeId),
     },
   }
 }

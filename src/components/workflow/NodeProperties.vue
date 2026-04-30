@@ -462,57 +462,57 @@ function confirmImport() {
         >
           {{ section.label }}
         </button>
-        <!-- 延迟执行图标 -->
-        <Popover
-          v-if="store.selectedNode?.type !== 'start' && store.selectedNode?.type !== 'end'"
-        >
-          <PopoverTrigger as-child>
-            <button
-              class="relative p-1 rounded hover:bg-muted transition-colors"
-              :class="getFieldValue('_delay') ? 'text-primary' : 'text-muted-foreground'"
-            >
-              <Timer class="w-3.5 h-3.5" />
-              <span
-                v-if="getFieldValue('_delay')"
-                class="absolute -top-1 -right-1 min-w-3.5 h-3.5 px-0.5 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] leading-none font-medium"
-              >{{ Math.ceil((getFieldValue('_delay') || 0) / 1000) }}s</span>
-            </button>
-          </PopoverTrigger>
-          <PopoverContent
-            align="end"
-            class="w-56 p-3 space-y-2"
+        <div class="ml-auto flex items-center gap-1">
+          <Button
+            v-if="canDebugSelectedNode"
+            variant="ghost"
+            size="sm"
+            class="h-6 w-6 p-0"
+            :class="isDebugging ? 'text-destructive' : 'text-muted-foreground hover:text-foreground'"
+            @click="handleDebug"
           >
-            <p class="text-xs font-medium">延迟执行</p>
-            <p class="text-xs text-muted-foreground">执行当前节点前等待的毫秒数</p>
-            <Input
-              type="number"
-              :model-value="getFieldValue('_delay') || 0"
-              :min="0"
-              :step="100"
-              class="h-7 text-xs"
-              placeholder="0"
-              @update:model-value="setFieldValue('_delay', Number($event) || 0)"
+            <Loader2
+              v-if="isDebugging"
+              class="h-3.5 w-3.5 animate-spin"
             />
-          </PopoverContent>
-        </Popover>
-        <!-- 调试图标按钮 -->
-        <Button
-          v-if="canDebugSelectedNode"
-          variant="ghost"
-          size="sm"
-          class="ml-auto h-6 w-6 p-0"
-          :class="isDebugging ? 'text-destructive' : 'text-muted-foreground hover:text-foreground'"
-          @click="handleDebug"
-        >
-          <Loader2
-            v-if="isDebugging"
-            class="h-3.5 w-3.5 animate-spin"
-          />
-          <Bug
-            v-else
-            class="h-3.5 w-3.5"
-          />
-        </Button>
+            <Bug
+              v-else
+              class="h-3.5 w-3.5"
+            />
+          </Button>
+          <Popover
+            v-if="store.selectedNode?.type !== 'start' && store.selectedNode?.type !== 'end'"
+          >
+            <PopoverTrigger as-child>
+              <button
+                class="relative p-1 rounded hover:bg-muted transition-colors"
+                :class="getFieldValue('_delay') ? 'text-primary' : 'text-muted-foreground'"
+              >
+                <Timer class="w-3.5 h-3.5" />
+                <span
+                  v-if="getFieldValue('_delay')"
+                  class="absolute -top-1 -right-1 min-w-3.5 h-3.5 px-0.5 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] leading-none font-medium"
+                >{{ Math.ceil((getFieldValue('_delay') || 0) / 1000) }}s</span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              class="w-56 p-3 space-y-2"
+            >
+              <p class="text-xs font-medium">延迟执行</p>
+              <p class="text-xs text-muted-foreground">执行当前节点前等待的毫秒数</p>
+              <Input
+                type="number"
+                :model-value="getFieldValue('_delay') || 0"
+                :min="0"
+                :step="100"
+                class="h-7 text-xs"
+                placeholder="0"
+                @update:model-value="setFieldValue('_delay', Number($event) || 0)"
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
 
       <!-- 整页滚动容器 -->
