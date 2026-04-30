@@ -87,7 +87,7 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'list_node_types',
     description:
-      '查询工作流中可用的节点类型列表。可按分类筛选，返回每种节点类型的 type、标签、分类、描述、句柄和参数定义。找到候选类型后，如需实际使用，继续调用 search_node_usage 查看具体用法。',
+      '分页查询工作流中可用的节点类型列表。默认返回精简摘要（type、标签、分类、描述、句柄摘要、字段概览），可按分类筛选。找到候选类型后，如需实际使用，继续调用 search_node_usage 查看具体用法；仅在确需完整定义时传 includeDetails=true。',
     input_schema: {
       type: 'object',
       properties: {
@@ -95,6 +95,26 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
           type: 'string',
           description:
             '按分类筛选节点类型。常见分类包括：流程控制、浏览器操作、数据处理、AI 能力、条件判断等。不传则返回全部。',
+        },
+        page: {
+          type: 'number',
+          description: '页码，从 1 开始。默认 1。',
+          default: 1,
+        },
+        pageSize: {
+          type: 'number',
+          description: '每页数量，默认 20，最大 50。',
+          default: 20,
+        },
+        page_size: {
+          type: 'number',
+          description: '每页数量，兼容蛇形命名；默认 20，最大 50。',
+          default: 20,
+        },
+        includeDetails: {
+          type: 'boolean',
+          description: '是否返回完整节点定义（包含完整 properties/outputs/compound/customView 等）。默认 false，建议只在小页或明确需要时开启。',
+          default: false,
         },
       },
     },

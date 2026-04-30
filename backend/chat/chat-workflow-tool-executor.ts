@@ -113,6 +113,56 @@ function buildNodeUsageExamples(def: any): Array<Record<string, any>> {
   return []
 }
 
+function normalizePositiveInteger(value: unknown, fallback: number, max: number): number {
+  const raw = typeof value === 'number' ? value : fallback
+  return Math.min(max, Math.max(1, Math.floor(raw)))
+}
+
+function summarizeNodeTypeDefinition(def: NodeTypeDefinition) {
+  return {
+    type: def.type,
+    label: def.label,
+    category: def.category,
+    description: def.description,
+    handles: {
+      source: !!def.handles?.source,
+      target: !!def.handles?.target,
+      sourceHandles: def.handles?.sourceHandles?.map((handle) => ({
+        id: handle.id,
+        label: handle.label,
+      })) ?? [],
+      dynamicSource: def.handles?.dynamicSource
+        ? {
+            dataKey: def.handles.dynamicSource.dataKey,
+            extraCount: def.handles.dynamicSource.extraCount,
+          }
+        : undefined,
+    },
+    properties: def.properties.map((property) => ({
+      key: property.key,
+      label: property.label,
+      type: property.type,
+      required: !!property.required,
+      readonly: !!property.readonly,
+      hasOptions: Array.isArray(property.options) && property.options.length > 0,
+      visibleWhen: property.visibleWhen,
+    })),
+    outputs: def.outputs?.map((output) => ({
+      key: output.key,
+      type: output.type,
+      description: output.description,
+      required: output.required,
+    })) ?? [],
+    flags: {
+      allowInputFields: !!def.allowInputFields,
+      manualCreate: !!def.manualCreate,
+      debuggable: !!def.debuggable,
+      compound: !!def.compound,
+      customView: !!def.customView,
+    },
+  }
+}
+
 function emptyChanges(): WorkflowChanges {
   return {
     upsertNodes: [],
@@ -873,8 +923,32 @@ export class ChatWorkflowToolExecutor {
         const allTypes = this.getAllNodeTypeDefinitions()
         const categories = Array.from(new Set(allTypes.map((d) => d.category)))
         const filtered = ctx.args?.category ? allTypes.filter((d) => d.category === ctx.args.category) : allTypes
+        const page = normalizePositiveInteger(ctx.args?.page, 1, Number.MAX_SAFE_INTEGER)
+        const pageSize = normalizePositiveInteger(ctx.args?.pageSize ?? ctx.args?.page_size, 20, 50)
+        const total = filtered.length
+        const totalPages = Math.max(1, Math.ceil(total / pageSize))
+        const currentPage = Math.min(page, totalPages)
+        const start = (currentPage - 1) * pageSize
+        const paged = filtered.slice(start, start + pageSize)
+        const includeDetails = ctx.args?.includeDetails === true
         return {
-          result: { success: true, message: `共 ${filtered.length} 种节点类型`, data: { nodeTypes: filtered, categories } },
+          result: {
+            success: true,
+            message: `共 ${total} 种节点类型，第 ${currentPage} 页，共 ${totalPages} 页。列表默认返回精简摘要；需要完整字段定义时传 includeDetails=true，或用 search_node_usage 查询具体类型。`,
+            data: {
+              nodeTypes: includeDetails ? paged : paged.map(summarizeNodeTypeDefinition),
+              categories,
+              page: currentPage,
+              pageSize,
+              page_size: pageSize,
+              total,
+              totalPages,
+              total_pages: totalPages,
+              hasNextPage: currentPage < totalPages,
+              hasPreviousPage: currentPage > 1,
+              includeDetails,
+            },
+          },
           mutated: false,
           nodes: ctx.nodes,
           edges: ctx.edges,
