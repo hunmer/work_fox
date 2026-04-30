@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, inject } from 'vue'
 import { Plus, Maximize, CircleCheck, CircleSlash, SkipForward, Info, Group, Trash2, Flag, FlagOff, Settings, Copy, FolderTree, Workflow, Palette, Archive, ArchiveRestore, CornerUpLeft } from 'lucide-vue-next'
 import { WORKFLOW_CANVAS_CONTEXT_KEY } from './workflowCanvasContext'
 import { useWorkflowStore } from '@/stores/workflow'

@@ -30,6 +30,7 @@ const menuRef = ref<InstanceType<typeof CanvasContextMenu>>()
         :min-zoom="0.2"
         :max-zoom="4"
         :connection-mode="canvas.connectionMode"
+        :delete-key-code="null"
         :nodes-draggable="canvas.nodesDraggable.value"
         :nodes-connectable="canvas.nodesConnectable.value"
         :edges-updatable="canvas.edgesUpdatable.value"

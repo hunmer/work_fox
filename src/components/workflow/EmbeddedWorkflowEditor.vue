@@ -7,6 +7,7 @@ import type { EmbeddedWorkflow, WorkflowEdge, WorkflowNode } from '@/lib/workflo
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import { useWorkflowStore } from '@/stores/workflow'
 import { createWorkflowShortcutHandler } from '@/composables/workflow/useEditorShortcuts'
+import { isScopeBoundaryWorkflowNode } from '@shared/workflow-composite'
 import { WORKFLOW_NODE_DRAG_MIME } from './dragDrop'
 import CustomNodeWrapper from './CustomNodeWrapper.vue'
 import EmbeddedWorkflowEdge from './EmbeddedWorkflowEdge.vue'
@@ -240,9 +241,9 @@ function deleteSelected() {
   if (!selectedNodeIds.size && !selectedEdgeIds.size) return
 
   const nextWorkflow = cloneWorkflow()
-  nextWorkflow.nodes = nextWorkflow.nodes.filter((node) => !selectedNodeIds.has(node.id) || node.type === 'start' || node.type === 'end')
+  nextWorkflow.nodes = nextWorkflow.nodes.filter((node) => !selectedNodeIds.has(node.id) || !canDeleteEmbeddedNode(node))
   const deletedNodeIds = new Set(props.modelValue.nodes
-    .filter((node) => selectedNodeIds.has(node.id) && node.type !== 'start' && node.type !== 'end')
+    .filter((node) => selectedNodeIds.has(node.id) && canDeleteEmbeddedNode(node))
     .map((node) => node.id))
   nextWorkflow.edges = nextWorkflow.edges.filter((edge) => (
     !selectedEdgeIds.has(edge.id)
@@ -250,6 +251,10 @@ function deleteSelected() {
     && !deletedNodeIds.has(edge.target)
   ))
   replaceWorkflow(nextWorkflow)
+}
+
+function canDeleteEmbeddedNode(node: WorkflowNode): boolean {
+  return node.type !== 'start' && node.type !== 'end' && !isScopeBoundaryWorkflowNode(node)
 }
 
 function selectEmbeddedNode(nodeId: string, additive = false) {
@@ -561,7 +566,7 @@ function onNodesChange(changes: Array<any>) {
 
     if (change.type === 'remove') {
       const node = props.modelValue.nodes.find((item) => item.id === change.id)
-      if (!node || node.type === 'start' || node.type === 'end') continue
+      if (!node || !canDeleteEmbeddedNode(node)) continue
       if (store.selectedEmbeddedNode?.hostNodeId === props.hostNodeId && store.selectedEmbeddedNode.nodeId === change.id) {
         store.selectedEmbeddedNode = null
       }
@@ -705,6 +710,7 @@ function handleSelectDialogOpenChange(open: boolean) {
         :edge-types="edgeTypes"
         :min-zoom="0.4"
         :max-zoom="1.8"
+        :delete-key-code="null"
         :fit-view-on-init="true"
         :connection-mode="ConnectionMode.Loose"
         class="h-full w-full"

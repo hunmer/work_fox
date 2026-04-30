@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
-import { Bug, Loader2, CheckCircle2, XCircle, Import, FileDown, Plus, Trash2, Pencil, Check, Copy } from 'lucide-vue-next'
+import { Bug, Loader2, CheckCircle2, XCircle, Import, FileDown, Plus, Trash2, Pencil, Check, Copy, Timer } from 'lucide-vue-next'
 import { JsonEditor } from '@/components/ui/json-editor'
 import OutputFieldEditor from './OutputFieldEditor.vue'
 import NodePropertyForm from './NodePropertyForm.vue'
@@ -462,6 +462,39 @@ function confirmImport() {
         >
           {{ section.label }}
         </button>
+        <!-- 延迟执行图标 -->
+        <Popover
+          v-if="store.selectedNode?.type !== 'start' && store.selectedNode?.type !== 'end'"
+        >
+          <PopoverTrigger as-child>
+            <button
+              class="relative p-1 rounded hover:bg-muted transition-colors"
+              :class="getFieldValue('_delay') ? 'text-primary' : 'text-muted-foreground'"
+            >
+              <Timer class="w-3.5 h-3.5" />
+              <span
+                v-if="getFieldValue('_delay')"
+                class="absolute -top-1 -right-1 min-w-3.5 h-3.5 px-0.5 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] leading-none font-medium"
+              >{{ Math.ceil((getFieldValue('_delay') || 0) / 1000) }}s</span>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            class="w-56 p-3 space-y-2"
+          >
+            <p class="text-xs font-medium">延迟执行</p>
+            <p class="text-xs text-muted-foreground">执行当前节点前等待的毫秒数</p>
+            <Input
+              type="number"
+              :model-value="getFieldValue('_delay') || 0"
+              :min="0"
+              :step="100"
+              class="h-7 text-xs"
+              placeholder="0"
+              @update:model-value="setFieldValue('_delay', Number($event) || 0)"
+            />
+          </PopoverContent>
+        </Popover>
         <!-- 调试图标按钮 -->
         <Button
           v-if="canDebugSelectedNode"

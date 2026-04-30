@@ -11,10 +11,9 @@ import { CodeEditor } from '@/components/ui/code-editor'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Braces, Info, Plus, Trash2, Timer, ChevronRight } from 'lucide-vue-next'
+import { Braces, Info, Plus, Trash2, ChevronRight } from 'lucide-vue-next'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import OutputFieldEditor from './OutputFieldEditor.vue'
 import JsonEditor from '@/components/ui/json-editor/JsonEditor.vue'
 import ConditionEditor from './ConditionEditor.vue'
 import VariablePicker from './VariablePicker.vue'
@@ -156,42 +155,6 @@ function insertArrayVariable(propKey: string, index: number, fieldKey: string, v
     class="space-y-3"
     :class="props.compact ? 'text-[11px]' : ''"
   >
-    <div
-      v-if="activeNode.type !== 'start' && activeNode.type !== 'end'"
-      class="flex justify-end"
-    >
-      <Popover>
-        <PopoverTrigger as-child>
-          <button
-            class="relative p-1 rounded hover:bg-muted transition-colors"
-            :class="getFieldValue('_delay') ? 'text-primary' : 'text-muted-foreground'"
-          >
-            <Timer class="w-3.5 h-3.5" />
-            <span
-              v-if="getFieldValue('_delay')"
-              class="absolute -top-1 -right-1 min-w-3.5 h-3.5 px-0.5 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] leading-none font-medium"
-            >{{ Math.ceil((getFieldValue('_delay') || 0) / 1000) }}s</span>
-          </button>
-        </PopoverTrigger>
-        <PopoverContent
-          align="end"
-          class="w-56 p-3 space-y-2"
-        >
-          <p class="text-xs font-medium">延迟执行</p>
-          <p class="text-xs text-muted-foreground">执行当前节点前等待的毫秒数</p>
-          <Input
-            type="number"
-            :model-value="getFieldValue('_delay') || 0"
-            :min="0"
-            :step="100"
-            class="h-7 text-xs"
-            placeholder="0"
-            @update:model-value="setFieldValue('_delay', Number($event) || 0)"
-          />
-        </PopoverContent>
-      </Popover>
-    </div>
-
     <Collapsible
       v-for="prop in visibleProperties"
       :key="prop.key"
