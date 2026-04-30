@@ -36,6 +36,7 @@ export function useConnectionDrop(
 
   function onNodeSelectFromDialog(type: string) {
     if (!connectSource || !store.currentWorkflow) return
+    if (!store.canCreateNode(type)) return
     const sourceNode = store.currentWorkflow.nodes.find(n => n.id === connectSource!.nodeId)
     if (!sourceNode) return
     const loopBodyNode = connectSource.handleId === LOOP_BODY_SOURCE_HANDLE

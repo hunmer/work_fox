@@ -191,6 +191,10 @@ const categories = computed(() => {
 })
 
 function onDragStart(event: DragEvent, nodeType: string) {
+  if (workflowStore.hasNodeOfType(nodeType)) {
+    event.preventDefault()
+    return
+  }
   if (event.dataTransfer) {
     event.dataTransfer.setData(WORKFLOW_NODE_DRAG_MIME, nodeType)
     event.dataTransfer.effectAllowed = 'move'
@@ -300,8 +304,11 @@ function getIcon(name: string) {
                 >
                   <HoverCardTrigger as-child>
                     <div
-                      draggable="true"
-                      class="flex items-center gap-2 px-2 py-1.5 text-xs rounded cursor-grab hover:bg-muted/50 active:cursor-grabbing"
+                      :draggable="!workflowStore.hasNodeOfType(node.type)"
+                      class="flex items-center gap-2 px-2 py-1.5 text-xs rounded"
+                      :class="workflowStore.hasNodeOfType(node.type)
+                        ? 'opacity-40 cursor-not-allowed'
+                        : 'cursor-grab hover:bg-muted/50 active:cursor-grabbing'"
                       @dragstart="onDragStart($event, node.type)"
                     >
                       <component

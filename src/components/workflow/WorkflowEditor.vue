@@ -66,6 +66,7 @@ import { useEdgeInsert } from '@/composables/workflow/useEdgeInsert'
 import { useFlowCanvas } from '@/composables/workflow/useFlowCanvas'
 import { useWorkflowFileActions } from '@/composables/workflow/useWorkflowFileActions'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
+import { useNotification } from '@/composables/useNotification'
 import type { WorkflowNode } from '@/lib/workflow/types'
 import { useClipboard } from '@/composables/workflow/useClipboard'
 import { useEditorShortcuts } from '@/composables/workflow/useEditorShortcuts'
@@ -87,6 +88,7 @@ provideWorkflowStore(props.store)
 const tabStore = useTabStore()
 const store = props.store
 const agentSettings = useAgentSettingsStore()
+const notify = useNotification()
 const listDialogOpen = ref(false)
 const listDialogCreateMode = ref(false)
 const nodeSelectOpen = ref(false)
@@ -503,6 +505,11 @@ function onLayoutDrop(event: DragEvent) {
 function addNodeFromDropEvent(event: DragEvent) {
   const type = event.dataTransfer?.getData(WORKFLOW_NODE_DRAG_MIME)
   if (!type) return
+  if (!store.canCreateNode(type)) {
+    const def = getNodeDefinition(type)
+    notify.warning(`${def?.label ?? type} 节点已存在，同一工作流中只能有一个`)
+    return
+  }
   const bounds = vueFlowRef.value?.getBoundingClientRect()
   if (!bounds) return
   const position = project({

@@ -225,7 +225,17 @@ export function createEditActions(
 
   function canCreateNode(type: string): boolean {
     const def = getNodeDefinition(type)
-    return def?.manualCreate !== false
+    if (def?.manualCreate === false) return false
+    if (def?.singleton && currentWorkflow.value) {
+      const exists = currentWorkflow.value.nodes.some((n) => n.type === type)
+      if (exists) return false
+    }
+    return true
+  }
+
+  function hasNodeOfType(type: string): boolean {
+    if (!currentWorkflow.value) return false
+    return currentWorkflow.value.nodes.some((n) => n.type === type)
   }
 
   function createNodeData(type: string): Record<string, any> {
@@ -854,6 +864,7 @@ export function createEditActions(
     canDeleteEdge,
     canConnectNodes,
     canCreateNode,
+    hasNodeOfType,
     isNodeManaged,
     findLoopBodyNode,
   }

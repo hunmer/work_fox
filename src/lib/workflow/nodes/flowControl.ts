@@ -40,6 +40,7 @@ export const flowControlNodes: NodeTypeDefinition[] = [
     properties: [],
     allowInputFields: true,
     handles: { source: true, target: false },
+    singleton: true,
   },
   {
     type: 'end',
@@ -49,6 +50,7 @@ export const flowControlNodes: NodeTypeDefinition[] = [
     description: '工作流出口节点，仅支持输入连接',
     properties: [],
     handles: { source: false, target: true },
+    singleton: true,
   },
   {
     type: 'sub_workflow',

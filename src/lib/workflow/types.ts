@@ -233,6 +233,8 @@ export interface NodeTypeDefinition {
   /** 自定义视图所需的最小节点尺寸 */
   customViewMinSize?: { width?: number; height?: number }
   manualCreate?: boolean
+  /** 是否为单例节点（同一工作流中仅允许存在一个，如 start/end） */
+  singleton?: boolean
   compound?: CompoundNodeDefinition
 }
 
