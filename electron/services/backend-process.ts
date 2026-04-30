@@ -11,11 +11,20 @@ export interface BackendStatus {
   error?: string
 }
 
+export interface BackendLogEntry {
+  stream: 'stdout' | 'stderr'
+  level: 'info' | 'error'
+  message: string
+}
+
+type BackendLogListener = (entry: BackendLogEntry) => void
+
 class BackendProcessManager {
   private child: ChildProcess | null = null
   private status: BackendStatus = { running: false }
   private sessionToken = randomUUID()
   private startupPromise: Promise<BackendStatus> | null = null
+  private logListeners = new Set<BackendLogListener>()
 
   async start(): Promise<BackendStatus> {
     if (this.startupPromise) return this.startupPromise
@@ -57,7 +66,8 @@ class BackendProcessManager {
 
       child.stdout?.on('data', (chunk) => {
         const text = chunk.toString()
-        const line = text.trim().split('\n').find((entry) => entry.startsWith('WORKFOX_BACKEND_READY '))
+        this.emitLog({ stream: 'stdout', level: 'info', message: text })
+        const line = text.trim().split('\n').find((lineText: string) => lineText.startsWith('WORKFOX_BACKEND_READY '))
         if (!line || settled) return
         clearTimeout(timer)
         settled = true
@@ -71,7 +81,9 @@ class BackendProcessManager {
       })
 
       child.stderr?.on('data', (chunk) => {
-        console.error('[backend-process]', chunk.toString())
+        const text = chunk.toString()
+        this.emitLog({ stream: 'stderr', level: 'error', message: text })
+        console.error('[backend-process]', text)
       })
 
       child.on('exit', (code, signal) => {
@@ -117,6 +129,17 @@ class BackendProcessManager {
     return {
       url: this.status.url,
       token: this.sessionToken,
+    }
+  }
+
+  onLog(listener: BackendLogListener): () => void {
+    this.logListeners.add(listener)
+    return () => this.logListeners.delete(listener)
+  }
+
+  private emitLog(entry: BackendLogEntry): void {
+    for (const listener of this.logListeners) {
+      listener(entry)
     }
   }
 }

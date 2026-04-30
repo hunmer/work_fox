@@ -47,6 +47,25 @@ function createWindow(): void {
   }
 }
 
+function registerDevToolsShortcut(window: BrowserWindow): void {
+  window.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return
+
+    const isToggleDevTools =
+      input.code === 'F12' ||
+      (input.code === 'KeyI' && input.control && input.shift)
+
+    if (!isToggleDevTools) return
+
+    if (window.webContents.isDevToolsOpened()) {
+      window.webContents.closeDevTools()
+    } else {
+      window.webContents.openDevTools({ mode: 'undocked' })
+    }
+    event.preventDefault()
+  })
+}
+
 app.whenReady().then(() => {
   // 注册 local:// 自定义协议，允许渲染进程加载本地文件资源
   const MIME_MAP: Record<string, string> = {
@@ -111,6 +130,7 @@ app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.work-fox.app')
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
+    registerDevToolsShortcut(window)
   })
 
   registerWorkflowIpcHandlers()
@@ -118,6 +138,9 @@ app.whenReady().then(() => {
   registerPluginIpcHandlers()
   registerFsIpcHandlers()
   registerBackendIpcHandlers()
+  backendProcessManager.onLog((entry) => {
+    mainWindow?.webContents.send('backend:log', entry)
+  })
   workflowNodeRegistry.registerBuiltinNodes(builtinNodeDefinitions)
   pluginManager.loadAll()
   backendProcessManager.start().catch((error) => {

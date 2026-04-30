@@ -83,5 +83,10 @@ const api = {
 }
 
 export type IpcAPI = typeof api
+export type BackendLogEntry = {
+  stream: 'stdout' | 'stderr'
+  level: 'info' | 'error'
+  message: string
+}
 
 contextBridge.exposeInMainWorld('api', api)
