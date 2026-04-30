@@ -407,21 +407,27 @@ const customViewProps = computed(() => {
     const isPending = pending?.nodeId === props.id && pending?.interactionType === 'table_confirm'
     const isStaticHeaders = Array.isArray(headers)
     const isStaticCells = Array.isArray(cells)
+    const isCompleted = nodeStatus.value === 'completed'
     const output = executionStep.value?.output
     // pending interaction 时用 schema 中的数据（后端解析变量后的实际值）
     const schema = isPending ? (pending.schema as any) : null
     // 静态数据：执行完成后才显示
     const resolvedHeaders = isStaticHeaders
-      ? (nodeStatus.value === 'completed' ? headers : [])
+      ? (isCompleted ? headers : [])
       : (Array.isArray(output?.headers) ? output.headers : [])
     const resolvedCells = isStaticCells
-      ? (nodeStatus.value === 'completed' ? cells : [])
-      : (Array.isArray(output?.selectedRows) ? output.selectedRows : (Array.isArray(output?.cells) ? output.cells : []))
+      ? (isCompleted ? cells : [])
+      : (Array.isArray(output?.cells) ? output.cells : (Array.isArray(output?.selectedRows) ? output.selectedRows : []))
+    const selectedRowIds = isCompleted && Array.isArray(output?.selectedRows)
+      ? output.selectedRows.map((r: any) => r.id)
+      : []
     return {
       headers: schema?.headers ?? resolvedHeaders,
       cells: schema?.cells ?? resolvedCells,
       selectionMode: schema?.selectionMode ?? selectionMode,
       interactive: !!isPending,
+      readonly: isCompleted && !isPending,
+      selectedRows: selectedRowIds,
       onSubmit: isPending
         ? (rows: Array<{ id: string; data: Record<string, any> }>) => {
             store.pendingInteraction = null

@@ -277,7 +277,7 @@ function removeImage(index: number) {
       />
 
       <!-- 底部工具栏 -->
-      <InputGroupAddon align="block-end">
+      <InputGroupAddon align="block-end" class="overflow-hidden">
         <!-- 清空对话 -->
         <InputGroupButton
           variant="ghost"
@@ -369,16 +369,16 @@ function removeImage(index: number) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <InputGroupText class="ml-auto">
+        <InputGroupText class="ml-auto hidden sm:inline-flex">
           {{ charCount }}
         </InputGroupText>
 
         <Separator
           orientation="vertical"
-          class="!h-4"
+          class="!h-4 hidden sm:block"
         />
 
-        <ModelSelector />
+        <ModelSelector class="shrink-1 min-w-0" />
 
         <!-- 发送/停止 -->
         <InputGroupButton

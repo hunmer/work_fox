@@ -33,9 +33,9 @@ function isCurrentModel(providerId: string, modelId: string) {
 <template>
   <Popover v-model:open="open">
     <PopoverTrigger as-child>
-      <Button variant="ghost" size="sm" class="h-7 w-[180px] justify-between px-2 text-xs">
+      <Button variant="ghost" size="sm" class="h-7 min-w-0 w-max max-w-[180px] justify-between px-2 text-xs">
         <span class="truncate">{{ currentModelLabel }}</span>
-        <ChevronDown class="ml-2 size-3.5 shrink-0 opacity-70" />
+        <ChevronDown class="ml-1 size-3.5 shrink-0 opacity-70" />
       </Button>
     </PopoverTrigger>
     <PopoverContent
