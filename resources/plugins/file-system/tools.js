@@ -1,7 +1,7 @@
 module.exports = {
   tools: [
     {
-      name: '写入文本文件',
+      name: 'write_text_file',
       description: '将文本内容写入文件，文件不存在时自动创建。',
       input_schema: {
         type: 'object',
@@ -14,7 +14,7 @@ module.exports = {
       },
     },
     {
-      name: '写入二进制文件',
+      name: 'write_binary_file',
       description: '将二进制数据写入文件，适用于图片、音频等非文本文件。',
       input_schema: {
         type: 'object',
@@ -138,10 +138,10 @@ module.exports = {
 
   handler: async (name, args, api) => {
     switch (name) {
-      case '写入文本文件':
+      case 'write_text_file':
         await api.writeFile(args.path, args.content, args.encoding)
         return { success: true, message: `文件已写入: ${args.path}`, data: { path: args.path } }
-      case '写入二进制文件':
+      case 'write_binary_file':
         await api.writeBinaryFile(args.path, args.data)
         return { success: true, message: `二进制文件已写入: ${args.path}`, data: { path: args.path } }
       case 'read_file': {

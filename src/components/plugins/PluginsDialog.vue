@@ -274,7 +274,7 @@ watch(() => props.open, async (val) => {
       <!-- 过滤栏 -->
       <div
         v-if="hasPlugins"
-        class="px-4 py-2 border-b border-border space-y-2 flex-shrink-0"
+        class="px-4 py-2 border-b border-border flex-shrink-0"
       >
         <div class="flex items-center gap-2">
           <div class="relative flex-1">
@@ -285,6 +285,23 @@ watch(() => props.open, async (val) => {
               class="h-7 pl-8 text-xs"
             />
           </div>
+          <Select
+            v-if="allTags.length"
+            :model-value="selectedTags.size === 1 ? [...selectedTags][0] : '__all__'"
+            @update:model-value="selectedTags = $event === '__all__' ? new Set() : new Set([$event])"
+          >
+            <SelectTrigger class="w-[140px] !h-7 text-xs py-0 px-2 shrink-0">
+              <SelectValue>
+                {{ selectedTags.size === 1 ? [...selectedTags][0] : '按标签过滤' }}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">全部标签</SelectItem>
+              <SelectItem v-for="tag in allTags" :key="tag" :value="tag">
+                {{ tag }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
           <Select
             v-if="!isStoreMode"
             v-model="filterEnabled"
@@ -313,24 +330,6 @@ watch(() => props.open, async (val) => {
           >
             清除
           </Button>
-        </div>
-
-        <div
-          v-if="allTags.length"
-          class="flex flex-wrap gap-1"
-        >
-          <Badge
-            v-for="tag in allTags"
-            :key="tag"
-            variant="secondary"
-            class="cursor-pointer select-none text-[11px] px-2 py-0.5 transition-colors"
-            :class="selectedTags.has(tag)
-              ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-              : 'hover:bg-secondary/80'"
-            @click="toggleTag(tag)"
-          >
-            {{ tag }}
-          </Badge>
         </div>
       </div>
 

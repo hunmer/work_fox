@@ -13,6 +13,13 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
@@ -100,6 +107,19 @@ function togglePlugin(pluginId: string) {
           <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input v-model="searchQuery" placeholder="搜索插件..." class="pl-8 h-8" />
         </div>
+        <Select v-if="allTags.length" :model-value="activeTag ?? '__all__'" @update:model-value="activeTag = $event === '__all__' ? null : $event">
+          <SelectTrigger class="w-[140px] h-8 text-xs shrink-0">
+            <SelectValue placeholder="按标签过滤">
+              {{ activeTag ?? '按标签过滤' }}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">全部标签</SelectItem>
+            <SelectItem v-for="tag in allTags" :key="tag" :value="tag">
+              {{ tag }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
         <div class="flex gap-1">
           <Button
             v-for="opt in typeOptions"
@@ -112,17 +132,6 @@ function togglePlugin(pluginId: string) {
             {{ opt.label }}
           </Button>
         </div>
-      </div>
-      <div v-if="allTags.length" class="flex flex-wrap gap-1 px-1">
-        <Badge
-          v-for="tag in allTags"
-          :key="tag"
-          :variant="activeTag === tag ? 'default' : 'outline'"
-          class="cursor-pointer text-[11px] px-2 py-0.5 h-5 font-normal transition-colors"
-          @click="activeTag = activeTag === tag ? null : tag"
-        >
-          {{ tag }}
-        </Badge>
       </div>
       <ScrollArea class="max-h-[400px]">
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-2">

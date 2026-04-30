@@ -222,8 +222,16 @@ export async function createChatToolAdapter(
   const clientPluginTools = deps.clientNodeCache.getAllTools()
   const pluginTools = [...serverPluginTools, ...clientPluginTools]
   if (pluginTools.length > 0) {
+    const usedMcpNames = new Map<string, number>()
     const tools = pluginTools.map((definition) => {
-      const mcpToolName = sanitizeToolName(`${definition.pluginId || 'plugin'}_${definition.name}`)
+      let mcpToolName = sanitizeToolName(`${definition.pluginId || 'plugin'}_${definition.name}`)
+      const dupIndex = usedMcpNames.get(mcpToolName)
+      if (dupIndex !== undefined) {
+        usedMcpNames.set(mcpToolName, dupIndex + 1)
+        mcpToolName = `${mcpToolName}_${dupIndex + 1}`
+      } else {
+        usedMcpNames.set(mcpToolName, 0)
+      }
       registerMcpToolName(PLUGIN_TOOL_SERVER, mcpToolName, definition.name)
       return sdk.tool(mcpToolName, definition.description, toZodSchema((definition as any).inputSchema || (definition as any).input_schema), async (args) => {
         const isClientTool = deps.clientNodeCache.hasClientTool(definition.name)
