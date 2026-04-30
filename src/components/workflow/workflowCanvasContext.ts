@@ -1,5 +1,5 @@
 import type { ComputedRef, InjectionKey, Raw, Ref } from 'vue'
-import type { ConnectionMode } from '@vue-flow/core'
+import type { ConnectionMode, NodeDragEvent } from '@vue-flow/core'
 import type CustomNodeWrapper from './CustomNodeWrapper.vue'
 import type GroupNode from './GroupNode.vue'
 import type CustomEdge from './CustomEdge.vue'
@@ -23,9 +23,12 @@ export interface WorkflowCanvasContext {
   onDragOver: (event: DragEvent) => void
   onDrop: (event: DragEvent) => void
   onNodeClick: (payload: any) => void
+  onNodeDrag: (event: NodeDragEvent) => void
+  onNodeDragStop: (event: NodeDragEvent) => void
   onPaneClick: () => void
   onNodesInitialized: (nodes: any[]) => void
   onEdgeInsertNode: (edgeId: string, sourceId: string, targetId: string, sourceHandle: string | null) => void
+  syncScopeBoundaryLayout: (scopeNodeId: string) => void
   fitView: () => void
   getViewport: () => { x: number; y: number; zoom: number }
   setViewport: (viewport: { x: number; y: number; zoom: number }) => void

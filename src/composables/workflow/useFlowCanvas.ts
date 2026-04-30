@@ -1,6 +1,6 @@
 import { computed, ref, watch, nextTick, onUnmounted } from 'vue'
 import { useVueFlow, MarkerType } from '@vue-flow/core'
-import type { GraphNode, NodeChange } from '@vue-flow/core'
+import type { GraphNode, NodeChange, NodeDragEvent } from '@vue-flow/core'
 import type { WorkflowStore } from '@/stores/workflow'
 import type { WorkflowGroup, WorkflowNode } from '@/lib/workflow/types'
 import { normalizeEmbeddedWorkflow } from '@shared/embedded-workflow'
@@ -52,6 +52,7 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
   // ── 对齐辅助线状态 ──
   const helperLineHorizontal = ref<number | undefined>(undefined)
   const helperLineVertical = ref<number | undefined>(undefined)
+  const activeLoopBodyDropTargetId = ref<string | null>(null)
 
   function syncScopeBoundaryLayout(scopeNodeId: string): void {
     const workflow = store.currentWorkflow
@@ -253,6 +254,66 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     const scopeNodes = workflow.nodes.filter((node) => isScopeBoundaryWorkflowNode(node))
     for (const node of scopeNodes) {
       syncScopeBoundaryLayout(node.id)
+    }
+  }
+
+  function isNodeAllowedInScope(node: WorkflowNode | undefined, scopeNodeId: string): boolean {
+    if (!node) return false
+    if (node.id === scopeNodeId) return false
+    if (isScopeBoundaryWorkflowNode(node)) return false
+    if (getCompositeParentId(node) === scopeNodeId) return false
+    return store.canDeleteNode(node.id)
+  }
+
+  function findLoopBodyDropTarget(nodeId: string, position: { x: number; y: number }): WorkflowNode | null {
+    const workflow = store.currentWorkflow
+    if (!workflow) return null
+
+    const draggedNode = workflow.nodes.find((node) => node.id === nodeId)
+    const loopBodies = workflow.nodes.filter((node) => node.type === LOOP_BODY_NODE_TYPE)
+    for (let i = loopBodies.length - 1; i >= 0; i--) {
+      const node = loopBodies[i]
+      if (!isNodeAllowedInScope(draggedNode, node.id)) continue
+      const absoluteX = node.position.x
+      const absoluteY = node.position.y
+      const width = Number(node.data?.width || MIN_CONTAINER_SIZE.width)
+      const height = Number(node.data?.height || MIN_CONTAINER_SIZE.height)
+      if (
+        position.x >= absoluteX
+        && position.x <= absoluteX + width
+        && position.y >= absoluteY
+        && position.y <= absoluteY + height
+      ) {
+        return node
+      }
+    }
+    return null
+  }
+
+  function getDragEventPosition(event: NodeDragEvent): { x: number; y: number } {
+    const width = getNumber(event.node.dimensions?.width) ?? getNumber(event.node.width) ?? DEFAULT_NODE_SIZE.width
+    const height = getNumber(event.node.dimensions?.height) ?? getNumber(event.node.height) ?? DEFAULT_NODE_SIZE.height
+    const x = event.node.position?.x ?? event.node.computedPosition?.x ?? 0
+    const y = event.node.position?.y ?? event.node.computedPosition?.y ?? 0
+    return {
+      x: x + width / 2,
+      y: y + height / 2,
+    }
+  }
+
+  function handleNodeDrag(event: NodeDragEvent): void {
+    if (store.isPreview) return
+    const target = findLoopBodyDropTarget(event.node.id, getDragEventPosition(event))
+    activeLoopBodyDropTargetId.value = target?.id ?? null
+  }
+
+  function handleNodeDragStop(event: NodeDragEvent): void {
+    if (store.isPreview) return
+    const target = findLoopBodyDropTarget(event.node.id, getDragEventPosition(event))
+    activeLoopBodyDropTargetId.value = null
+    if (!target) return
+    if (store.moveNodeToScope(event.node.id, target.id)) {
+      syncScopeBoundaryLayout(target.id)
     }
   }
 
@@ -666,7 +727,7 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
           height: height ? `${height}px` : undefined,
           ...(isLoopBody ? { zIndex: -1 } : {}),
         } : (isLoopBody ? { zIndex: -1 } : undefined),
-        data: { ...n.data, label: n.label, nodeType: n.type }
+        data: { ...n.data, label: n.label, nodeType: n.type, isDropTarget: isLoopBody && activeLoopBodyDropTargetId.value === n.id }
       }
       })
 
@@ -744,7 +805,10 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     edges,
     handleConnect,
     handleNodesInitialized,
+    handleNodeDrag,
+    handleNodeDragStop,
     syncScopeBoundaryLayout,
+    activeLoopBodyDropTargetId,
     helperLineHorizontal,
     helperLineVertical,
   }

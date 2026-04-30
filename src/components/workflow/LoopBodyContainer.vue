@@ -6,6 +6,7 @@ import { getCompositeParentId } from '@shared/workflow-composite'
 const props = defineProps<{
   nodeId?: string
   outputLabel?: string
+  isDropTarget?: boolean
 }>()
 
 const store = useWorkflowStore()
@@ -25,7 +26,7 @@ function selectLoopBodyNode() {
 </script>
 
 <template>
-  <div class="loop-body-shell" @click="selectLoopBodyNode">
+  <div class="loop-body-shell" :class="{ 'is-drop-target': props.isDropTarget }" @click="selectLoopBodyNode">
     <div class="loop-body-header">
       <div class="flex flex-col gap-0.5">
         <span class="loop-body-title">循环体</span>
@@ -35,6 +36,9 @@ function selectLoopBodyNode() {
         <span>{{ childCount }} 个节点</span>
         <span v-if="props.outputLabel">输出: {{ props.outputLabel }}</span>
       </div>
+    </div>
+    <div v-if="props.isDropTarget" class="loop-body-drop-placeholder">
+      拖拽添加到循环体
     </div>
   </div>
 </template>
@@ -50,6 +54,13 @@ function selectLoopBodyNode() {
     linear-gradient(180deg, rgba(232, 245, 249, 0.72), rgba(248, 251, 252, 0.42));
   box-sizing: border-box;
   pointer-events: none;
+}
+
+.loop-body-shell.is-drop-target {
+  background:
+    linear-gradient(180deg, rgba(224, 247, 250, 0.84), rgba(240, 253, 250, 0.58));
+  outline: 2px dashed rgba(20, 184, 166, 0.78);
+  outline-offset: -10px;
 }
 
 .loop-body-header {
@@ -86,5 +97,21 @@ function selectLoopBodyNode() {
   justify-content: flex-end;
   font-size: 11px;
   color: rgba(23, 92, 112, 0.88);
+}
+
+.loop-body-drop-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 120px;
+  margin: 14px;
+  border: 1px dashed rgba(20, 184, 166, 0.68);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.58);
+  color: rgb(15, 118, 110);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 </style>

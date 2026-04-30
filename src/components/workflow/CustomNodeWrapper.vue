@@ -436,7 +436,13 @@ const customViewProps = computed(() => {
         : undefined,
     }
   }
-  if (definition.value?.type === LOOP_BODY_NODE_TYPE) return { nodeId: props.id, outputLabel: props.data?.outputLabel }
+  if (definition.value?.type === LOOP_BODY_NODE_TYPE) {
+    return {
+      nodeId: props.id,
+      outputLabel: props.data?.outputLabel,
+      isDropTarget: !!props.data?.isDropTarget,
+    }
+  }
   if (definition.value?.type === 'sub_workflow') {
     return {
       nodeId: props.id,

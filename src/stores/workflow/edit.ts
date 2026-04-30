@@ -641,6 +641,66 @@ export function createEditActions(
     if (node) node.position = position
   }
 
+  function moveNodeToScope(nodeId: string, scopeNodeId: string): boolean {
+    const workflow = currentWorkflow.value
+    if (!workflow) return false
+    const node = getNode(nodeId)
+    const scopeNode = getNode(scopeNodeId)
+    if (!node || !scopeNode || !isScopeBoundaryWorkflowNode(scopeNode)) return false
+    if (node.id === scopeNode.id || isScopeBoundaryWorkflowNode(node) || !canDeleteNode(node.id)) return false
+    if (getCompositeParentId(node) === scopeNode.id) return false
+
+    undoRedo.pushUndo('移动节点到循环体')
+    node.composite = {
+      ...(node.composite || {}),
+      rootId: scopeNode.composite?.rootId || scopeNode.id,
+      parentId: scopeNode.id,
+      generated: false,
+      hidden: false,
+    }
+
+    workflow.edges = workflow.edges.filter((edge) => {
+      if (edge.source !== nodeId && edge.target !== nodeId) return true
+      if (isLockedWorkflowEdge(edge)) return true
+      const sourceScopeId = edge.source === nodeId ? scopeNode.id : getScopeOwnerId(edge.source)
+      const targetScopeId = edge.target === nodeId ? scopeNode.id : getScopeOwnerId(edge.target)
+      return sourceScopeId === targetScopeId
+    })
+
+    selectedNodeIds.value = [nodeId]
+    return true
+  }
+
+  function moveNodeOutOfScope(nodeId: string): string | null {
+    const workflow = currentWorkflow.value
+    if (!workflow) return null
+    const node = getNode(nodeId)
+    if (!node || !canDeleteNode(node.id)) return null
+    const parentId = getCompositeParentId(node)
+    const parentNode = parentId ? getNode(parentId) : null
+    if (!parentNode || !isScopeBoundaryWorkflowNode(parentNode)) return null
+
+    undoRedo.pushUndo('从循环体移出节点')
+    node.composite = {
+      ...(node.composite || {}),
+      rootId: node.id,
+      parentId: null,
+      generated: false,
+      hidden: false,
+    }
+
+    workflow.edges = workflow.edges.filter((edge) => {
+      if (edge.source !== nodeId && edge.target !== nodeId) return true
+      if (isLockedWorkflowEdge(edge)) return true
+      const sourceScopeId = edge.source === nodeId ? null : getScopeOwnerId(edge.source)
+      const targetScopeId = edge.target === nodeId ? null : getScopeOwnerId(edge.target)
+      return sourceScopeId === targetScopeId
+    })
+
+    selectedNodeIds.value = [nodeId]
+    return parentNode.id
+  }
+
   function updateEmbeddedWorkflow(
     nodeId: string,
     embeddedWorkflow: EmbeddedWorkflow,
@@ -851,6 +911,8 @@ export function createEditActions(
     updateNodeData,
     updateEmbeddedWorkflow,
     updateNodePosition,
+    moveNodeToScope,
+    moveNodeOutOfScope,
     updateNodeLabel,
     updateNodeState,
     updateNodeBreakpoint,

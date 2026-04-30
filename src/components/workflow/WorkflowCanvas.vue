@@ -4,7 +4,7 @@ import { VueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { MiniMap } from '@vue-flow/minimap'
 import { Controls } from '@vue-flow/controls'
-import { Plus, Maximize, CircleCheck, CircleSlash, SkipForward, Info, Group, Trash2, Flag, FlagOff, Settings, Copy, FolderTree, Workflow, Palette, Archive, ArchiveRestore } from 'lucide-vue-next'
+import { Plus, Maximize, CircleCheck, CircleSlash, SkipForward, Info, Group, Trash2, Flag, FlagOff, Settings, Copy, FolderTree, Workflow, Palette, Archive, ArchiveRestore, CornerUpLeft } from 'lucide-vue-next'
 import CustomEdge from './CustomEdge.vue'
 import HelperLines from './HelperLines.vue'
 import CanvasToolbar from './CanvasToolbar.vue'
@@ -12,6 +12,7 @@ import { WORKFLOW_CANVAS_CONTEXT_KEY } from './workflowCanvasContext'
 import { useWorkflowStore } from '@/stores/workflow'
 import { getNodeDefinition } from '@/lib/workflow/nodeRegistry'
 import type { EmbeddedWorkflow, NodeBreakpoint, NodeRunState, WorkflowNode } from '@/lib/workflow/types'
+import { getCompositeParentId, isScopeBoundaryWorkflowNode } from '@shared/workflow-composite'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -181,6 +182,21 @@ const isContextBoundaryNode = computed(() => {
   return node?.type === 'start' || node?.type === 'end'
 })
 
+const primaryTargetNode = computed(() => {
+  const id = targetNodeIds.value[0]
+  if (!id) return null
+  return store.currentWorkflow?.nodes.find((node) => node.id === id) ?? null
+})
+
+const canMoveContextNodeOutOfLoopBody = computed(() => {
+  const node = primaryTargetNode.value
+  if (!node || node.type === 'start' || node.type === 'end' || !store.canDeleteNode(node.id)) return false
+  const parentId = getCompositeParentId(node)
+  if (!parentId) return false
+  const parentNode = store.currentWorkflow?.nodes.find((item) => item.id === parentId)
+  return !!parentNode && isScopeBoundaryWorkflowNode(parentNode)
+})
+
 // ── 画布操作 ──
 function handleAddNode() {
   if (!contextMenuEvent.value) return
@@ -276,6 +292,13 @@ function handleShowGroupPicker() {
   if (id) canvas.openGroupPickerDialog(id)
 }
 
+function handleMoveOutOfLoopBody() {
+  const id = targetNodeIds.value[0]
+  if (!id) return
+  const parentId = store.moveNodeOutOfScope(id)
+  if (parentId) canvas.syncScopeBoundaryLayout(parentId)
+}
+
 function handleMergeToGroup() {
   const ids = targetNodeIds.value.filter(id => store.canDeleteNode(id))
   if (ids.length >= 2) {
@@ -321,6 +344,8 @@ async function handleMergeToWorkflow() {
           @dragover="canvas.onDragOver"
           @drop="canvas.onDrop"
           @node-click="canvas.onNodeClick"
+          @node-drag="canvas.onNodeDrag"
+          @node-drag-stop="canvas.onNodeDragStop"
           @nodes-initialized="canvas.onNodesInitialized"
           @pane-click="canvas.onPaneClick"
           @pane-contextmenu="onPaneContextMenu"
@@ -552,6 +577,13 @@ async function handleMergeToWorkflow() {
               >
                 <ArchiveRestore class="w-4 h-4 mr-2" />
                 移动到暂存
+              </ContextMenuItem>
+              <ContextMenuItem
+                v-if="canMoveContextNodeOutOfLoopBody"
+                @click="handleMoveOutOfLoopBody"
+              >
+                <CornerUpLeft class="w-4 h-4 mr-2" />
+                从循环体内部移出
               </ContextMenuItem>
               <ContextMenuSeparator />
               <ContextMenuItem
