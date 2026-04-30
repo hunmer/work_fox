@@ -61,6 +61,11 @@ module.exports = {
               children: item.children,
             })),
             spineCount: spine.length,
+            spine: spine.map(item => ({
+              id: item.id,
+              href: item.href,
+              linear: item.linear,
+            })),
             guide,
           }
 
