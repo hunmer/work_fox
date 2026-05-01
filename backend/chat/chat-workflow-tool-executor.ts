@@ -7,7 +7,7 @@ import type { BackendPluginRegistry } from '../plugins/plugin-registry'
 import type { ConnectionManager } from '../ws/connection-manager'
 import type { ClientNodeCache } from './client-node-cache'
 import { createDefaultEmbeddedWorkflow, normalizeEmbeddedWorkflow } from '../../shared/embedded-workflow'
-import { LOOP_BODY_NODE_TYPE, LOOP_BODY_ROLE, LOOP_NEXT_SOURCE_HANDLE, LOOP_NODE_TYPE } from '../../shared/workflow-composite'
+import { getNodesForExecutionScope, LOOP_BODY_NODE_TYPE, LOOP_BODY_ROLE, LOOP_NEXT_SOURCE_HANDLE, LOOP_NODE_TYPE } from '../../shared/workflow-composite'
 import type { BackendWorkflowExecutionManager } from '../workflow/execution-manager'
 import type { BackendExecutionLogStore } from '../storage/execution-log-store'
 
@@ -236,6 +236,18 @@ function sameHandle(a: string | null | undefined, b: string | null | undefined):
 
 function isTopLevelNode(node: WorkflowNode): boolean {
   return !node.composite?.parentId && !node.composite?.hidden
+}
+
+function summarizeStartNodes(workflow: Workflow) {
+  return getNodesForExecutionScope(workflow.nodes, null)
+    .filter((node) => node.type === 'start')
+    .map((node) => ({
+      id: node.id,
+      label: node.label,
+      inputFields: Array.isArray(node.data?.inputFields)
+        ? cloneJson(node.data.inputFields as OutputField[])
+        : [],
+    }))
 }
 
 function findAutoLoopNextEdgeTarget(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowNode | null {
@@ -589,16 +601,14 @@ export class ChatWorkflowToolExecutor {
     const items = workflows
       .slice(start, start + pageSize)
       .map((workflow) => {
-        const startNode = workflow.nodes.find((node) => node.type === 'start')
-        const inputFields = Array.isArray(startNode?.data?.inputFields)
-          ? cloneJson(startNode.data.inputFields as OutputField[])
-          : []
+        const startNodes = summarizeStartNodes(workflow)
 
         return {
           workflow_id: workflow.id,
           title: workflow.name,
           description: workflow.description ?? '',
-          inputFields,
+          inputFields: startNodes[0]?.inputFields ?? [],
+          startNodes,
           updatedAt: workflow.updatedAt,
         }
       })
@@ -636,15 +646,13 @@ export class ChatWorkflowToolExecutor {
         return haystack.includes(keyword)
       })
       .map((workflow) => {
-        const startNode = workflow.nodes.find((node) => node.type === 'start')
-        const inputFields = Array.isArray(startNode?.data?.inputFields)
-          ? cloneJson(startNode.data.inputFields as OutputField[])
-          : []
+        const startNodes = summarizeStartNodes(workflow)
         return {
           workflow_id: workflow.id,
           title: workflow.name,
           description: workflow.description ?? '',
-          inputFields,
+          inputFields: startNodes[0]?.inputFields ?? [],
+          startNodes,
           updatedAt: workflow.updatedAt,
         }
       })
@@ -680,7 +688,8 @@ export class ChatWorkflowToolExecutor {
     }
 
     const input = isRecord(args?.input) ? args.input : {}
-    const result = await this.executionManager.execute({ workflowId, input }, ownerClientId)
+    const startNodeId = typeof args?.start_node_id === 'string' ? args.start_node_id : undefined
+    const result = await this.executionManager.execute({ workflowId, input, startNodeId }, ownerClientId)
     const recovery = this.executionManager.getExecutionRecovery({ workflowId, executionId: result.executionId }, ownerClientId)
     const log = recovery.execution?.log ?? this.findExecutionLog(workflowId, result.executionId)
 
@@ -707,7 +716,8 @@ export class ChatWorkflowToolExecutor {
     }
 
     const input = isRecord(args?.input) ? args.input : {}
-    const result = await this.executionManager.execute({ workflowId, input }, ownerClientId)
+    const startNodeId = typeof args?.start_node_id === 'string' ? args.start_node_id : undefined
+    const result = await this.executionManager.execute({ workflowId, input, startNodeId }, ownerClientId)
     return {
       success: true,
       message: '工作流已开始异步执行',

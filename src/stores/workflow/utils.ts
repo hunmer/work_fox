@@ -10,27 +10,11 @@ export interface WorkflowChanges {
 
 export function validateWorkflowExecution(workflow: Workflow): string | null {
   const nodes = getNodesForExecutionScope(workflow.nodes, null)
-  const nodeIds = new Set(nodes.map((node) => node.id))
-  const edges = workflow.edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
   const startNodes = nodes.filter((n) => n.type === 'start')
   const endNodes = nodes.filter((n) => n.type === 'end')
   if (startNodes.length === 0) return '缺少「开始」节点'
   if (endNodes.length === 0) return '缺少「结束」节点'
-  if (startNodes.length > 1) return '只能有一个「开始」节点'
-  if (endNodes.length > 1) return '只能有一个「结束」节点'
-
-  const visited = new Set<string>([startNodes[0].id])
-  const queue = [startNodes[0].id]
-  while (queue.length > 0) {
-    const current = queue.shift()!
-    for (const edge of edges) {
-      if (edge.source === current && !visited.has(edge.target)) {
-        visited.add(edge.target)
-        queue.push(edge.target)
-      }
-    }
-  }
-  return visited.has(endNodes[0].id) ? null : '「开始」与「结束」节点未连接'
+  return null
 }
 
 export function buildPartialWorkflowSnapshot(

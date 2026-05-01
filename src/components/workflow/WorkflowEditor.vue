@@ -524,7 +524,7 @@ function addNodeFromDropEvent(event: DragEvent) {
   if (!type) return
   if (!store.canCreateNode(type)) {
     const def = getNodeDefinition(type)
-    notify.warning(`${def?.label ?? type} 节点已存在，同一工作流中只能有一个`)
+    notify.warning(`${def?.label ?? type} 节点不允许创建或已达到创建限制`)
     return
   }
   const bounds = vueFlowRef.value?.getBoundingClientRect()

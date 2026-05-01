@@ -142,6 +142,7 @@ export interface WorkflowExecuteRequest {
   workflowId: string
   input?: Record<string, unknown>
   snapshot?: ExecutionSnapshot
+  startNodeId?: string
 }
 
 export interface WorkflowExecuteResponse {

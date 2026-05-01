@@ -145,12 +145,65 @@ export class BackendWorkflowExecutionManager {
       throw createErrorShape('NOT_FOUND', `工作流不存在: ${request.workflowId}`)
     }
 
+    const snapshot = this.resolveExecutionSnapshot(workflow, request)
     const executionId = randomUUID()
-    const session = this.createSession(executionId, workflow, ownerClientId, request.input || {}, request.snapshot, undefined, eventSink)
+    const session = this.createSession(executionId, workflow, ownerClientId, request.input || {}, snapshot, undefined, eventSink)
 
     this.sessions.set(executionId, session)
     void this.run(session)
     return { executionId, status: 'running' }
+  }
+
+  private resolveExecutionSnapshot(
+    workflow: Workflow,
+    request: WorkflowExecuteRequest,
+  ): { nodes: WorkflowNode[]; edges: WorkflowEdge[] } | undefined {
+    const baseNodes = request.snapshot?.nodes ? clone(request.snapshot.nodes) : clone(workflow.nodes)
+    const baseEdges = request.snapshot?.edges ? clone(request.snapshot.edges) : clone(workflow.edges)
+    const rootNodes = getNodesForExecutionScope(baseNodes, null)
+    const startNodes = rootNodes.filter((node) => node.type === 'start')
+
+    if (request.startNodeId) {
+      const startNode = startNodes.find((node) => node.id === request.startNodeId)
+      if (!startNode) {
+        throw createErrorShape('BAD_REQUEST', `指定的开始节点不存在或不在顶层工作流中: ${request.startNodeId}`)
+      }
+      return this.buildReachableSnapshot(baseNodes, baseEdges, startNode.id)
+    }
+
+    if (startNodes.length > 1) {
+      const choices = startNodes.map((node) => `${node.label || '开始'}(${node.id})`).join('、')
+      throw createErrorShape('BAD_REQUEST', `工作流包含多个顶层开始节点，请指定 start_node_id。可选开始节点: ${choices}`)
+    }
+
+    return request.snapshot ? { nodes: baseNodes, edges: baseEdges } : undefined
+  }
+
+  private buildReachableSnapshot(
+    nodes: WorkflowNode[],
+    edges: WorkflowEdge[],
+    firstNodeId: string,
+  ): { nodes: WorkflowNode[]; edges: WorkflowEdge[] } {
+    const reachableIds = new Set<string>([firstNodeId])
+    const queue = [firstNodeId]
+
+    while (queue.length > 0) {
+      const sourceId = queue.shift()!
+      for (const edge of edges) {
+        if (edge.source !== sourceId || reachableIds.has(edge.target)) continue
+        reachableIds.add(edge.target)
+        queue.push(edge.target)
+      }
+    }
+
+    const partialNodes = nodes.filter((node) => reachableIds.has(node.id))
+    const firstNode = partialNodes.find((node) => node.id === firstNodeId)
+    return {
+      nodes: firstNode
+        ? [firstNode, ...partialNodes.filter((node) => node.id !== firstNodeId)]
+        : partialNodes,
+      edges: edges.filter((edge) => reachableIds.has(edge.source) && reachableIds.has(edge.target)),
+    }
   }
 
   async debugNode(request: WorkflowDebugNodeRequest, ownerClientId: string): Promise<WorkflowDebugNodeResponse> {

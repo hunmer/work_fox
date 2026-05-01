@@ -376,7 +376,12 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
       '同步执行当前工作流。会阻塞等待所有节点按拓扑顺序执行完成后返回完整执行结果（每个节点的输入、输出、状态和耗时）。适用于需要立即获取结果的场景。',
     input_schema: {
       type: 'object',
-      properties: {},
+      properties: {
+        start_node_id: {
+          type: 'string',
+          description: '可选，指定从哪个顶层开始节点执行。当前工作流存在多个顶层开始节点时必须提供。',
+        },
+      },
     },
   },
   {
@@ -385,7 +390,12 @@ export const WORKFLOW_TOOL_DEFINITIONS: ToolDefinition[] = [
       '异步执行当前工作流。立即返回一个 execution_id 用于后续查询执行状态和结果，工作流在后台运行。适用于长时间运行的工作流，可配合 get_workflow_result 轮询结果。',
     input_schema: {
       type: 'object',
-      properties: {},
+      properties: {
+        start_node_id: {
+          type: 'string',
+          description: '可选，指定从哪个顶层开始节点执行。当前工作流存在多个顶层开始节点时必须提供。',
+        },
+      },
     },
   },
   {

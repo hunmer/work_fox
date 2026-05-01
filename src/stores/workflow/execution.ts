@@ -180,7 +180,7 @@ export function createExecutionActions(
         : String(error)
   })
 
-  async function startExecution(inputs?: Record<string, unknown>): Promise<{ executionId: string | null; status: EngineStatus }> {
+  async function startExecution(inputs?: Record<string, unknown>, startNodeId?: string): Promise<{ executionId: string | null; status: EngineStatus }> {
     if (!currentWorkflow.value || startingExecution) {
       return { executionId: null, status: executionStatus.value }
     }
@@ -190,7 +190,7 @@ export function createExecutionActions(
       backendLastError.value = null
       await saveWorkflow(currentWorkflow.value)
       partialExecutionStartNodeId.value = null
-      const result = await createWorkflowDomainApi().workflow.execute(currentWorkflow.value.id, inputs)
+      const result = await createWorkflowDomainApi().workflow.execute(currentWorkflow.value.id, inputs, undefined, startNodeId)
       currentExecutionId = result.executionId
       executionStatus.value = result.status as EngineStatus
       return { executionId: currentExecutionId, status: executionStatus.value }

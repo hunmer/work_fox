@@ -176,26 +176,39 @@ const expanded = computed(() => execBarLayout?.getExpanded() ?? false)
 
 // ====== 执行前输入表单 Drawer ======
 const inputDrawerOpen = ref(false)
+const selectedStartNodeId = ref<string | null>(null)
 
-const startInputFields = computed<OutputField[]>(() => {
+const startNodes = computed<WorkflowNode[]>(() => {
   const nodes = store.currentWorkflow?.nodes
   if (!nodes) return []
-  const startNode = getNodesForExecutionScope(nodes, null).find(n => n.type === 'start')
-  const fields = startNode?.data?.inputFields
+  return getNodesForExecutionScope(nodes, null).filter(n => n.type === 'start')
+})
+
+const activeStartNode = computed<WorkflowNode | null>(() => {
+  if (selectedStartNodeId.value) {
+    const selected = startNodes.value.find(node => node.id === selectedStartNodeId.value)
+    if (selected) return selected
+  }
+  return startNodes.value[0] ?? null
+})
+
+const startInputFields = computed<OutputField[]>(() => {
+  const fields = activeStartNode.value?.data?.inputFields
   return Array.isArray(fields) ? fields : []
 })
 
-function handleExecuteClick() {
+function handleExecuteClick(startNodeId?: string) {
+  selectedStartNodeId.value = startNodeId ?? startNodes.value[0]?.id ?? null
   if (startInputFields.value.length > 0) {
     inputDrawerOpen.value = true
   } else {
-    store.startExecution()
+    store.startExecution(undefined, selectedStartNodeId.value ?? undefined)
     setExpanded(true)
   }
 }
 
 function handleInputSubmit(inputs: Record<string, unknown>) {
-  store.startExecution(inputs)
+  store.startExecution(inputs, selectedStartNodeId.value ?? undefined)
   setExpanded(true)
 }
 
@@ -297,16 +310,42 @@ function setExpanded(nextExpanded: boolean) {
         />
         {{ resumeButtonText }}
       </Button>
-      <Button
-        v-else
-        variant="ghost"
-        size="sm"
-        class="h-6 text-xs gap-1 px-2"
-        :disabled="!canStart"
-        @click="handleExecuteClick()"
-      >
-        <Play class="w-3 h-3" /> 执行
-      </Button>
+      <template v-else>
+        <Button
+          v-if="startNodes.length <= 1"
+          variant="ghost"
+          size="sm"
+          class="h-6 text-xs gap-1 px-2"
+          :disabled="!canStart"
+          @click="handleExecuteClick()"
+        >
+          <Play class="w-3 h-3" /> 执行
+        </Button>
+        <DropdownMenu v-else>
+          <DropdownMenuTrigger as-child>
+            <Button
+              variant="ghost"
+              size="sm"
+              class="h-6 text-xs gap-1 px-2"
+              :disabled="!canStart"
+            >
+              <Play class="w-3 h-3" /> 执行
+              <ChevronDown class="w-3 h-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" class="w-56">
+            <DropdownMenuItem
+              v-for="node in startNodes"
+              :key="node.id"
+              class="text-xs"
+              @click="handleExecuteClick(node.id)"
+            >
+              {{ node.label || '开始' }}
+              <span class="ml-auto text-[10px] text-muted-foreground">{{ node.id.slice(0, 8) }}</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </template>
 
       <!-- 验证错误提示 -->
       <div

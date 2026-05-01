@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, inject } from 'vue'
-import { allNodeDefinitions, searchNodeDefinitions, registerPluginNodeDefinitions, type NodeTypeDefinition } from '@/lib/workflow/nodeRegistry'
+import { allNodeDefinitions, searchNodeDefinitions, registerPluginNodeDefinitions } from '@/lib/workflow/nodeRegistry'
 import { resolveLucideIcon } from '@/lib/lucide-resolver'
 import { stringToHsl } from '@/lib/utils'
 import { usePluginStore } from '@/stores/plugin'
@@ -190,12 +190,8 @@ const categories = computed(() => {
   return grouped
 })
 
-function isBoundaryNodeType(nodeType: string): boolean {
-  return nodeType === 'start' || nodeType === 'end'
-}
-
 function isCreateDisabled(nodeType: string): boolean {
-  return isBoundaryNodeType(nodeType) && workflowStore.hasNodeOfType(nodeType)
+  return !workflowStore.canCreateNode(nodeType)
 }
 
 function onDragStart(event: DragEvent, nodeType: string) {

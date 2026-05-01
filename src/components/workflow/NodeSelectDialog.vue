@@ -55,7 +55,7 @@ function getIcon(name: string) {
 }
 
 function handleSelect(type: string) {
-  if (workflowStore.hasNodeOfType(type)) return
+  if (!workflowStore.canCreateNode(type)) return
   emit('select', type)
   emit('update:open', false)
   searchQuery.value = ''
@@ -131,10 +131,10 @@ function handleOpenChange(value: boolean) {
                 v-for="node in filteredNodes"
                 :key="node.type"
                 class="group flex flex-col items-center gap-1.5 p-3 rounded-lg border transition-all"
-                :class="workflowStore.hasNodeOfType(node.type)
+                :class="!workflowStore.canCreateNode(node.type)
                   ? 'border-border opacity-40 cursor-not-allowed'
                   : 'border-border hover:border-primary/50 hover:bg-primary/5 cursor-pointer'"
-                :disabled="workflowStore.hasNodeOfType(node.type)"
+                :disabled="!workflowStore.canCreateNode(node.type)"
                 @click="handleSelect(node.type)"
               >
                 <div class="p-2 rounded-md bg-muted group-hover:bg-primary/10 transition-colors">

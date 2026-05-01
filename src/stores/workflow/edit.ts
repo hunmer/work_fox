@@ -227,6 +227,7 @@ export function createEditActions(
   function canCreateNode(type: string): boolean {
     const def = getNodeDefinition(type)
     if (def?.manualCreate === false) return false
+    if (type === 'start' || type === 'end') return true
     if (def?.singleton && currentWorkflow.value) {
       const exists = currentWorkflow.value.nodes.some((n) => n.type === type)
       if (exists) return false

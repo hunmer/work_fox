@@ -110,10 +110,10 @@ export function executeRendererWorkflowTool(
       return restoreWorkflowVersion(args)
 
     case 'execute_workflow_sync':
-      return executeWorkflowSync()
+      return executeWorkflowSync(args)
 
     case 'execute_workflow_async':
-      return executeWorkflowAsync()
+      return executeWorkflowAsync(args)
 
     case 'get_workflow_result':
       return getWorkflowResult(args)
@@ -192,7 +192,7 @@ async function restoreWorkflowVersion(args: Record<string, unknown>): Promise<To
   }
 }
 
-async function executeWorkflowSync(): Promise<ToolResult> {
+async function executeWorkflowSync(args: Record<string, unknown> = {}): Promise<ToolResult> {
   const workflowStore = useTabStore().activeStore
   if (!workflowStore) {
     return { success: false, message: '当前没有激活的工作流标签页' }
@@ -205,7 +205,8 @@ async function executeWorkflowSync(): Promise<ToolResult> {
     return { success: false, message: '工作流正在执行中，请等待完成后再试' }
   }
 
-  const started = await workflowStore.startExecution()
+  const startNodeId = typeof args.start_node_id === 'string' ? args.start_node_id : undefined
+  const started = await workflowStore.startExecution(undefined, startNodeId)
   const executionId = started.executionId
 
   const status = await waitForExecutionTerminalState(workflowStore, executionId)
@@ -231,7 +232,7 @@ async function executeWorkflowSync(): Promise<ToolResult> {
   }
 }
 
-async function executeWorkflowAsync(): Promise<ToolResult> {
+async function executeWorkflowAsync(args: Record<string, unknown> = {}): Promise<ToolResult> {
   const workflowStore = useTabStore().activeStore
   if (!workflowStore) {
     return { success: false, message: '当前没有激活的工作流标签页' }
@@ -244,7 +245,8 @@ async function executeWorkflowAsync(): Promise<ToolResult> {
     return { success: false, message: '工作流正在执行中，请等待完成后再试' }
   }
 
-  const started = await workflowStore.startExecution()
+  const startNodeId = typeof args.start_node_id === 'string' ? args.start_node_id : undefined
+  const started = await workflowStore.startExecution(undefined, startNodeId)
   const executionId = started.executionId || `exec-async-${Date.now()}`
   asyncExecutions.set(executionId, {
     workflowId: workflow.id,
