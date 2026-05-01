@@ -146,6 +146,9 @@ importers:
       vue-stream-markdown:
         specifier: ^0.7.1
         version: 0.7.1(katex@0.16.45)(micromark@4.0.2)(shiki@4.0.2)(vue@3.5.32(typescript@5.7.3))
+      vue-virtual-scroller:
+        specifier: ^3.0.2
+        version: 3.0.2(vue@3.5.32(typescript@5.7.3))
       vue3-emoji-picker:
         specifier: ^1.1.8
         version: 1.1.8(typescript@5.7.3)
@@ -4337,6 +4340,11 @@ packages:
     hasBin: true
     peerDependencies:
       typescript: '>=5.0.0'
+
+  vue-virtual-scroller@3.0.2:
+    resolution: {integrity: sha512-zneKxsBecfFBpH2NAk8zF0IWBRSYRaXnXK/dPQ/AnXE9xlbRyW6sSO9EUb5L5cSFz2Dpfb2giN30/y+/Xvu5PQ==}
+    peerDependencies:
+      vue: ^3.3.0
 
   vue3-emoji-picker@1.1.8:
     resolution: {integrity: sha512-k9tVHeQEBVLzVCLYAkFaI1nib3FJFQwdPhWD5khJkhks3ktg3g12z5wPGOSDpIuSLNtelRGvq1qdmZuJu5khfA==}
@@ -9244,6 +9252,10 @@ snapshots:
       '@volar/typescript': 2.4.28
       '@vue/language-core': 3.2.7
       typescript: 5.7.3
+
+  vue-virtual-scroller@3.0.2(vue@3.5.32(typescript@5.7.3)):
+    dependencies:
+      vue: 3.5.32(typescript@5.7.3)
 
   vue3-emoji-picker@1.1.8(typescript@5.7.3):
     dependencies:

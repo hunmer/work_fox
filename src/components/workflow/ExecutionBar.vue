@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, ref } from 'vue'
+import { DynamicScroller, DynamicScrollerItem, RecycleScroller } from 'vue-virtual-scroller'
+import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import { useWorkflowStore } from '@/stores/workflow'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -21,6 +23,14 @@ type StepGroupItem =
   | { type: 'single'; step: ExecutionStep }
   | { type: 'group'; groupKey: string; parentLabel: string; parentType: string; hue: number; steps: ExecutionStep[] }
 
+type StepCardItem = {
+  key: string
+  step: ExecutionStep
+  groupHue?: number
+}
+
+type StepLog = NonNullable<ExecutionStep['logs']>[number]
+
 const SCOPE_PARENT_TYPES = new Set(['loop', 'sub_workflow'])
 
 const snapshotNodeMap = computed(() => {
@@ -41,10 +51,12 @@ function stepsOfItem(item: StepGroupItem): ExecutionStep[] {
   return item.type === 'single' ? [item.step] : item.steps
 }
 
-function itemKey(item: StepGroupItem): string {
-  return item.type === 'single'
-    ? `s-${item.step.nodeId}-${item.step.startedAt}`
-    : `g-${item.groupKey}`
+function logItemKey(_log: StepLog, index: number): number {
+  return index
+}
+
+function activeStepTab(stepKey: string): string {
+  return stepTabs.value[stepKey] || 'input'
 }
 
 /** 将扁平步骤列表按 scope 父节点分组 */
@@ -112,6 +124,25 @@ const groupedSteps = computed<StepGroupItem[]>(() => {
 
   flushGroup()
   return result
+})
+
+const stepCards = computed<StepCardItem[]>(() => {
+  const cards: StepCardItem[] = []
+
+  for (const item of groupedSteps.value) {
+    const steps = stepsOfItem(item)
+    steps.forEach((step, index) => {
+      cards.push({
+        key: item.type === 'single'
+          ? `s-${step.nodeId}-${step.startedAt}-${index}`
+          : `g-${item.groupKey}-${step.nodeId}-${step.startedAt}-${index}`,
+        step,
+        groupHue: item.type === 'group' ? item.hue : undefined,
+      })
+    })
+  }
+
+  return cards
 })
 
 const stepTabs = ref<Record<string, string>>({})
@@ -533,178 +564,192 @@ function setExpanded(nextExpanded: boolean) {
           <div class="h-full flex flex-col">
             <div
               v-if="displayLog"
-              class="execution-cards flex-1 min-h-0 flex gap-2 p-2 overflow-x-auto"
+              class="execution-cards flex-1 min-h-0"
             >
-              <template v-for="item in groupedSteps" :key="itemKey(item)">
-                <!-- 分组容器：group 带背景/padding，single 用 display:contents 透明 -->
-                <div
-                  :class="item.type === 'group'
-                    ? 'shrink-0 flex gap-2 p-2 rounded-lg h-full'
-                    : 'contents'"
-                  :style="item.type === 'group'
-                    ? { backgroundColor: `hsla(${item.hue}, 55%, 50%, 0.07)`, borderLeft: `3px solid hsl(${item.hue}, 55%, 55%)` }
-                    : undefined"
-                >
-                  <template v-for="(step, stepIdx) in stepsOfItem(item)" :key="`${step.nodeId}-${stepIdx}`">
+              <RecycleScroller
+                :items="stepCards"
+                :item-size="288"
+                :buffer="576"
+                :key-field="'key'"
+                direction="horizontal"
+                class="h-full w-full px-2 py-2"
+                item-class="execution-card-item"
+              >
+                <template #default="{ item: stepCard }">
+                  <div class="h-full pr-2">
                     <div
-                      class="shrink-0 w-[280px] border border-border rounded-md flex flex-col h-full overflow-hidden"
-                      :class="item.type === 'single' ? 'bg-background' : ''"
-                      :style="item.type === 'group' ? { backgroundColor: `hsla(${item.hue}, 45%, 50%, 0.05)` } : undefined"
+                      class="w-[280px] border border-border rounded-md flex flex-col h-full overflow-hidden"
+                      :class="stepCard.groupHue === undefined ? 'bg-background' : ''"
+                      :style="stepCard.groupHue === undefined
+                        ? undefined
+                        : {
+                          backgroundColor: `hsla(${stepCard.groupHue}, 45%, 50%, 0.05)`,
+                          borderLeft: `3px solid hsl(${stepCard.groupHue}, 55%, 55%)`,
+                        }"
                     >
-                <!-- 卡片 Header：状态 + 名称 + 时间 -->
-                <div class="flex items-center gap-1.5 px-2.5 py-1.5 border-b border-border">
-                  <CheckCircle
-                    v-if="step.status === 'completed'"
-                    class="w-3 h-3 text-green-500 shrink-0"
-                  />
-                  <XCircle
-                    v-else-if="step.status === 'error'"
-                    class="w-3 h-3 text-red-500 shrink-0"
-                  />
-                  <Loader2
-                    v-else-if="step.status === 'running'"
-                    class="w-3 h-3 text-blue-500 animate-spin shrink-0"
-                  />
-                  <Circle
-                    v-else
-                    class="w-3 h-3 text-muted-foreground shrink-0"
-                  />
-                  <span class="text-xs font-medium truncate flex-1">{{ step.nodeLabel }}</span>
-                  <span class="text-[10px] text-muted-foreground/60 shrink-0 font-mono">
-                    {{ snapshotNodeMap.get(step.nodeId)?.type || '' }}
-                  </span>
-                  <span class="text-[10px] text-muted-foreground shrink-0">
-                    {{ step.finishedAt ? formatDuration(step.startedAt, step.finishedAt) : '...' }}
-                  </span>
-                  <button
-                    class="shrink-0 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                    title="复制节点信息"
-                    @click="copyNodeInfo(step)"
-                  >
-                    <component :is="copiedNodeId === `info-${step.nodeId}` ? Check : Copy" class="w-3 h-3" />
-                  </button>
-                </div>
-
-                <!-- 错误信息 -->
-                <div
-                  v-if="step.error"
-                  class="px-2.5 py-1 pr-1 text-[10px] text-red-500 bg-red-500/10 border-b border-border flex items-start gap-1"
-                >
-                  <span class="flex-1 break-all">{{ step.error }}</span>
-                  <button
-                    class="shrink-0 p-0.5 rounded hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors"
-                    title="复制错误信息"
-                    @click="copyError(step)"
-                  >
-                    <component :is="copiedNodeId === step.nodeId ? Check : Copy" class="w-3 h-3" />
-                  </button>
-                </div>
-
-                <!-- Tabs：输入 / 输出 / 日志 -->
-                <Tabs
-                  :model-value="stepTabs[step.nodeId] || 'input'"
-                  class="flex-1 flex flex-col min-h-0"
-                  @update:model-value="stepTabs[step.nodeId] = $event"
-                >
-                  <TabsList class="w-full h-7 rounded-none border-b border-border bg-transparent px-1">
-                    <TabsTrigger
-                      value="input"
-                      class="text-[10px] h-5 px-2 flex-1"
-                    >
-                      输入
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="output"
-                      class="text-[10px] h-5 px-2 flex-1"
-                    >
-                      输出
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="logs"
-                      class="text-[10px] h-5 px-2 flex-1"
-                    >
-                      日志
-                    </TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent
-                    value="input"
-                    class="flex-1 min-h-0 mt-0"
-                  >
-                    <JsonEditor
-                      v-if="step.input !== undefined && step.input !== null"
-                      :model-value="step.input"
-                      :readonly="true"
-                      height="100%"
-                      mode="tree"
-                      class="h-full [&_.json-editor-wrapper]:h-full [&_.json-editor-wrapper]:border-0"
-                    />
-                    <div
-                      v-else
-                      class="p-2 text-[10px] text-muted-foreground"
-                    >
-                      无输入
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent
-                    value="output"
-                    class="flex-1 min-h-0 mt-0"
-                  >
-                    <JsonEditor
-                      v-if="step.output !== undefined && step.output !== null"
-                      :model-value="step.output"
-                      :readonly="true"
-                      height="100%"
-                      mode="tree"
-                      class="h-full [&_.json-editor-wrapper]:h-full [&_.json-editor-wrapper]:border-0"
-                    />
-                    <div
-                      v-else
-                      class="p-2 text-[10px] text-muted-foreground"
-                    >
-                      无输出
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent
-                    value="logs"
-                    class="flex-1 min-h-0 mt-0"
-                  >
-                    <ScrollArea class="h-full">
-                      <div
-                        v-if="step.logs && step.logs.length > 0"
-                        class="p-2 space-y-px"
-                      >
-                        <div
-                          v-for="(log, idx) in step.logs"
-                          :key="idx"
-                          class="flex items-start gap-1 text-[10px] px-1.5 py-0.5 rounded"
-                          :class="{
-                            'text-blue-600 dark:text-blue-400 bg-blue-500/10': log.level === 'info',
-                            'text-yellow-600 dark:text-yellow-400 bg-yellow-500/10': log.level === 'warning',
-                            'text-red-600 dark:text-red-400 bg-red-500/10': log.level === 'error',
-                          }"
+                      <!-- 卡片 Header：状态 + 名称 + 时间 -->
+                      <div class="flex items-center gap-1.5 px-2.5 py-1.5 border-b border-border">
+                        <CheckCircle
+                          v-if="stepCard.step.status === 'completed'"
+                          class="w-3 h-3 text-green-500 shrink-0"
+                        />
+                        <XCircle
+                          v-else-if="stepCard.step.status === 'error'"
+                          class="w-3 h-3 text-red-500 shrink-0"
+                        />
+                        <Loader2
+                          v-else-if="stepCard.step.status === 'running'"
+                          class="w-3 h-3 text-blue-500 animate-spin shrink-0"
+                        />
+                        <Circle
+                          v-else
+                          class="w-3 h-3 text-muted-foreground shrink-0"
+                        />
+                        <span class="text-xs font-medium truncate flex-1">{{ stepCard.step.nodeLabel }}</span>
+                        <span class="text-[10px] text-muted-foreground/60 shrink-0 font-mono">
+                          {{ snapshotNodeMap.get(stepCard.step.nodeId)?.type || '' }}
+                        </span>
+                        <span class="text-[10px] text-muted-foreground shrink-0">
+                          {{ stepCard.step.finishedAt ? formatDuration(stepCard.step.startedAt, stepCard.step.finishedAt) : '...' }}
+                        </span>
+                        <button
+                          class="shrink-0 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                          title="复制节点信息"
+                          @click="copyNodeInfo(stepCard.step)"
                         >
-                          <Info v-if="log.level === 'info'" class="w-2.5 h-2.5 shrink-0 mt-0.5" />
-                          <AlertTriangle v-else-if="log.level === 'warning'" class="w-2.5 h-2.5 shrink-0 mt-0.5" />
-                          <AlertCircleIcon v-else class="w-2.5 h-2.5 shrink-0 mt-0.5" />
-                          <span class="break-all">{{ log.message }}</span>
-                        </div>
+                          <component :is="copiedNodeId === `info-${stepCard.step.nodeId}` ? Check : Copy" class="w-3 h-3" />
+                        </button>
                       </div>
+
+                      <!-- 错误信息 -->
                       <div
-                        v-else
-                        class="p-2 text-[10px] text-muted-foreground"
+                        v-if="stepCard.step.error"
+                        class="px-2.5 py-1 pr-1 text-[10px] text-red-500 bg-red-500/10 border-b border-border flex items-start gap-1"
                       >
-                        无日志
+                        <span class="flex-1 break-all">{{ stepCard.step.error }}</span>
+                        <button
+                          class="shrink-0 p-0.5 rounded hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors"
+                          title="复制错误信息"
+                          @click="copyError(stepCard.step)"
+                        >
+                          <component :is="copiedNodeId === stepCard.step.nodeId ? Check : Copy" class="w-3 h-3" />
+                        </button>
                       </div>
-                    </ScrollArea>
-                  </TabsContent>
-                </Tabs>
+
+                      <!-- Tabs：输入 / 输出 / 日志 -->
+                      <Tabs
+                        :model-value="activeStepTab(stepCard.key)"
+                        class="flex-1 flex flex-col min-h-0"
+                        @update:model-value="stepTabs[stepCard.key] = $event"
+                      >
+                        <TabsList class="w-full h-7 rounded-none border-b border-border bg-transparent px-1">
+                          <TabsTrigger
+                            value="input"
+                            class="text-[10px] h-5 px-2 flex-1"
+                          >
+                            输入
+                          </TabsTrigger>
+                          <TabsTrigger
+                            value="output"
+                            class="text-[10px] h-5 px-2 flex-1"
+                          >
+                            输出
+                          </TabsTrigger>
+                          <TabsTrigger
+                            value="logs"
+                            class="text-[10px] h-5 px-2 flex-1"
+                          >
+                            日志
+                          </TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent
+                          value="input"
+                          class="flex-1 min-h-0 mt-0"
+                        >
+                          <JsonEditor
+                            v-if="activeStepTab(stepCard.key) === 'input' && stepCard.step.input !== undefined && stepCard.step.input !== null"
+                            :model-value="stepCard.step.input"
+                            :readonly="true"
+                            height="100%"
+                            mode="tree"
+                            class="h-full [&_.json-editor-wrapper]:h-full [&_.json-editor-wrapper]:border-0"
+                          />
+                          <div
+                            v-else
+                            class="p-2 text-[10px] text-muted-foreground"
+                          >
+                            无输入
+                          </div>
+                        </TabsContent>
+
+                        <TabsContent
+                          value="output"
+                          class="flex-1 min-h-0 mt-0"
+                        >
+                          <JsonEditor
+                            v-if="activeStepTab(stepCard.key) === 'output' && stepCard.step.output !== undefined && stepCard.step.output !== null"
+                            :model-value="stepCard.step.output"
+                            :readonly="true"
+                            height="100%"
+                            mode="tree"
+                            class="h-full [&_.json-editor-wrapper]:h-full [&_.json-editor-wrapper]:border-0"
+                          />
+                          <div
+                            v-else
+                            class="p-2 text-[10px] text-muted-foreground"
+                          >
+                            无输出
+                          </div>
+                        </TabsContent>
+
+                        <TabsContent
+                          value="logs"
+                          class="flex-1 min-h-0 mt-0"
+                        >
+                          <DynamicScroller
+                            v-if="activeStepTab(stepCard.key) === 'logs' && stepCard.step.logs && stepCard.step.logs.length > 0"
+                            :items="stepCard.step.logs"
+                            :min-item-size="22"
+                            :key-field="logItemKey"
+                            class="h-full px-2 py-1 execution-log-scroller"
+                          >
+                            <template #default="{ item: log, index, active }">
+                              <DynamicScrollerItem
+                                :item="log"
+                                :active="active"
+                                :index="index"
+                                :size-dependencies="[log.level, log.message]"
+                                :emit-resize="true"
+                              >
+                                <div
+                                  class="flex items-start gap-1 text-[10px] px-1.5 py-0.5 my-px rounded"
+                                  :class="{
+                                    'text-blue-600 dark:text-blue-400 bg-blue-500/10': log.level === 'info',
+                                    'text-yellow-600 dark:text-yellow-400 bg-yellow-500/10': log.level === 'warning',
+                                    'text-red-600 dark:text-red-400 bg-red-500/10': log.level === 'error',
+                                  }"
+                                >
+                                  <Info v-if="log.level === 'info'" class="w-2.5 h-2.5 shrink-0 mt-0.5" />
+                                  <AlertTriangle v-else-if="log.level === 'warning'" class="w-2.5 h-2.5 shrink-0 mt-0.5" />
+                                  <AlertCircleIcon v-else class="w-2.5 h-2.5 shrink-0 mt-0.5" />
+                                  <span class="break-all">{{ log.message }}</span>
+                                </div>
+                              </DynamicScrollerItem>
+                            </template>
+                          </DynamicScroller>
+                          <div
+                            v-else
+                            class="p-2 text-[10px] text-muted-foreground"
+                          >
+                            无日志
+                          </div>
+                        </TabsContent>
+                      </Tabs>
                     </div>
-                  </template>
-                </div>
-              </template>
+                  </div>
+                </template>
+              </RecycleScroller>
             </div>
             <div
               v-else
