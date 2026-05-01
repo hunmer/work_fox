@@ -407,7 +407,7 @@ async function handleRerun() {
         <span>输入参数</span>
         <span class="text-[10px] opacity-60">({{ argEntries.length }})</span>
       </CollapsibleTrigger>
-      <CollapsibleContent>
+      <CollapsibleContent class="max-h-[100px] overflow-y-auto">
         <div class="px-3 pb-2 space-y-1">
           <div
             v-for="entry in argEntries"
@@ -500,7 +500,7 @@ async function handleRerun() {
           </svg>
         </button>
       </div>
-      <CollapsibleContent>
+      <CollapsibleContent class="max-h-[100px] overflow-y-auto">
         <div
           v-if="toolCall.error"
           class="px-3 pb-2 text-red-500 font-mono text-[11px]"

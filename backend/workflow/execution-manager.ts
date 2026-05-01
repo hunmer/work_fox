@@ -943,6 +943,11 @@ export class BackendWorkflowExecutionManager {
         items,
       },
     })
+    if (result === null || result === undefined) {
+      appendNodeLog('warning', '用户取消表单，工作流中止')
+      throw new Error('表单已取消，工作流已中止')
+    }
+
     appendNodeLog('info', '用户表单填写完成')
     return { values: result, confirmed: result !== null }
   }
