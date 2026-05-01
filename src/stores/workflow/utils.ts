@@ -20,7 +20,7 @@ export function validateWorkflowExecution(workflow: Workflow): string | null {
 export function buildPartialWorkflowSnapshot(
   workflow: Workflow,
   firstNodeId: string,
-): { nodes: WorkflowNode[]; edges: Workflow['edges'] } | null {
+): { nodes: WorkflowNode[]; edges: Workflow['edges']; groups?: Workflow['groups'] } | null {
   const firstNode = workflow.nodes.find((node) => node.id === firstNodeId)
   if (!firstNode) return null
 
@@ -48,6 +48,7 @@ export function buildPartialWorkflowSnapshot(
   return {
     nodes: orderedNodes,
     edges: partialEdges,
+    groups: workflow.groups,
   }
 }
 

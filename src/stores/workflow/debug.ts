@@ -24,6 +24,7 @@ export function createDebugActions(
       snapshot: {
         nodes: currentWorkflow.value.nodes,
         edges: currentWorkflow.value.edges,
+        groups: currentWorkflow.value.groups,
       },
       embeddedNode,
     })

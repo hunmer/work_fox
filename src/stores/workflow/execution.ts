@@ -190,7 +190,16 @@ export function createExecutionActions(
       backendLastError.value = null
       await saveWorkflow(currentWorkflow.value)
       partialExecutionStartNodeId.value = null
-      const result = await createWorkflowDomainApi().workflow.execute(currentWorkflow.value.id, inputs, undefined, startNodeId)
+      const result = await createWorkflowDomainApi().workflow.execute(
+        currentWorkflow.value.id,
+        inputs,
+        {
+          nodes: currentWorkflow.value.nodes,
+          edges: currentWorkflow.value.edges,
+          groups: currentWorkflow.value.groups,
+        },
+        startNodeId,
+      )
       currentExecutionId = result.executionId
       executionStatus.value = result.status as EngineStatus
       return { executionId: currentExecutionId, status: executionStatus.value }

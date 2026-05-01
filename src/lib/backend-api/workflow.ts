@@ -35,7 +35,7 @@ export const workflowBackendApi = {
   execute(
     workflowId: string,
     input?: Record<string, unknown>,
-    snapshot?: { nodes: WorkflowNode[]; edges: Workflow['edges'] },
+    snapshot?: { nodes: WorkflowNode[]; edges: Workflow['edges']; groups?: Workflow['groups'] },
     startNodeId?: string,
   ) {
     return wsBridge.invoke('workflow:execute', { workflowId, input, snapshot, startNodeId })
@@ -45,7 +45,7 @@ export const workflowBackendApi = {
     nodeId: string,
     options?: {
       context?: Record<string, unknown>
-      snapshot?: { nodes: WorkflowNode[]; edges: Workflow['edges'] }
+      snapshot?: { nodes: WorkflowNode[]; edges: Workflow['edges']; groups?: Workflow['groups'] }
       embeddedNode?: WorkflowNode
     },
   ) {

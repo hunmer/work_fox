@@ -2,6 +2,7 @@ import type {
   EngineStatus,
   ExecutionLog,
   ExecutionStep,
+  Workflow,
   WorkflowEdge,
   WorkflowNode,
 } from './workflow-types'

@@ -3,6 +3,7 @@ import type {
   Workflow,
   WorkflowNode,
   WorkflowEdge,
+  WorkflowGroup,
   ExecutionLog,
   ExecutionStep,
   ExecutionLogEntry,
@@ -60,6 +61,7 @@ interface ExecutionSession {
   ownerClientId: string
   nodes: WorkflowNode[]
   edges: WorkflowEdge[]
+  groups?: WorkflowGroup[]
   context: Record<string, any>
   status: EngineStatus
   executionOrder: WorkflowNode[]
@@ -157,9 +159,10 @@ export class BackendWorkflowExecutionManager {
   private resolveExecutionSnapshot(
     workflow: Workflow,
     request: WorkflowExecuteRequest,
-  ): { nodes: WorkflowNode[]; edges: WorkflowEdge[] } | undefined {
+  ): { nodes: WorkflowNode[]; edges: WorkflowEdge[]; groups?: WorkflowGroup[] } | undefined {
     const baseNodes = request.snapshot?.nodes ? clone(request.snapshot.nodes) : clone(workflow.nodes)
     const baseEdges = request.snapshot?.edges ? clone(request.snapshot.edges) : clone(workflow.edges)
+    const baseGroups = request.snapshot?.groups ? clone(request.snapshot.groups) : clone(workflow.groups || [])
     const rootNodes = getNodesForExecutionScope(baseNodes, null)
     const startNodes = rootNodes.filter((node) => node.type === 'start')
 
@@ -168,7 +171,7 @@ export class BackendWorkflowExecutionManager {
       if (!startNode) {
         throw createErrorShape('BAD_REQUEST', `指定的开始节点不存在或不在顶层工作流中: ${request.startNodeId}`)
       }
-      return this.buildReachableSnapshot(baseNodes, baseEdges, startNode.id)
+      return this.buildReachableSnapshot(baseNodes, baseEdges, baseGroups, startNode.id)
     }
 
     if (startNodes.length > 1) {
@@ -176,14 +179,15 @@ export class BackendWorkflowExecutionManager {
       throw createErrorShape('BAD_REQUEST', `工作流包含多个顶层开始节点，请指定 start_node_id。可选开始节点: ${choices}`)
     }
 
-    return request.snapshot ? { nodes: baseNodes, edges: baseEdges } : undefined
+    return request.snapshot ? { nodes: baseNodes, edges: baseEdges, groups: baseGroups } : undefined
   }
 
   private buildReachableSnapshot(
     nodes: WorkflowNode[],
     edges: WorkflowEdge[],
+    groups: WorkflowGroup[],
     firstNodeId: string,
-  ): { nodes: WorkflowNode[]; edges: WorkflowEdge[] } {
+  ): { nodes: WorkflowNode[]; edges: WorkflowEdge[]; groups?: WorkflowGroup[] } {
     const reachableIds = new Set<string>([firstNodeId])
     const queue = [firstNodeId]
 
@@ -203,6 +207,7 @@ export class BackendWorkflowExecutionManager {
         ? [firstNode, ...partialNodes.filter((node) => node.id !== firstNodeId)]
         : partialNodes,
       edges: edges.filter((edge) => reachableIds.has(edge.source) && reachableIds.has(edge.target)),
+      groups,
     }
   }
 
@@ -215,6 +220,7 @@ export class BackendWorkflowExecutionManager {
 
     const snapshotNodes = request.snapshot?.nodes ? clone(request.snapshot.nodes) : clone(workflow.nodes)
     const snapshotEdges = request.snapshot?.edges ? clone(request.snapshot.edges) : clone(workflow.edges)
+    const snapshotGroups = request.snapshot?.groups ? clone(request.snapshot.groups) : clone(workflow.groups || [])
     const embeddedNode = request.embeddedNode ? clone(request.embeddedNode) : null
     const nodes = embeddedNode
       ? snapshotNodes.some((node) => node.id === request.nodeId)
@@ -236,7 +242,7 @@ export class BackendWorkflowExecutionManager {
       workflow,
       ownerClientId,
       request.input || {},
-      { nodes, edges: snapshotEdges },
+      { nodes, edges: snapshotEdges, groups: snapshotGroups },
       request.context,
     )
 
@@ -273,7 +279,7 @@ export class BackendWorkflowExecutionManager {
     workflow: Workflow,
     ownerClientId: string,
     input: Record<string, unknown>,
-    snapshot?: { nodes: WorkflowNode[]; edges: WorkflowEdge[] },
+    snapshot?: { nodes: WorkflowNode[]; edges: WorkflowEdge[]; groups?: WorkflowGroup[] },
     context?: Record<string, unknown>,
     eventSink?: (channel: string, payload: unknown) => void,
   ): ExecutionSession {
@@ -283,6 +289,7 @@ export class BackendWorkflowExecutionManager {
       ownerClientId,
       nodes: snapshot?.nodes ? clone(snapshot.nodes) : clone(workflow.nodes),
       edges: snapshot?.edges ? clone(snapshot.edges) : clone(workflow.edges),
+      groups: snapshot?.groups ? clone(snapshot.groups) : clone(workflow.groups || []),
       context: {
         ...(context ? clone(context) : {}),
         __data__: context?.__data__ && typeof context.__data__ === 'object' ? clone(context.__data__) : {},
@@ -1639,6 +1646,7 @@ if (typeof main === 'function') return main({ params, context })`)
       snapshot: {
         nodes: clone(session.nodes),
         edges: clone(session.edges),
+        groups: clone(session.groups || []),
       },
     }
   }
