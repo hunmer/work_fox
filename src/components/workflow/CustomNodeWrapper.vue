@@ -181,8 +181,6 @@ const stateBackground = computed(() => {
         return 'bg-yellow-500/10'
     }
   }
-  if (definition.value?.type === 'start') return 'bg-emerald-500/10'
-  if (definition.value?.type === 'end') return 'bg-slate-500/10'
   return 'bg-background'
 })
 

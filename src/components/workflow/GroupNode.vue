@@ -82,7 +82,7 @@ const headerLabel = computed(() => {
 const groupStyle = computed(() => ({
   width: props.data.width ? `${props.data.width}px` : '100%',
   height: props.data.height ? `${props.data.height}px` : '100%',
-  backgroundColor: props.data.color ? `${props.data.color}99` : 'transparent',
+  backgroundColor: props.data.color ? `${props.data.color}33` : 'transparent',
 }))
 
 function selectColor(color?: string) {
