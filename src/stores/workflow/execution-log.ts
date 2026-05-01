@@ -30,7 +30,7 @@ export function createExecutionLogManager(currentWorkflow: Ref<Workflow | null>,
     selectedExecutionLogId.value = null
   }
 
-  function appendCompletedLog(log: ExecutionLog, workflowId: string, snapshot?: { nodes: any[]; edges: any[] }) {
+  function appendCompletedLog(log: ExecutionLog, workflowId: string, snapshot?: { nodes: any[]; edges: any[]; groups?: any[] }) {
     if (!log.id) {
       log.id = `exec-${Date.now()}`
     }

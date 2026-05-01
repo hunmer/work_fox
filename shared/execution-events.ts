@@ -89,6 +89,7 @@ export interface ExecutionContextEvent extends ExecutionEventBase {
 export interface ExecutionSnapshot {
   nodes: WorkflowNode[]
   edges: WorkflowEdge[]
+  groups?: Workflow['groups']
 }
 
 export interface ExecutionBacklogEvent {

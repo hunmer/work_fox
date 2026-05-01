@@ -261,15 +261,10 @@ function formatDuration(start: number, end?: number): string {
 
 function selectLog(log: ExecutionLog) {
   if (store.isPreview) {
-    store.selectedExecutionLogId = log.id
-    if (log.snapshot && store.currentWorkflow) {
-      store.currentWorkflow.nodes = JSON.parse(JSON.stringify(log.snapshot.nodes))
-      store.currentWorkflow.edges = JSON.parse(JSON.stringify(log.snapshot.edges))
-    }
-  } else {
-    store.selectedExecutionLogId = log.id
-    store.enterPreview(log)
+    store.exitPreview()
   }
+  store.selectedExecutionLogId = log.id
+  store.enterPreview(log)
 }
 
 const displayLog = computed(() => store.selectedExecutionLog)

@@ -143,6 +143,9 @@ export function createWorkflowStore(tabId: string) {
         _prePreviewWorkflow = JSON.parse(JSON.stringify(currentWorkflow.value))
         currentWorkflow.value.nodes = JSON.parse(JSON.stringify(log.snapshot.nodes))
         currentWorkflow.value.edges = JSON.parse(JSON.stringify(log.snapshot.edges))
+        if (log.snapshot.groups) {
+          currentWorkflow.value.groups = JSON.parse(JSON.stringify(log.snapshot.groups))
+        }
         isPreview.value = true
       },
       exitPreview: () => {
@@ -150,6 +153,7 @@ export function createWorkflowStore(tabId: string) {
         if (_prePreviewWorkflow && currentWorkflow.value) {
           currentWorkflow.value.nodes = _prePreviewWorkflow.nodes
           currentWorkflow.value.edges = _prePreviewWorkflow.edges
+          currentWorkflow.value.groups = _prePreviewWorkflow.groups || []
           _prePreviewWorkflow = null
         }
         execLogMgr.selectedExecutionLogId.value = null

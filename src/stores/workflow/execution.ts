@@ -107,8 +107,8 @@ export function createExecutionActions(
         executionLog.value = (payload as ExecutionEventMap['workflow:completed']).log
         executionContext.value = (payload as ExecutionEventMap['workflow:completed']).context as Record<string, any>
         if (currentWorkflow.value) {
-          const { nodes, edges } = currentWorkflow.value
-          execLogMgr.appendCompletedLog((payload as ExecutionEventMap['workflow:completed']).log, currentWorkflow.value.id, { nodes, edges })
+          const { nodes, edges, groups } = currentWorkflow.value
+          execLogMgr.appendCompletedLog((payload as ExecutionEventMap['workflow:completed']).log, currentWorkflow.value.id, { nodes, edges, groups })
         }
         break
       case 'workflow:error':
@@ -121,8 +121,8 @@ export function createExecutionActions(
         if ((payload as ExecutionEventMap['workflow:error']).log) {
           executionLog.value = (payload as ExecutionEventMap['workflow:error']).log || null
           if (currentWorkflow.value) {
-            const { nodes, edges } = currentWorkflow.value
-            execLogMgr.appendCompletedLog((payload as ExecutionEventMap['workflow:error']).log!, currentWorkflow.value.id, { nodes, edges })
+            const { nodes, edges, groups } = currentWorkflow.value
+            execLogMgr.appendCompletedLog((payload as ExecutionEventMap['workflow:error']).log!, currentWorkflow.value.id, { nodes, edges, groups })
           }
         }
         break

@@ -84,6 +84,11 @@ export interface WorkflowGroup {
   name: string
   childNodeIds: string[]                         // 直接子节点 ID（不含嵌套子分组的子节点）
   childGroupIds: string[]                        // 直接子分组 ID（嵌套）
+  x?: number                                     // 分组边界左上角 X
+  y?: number                                     // 分组边界左上角 Y
+  width?: number                                 // 手动调整后的宽度
+  height?: number                                // 手动调整后的高度
+  color?: string                                 // 分组背景色（hex/rgb 等 CSS 色值）
   locked: boolean                                // 固定状态
   disabled: boolean                              // 分组级禁用开关
   savedNodeStates: Record<string, NodeRunState>  // 禁用前记忆每个节点的状态
@@ -251,6 +256,7 @@ export interface ExecutionLog {
   snapshot?: {
     nodes: WorkflowNode[]
     edges: WorkflowEdge[]
+    groups?: WorkflowGroup[]
   }
 }
 

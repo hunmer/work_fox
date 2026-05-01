@@ -274,6 +274,7 @@ export interface ExecutionLog {
   snapshot?: {
     nodes: WorkflowNode[]
     edges: WorkflowEdge[]
+    groups?: WorkflowGroup[]
   }
 }
 
