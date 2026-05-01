@@ -66,6 +66,13 @@ const displayToolCalls = computed(() => {
   return props.message.toolCalls
 })
 
+const displayThinking = computed(() => {
+  return (displayThinkingBlocks.value ?? [])
+    .map((block) => block.content)
+    .filter(Boolean)
+    .join('\n\n')
+})
+
 const isUser = computed(() => props.message.role === 'user')
 const isSystem = computed(() => props.message.role === 'system')
 

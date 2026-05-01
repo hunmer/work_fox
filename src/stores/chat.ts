@@ -31,9 +31,9 @@ async function persistMessageUpdate(
   scopeKey: string,
   sessionId: string,
 ) {
-  await dbUpdateMessage(messageId, updates, scopeKey, sessionId)
   const idx = messages.value.findIndex((m) => m.id === messageId)
   if (idx !== -1) messages.value[idx] = { ...messages.value[idx], ...updates }
+  await dbUpdateMessage(messageId, updates, scopeKey, sessionId)
 }
 
 /** 构建流式输出的最终消息内容 */
@@ -68,6 +68,45 @@ function isAskUserQuestionToolName(name: string): boolean {
 
 function hasAskUserQuestionPayload(args: Record<string, unknown> | undefined): boolean {
   return Array.isArray(args?.questions) && args.questions.length > 0
+}
+
+function stringifyCompact(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
+
+function formatMessageForAgentHistory(message: ChatMessage): string {
+  const parts: string[] = []
+  if (message.content) parts.push(message.content)
+
+  if (message.thinkingBlocks?.length) {
+    const thinking = message.thinkingBlocks
+      .map((block) => block.content)
+      .filter(Boolean)
+      .join('\n')
+    if (thinking) parts.push(`[thinking]\n${thinking}`)
+  }
+
+  if (message.toolCalls?.length) {
+    for (const toolCall of message.toolCalls) {
+      parts.push(`[tool_call:${toolCall.name}]\n${stringifyCompact(toolCall.args ?? {})}`)
+      if (toolCall.result !== undefined) {
+        parts.push(`[tool_result:${toolCall.name}]\n${stringifyCompact(toolCall.result)}`)
+      }
+      if (toolCall.error) {
+        parts.push(`[tool_error:${toolCall.name}]\n${toolCall.error}`)
+      }
+    }
+  }
+
+  if (message.toolResult !== undefined) {
+    parts.push(`[tool_result]\n${stringifyCompact(message.toolResult)}`)
+  }
+
+  return parts.join('\n\n')
 }
 
 /** 构建工作流模式选项 */
@@ -338,13 +377,19 @@ function createStreamCallbacks(
         const sk = getScopeKey()
         const sid = getSessionId()
         if (sk && sid) await persistMessageUpdate(assistantMsg.id, messages, updates, sk, sid)
+      } catch (error) {
+        console.error('[chat-store] failed to persist assistant message:', error)
       } finally { resetStreamState() }
     },
     onError: async (error: Error) => {
       try {
         const sk = getScopeKey()
         const sid = getSessionId()
-        if (sk && sid) await persistMessageUpdate(assistantMsg.id, messages, { content: streamingToken.value || `[错误] ${error.message}` }, sk, sid)
+        const updates = buildStreamUpdates(streamingToken, streamingToolCalls, streamingThinkingBlocks, streamingUsage)
+        updates.content = streamingToken.value || `[错误] ${error.message}`
+        if (sk && sid) await persistMessageUpdate(assistantMsg.id, messages, updates, sk, sid)
+      } catch (persistError) {
+        console.error('[chat-store] failed to persist errored assistant message:', persistError)
       } finally { resetStreamState() }
     },
   }
@@ -527,7 +572,7 @@ export function createChatStore(scope: string) {
       const msgId = streamingMessageId.value
       if (msgId) {
         const updates = buildStreamUpdates(streamingToken, streamingToolCalls, streamingThinkingBlocks, streamingUsage)
-        const sk = getScopeKey()
+        const sk = currentSession.value ? resolveScopeKey(currentSession.value.scope, currentSession.value.workflowId) : getScopeKey()
         const sid = currentSessionId.value
         if (sk && sid) await persistMessageUpdate(msgId, messages, updates, sk, sid)
       }
@@ -539,7 +584,8 @@ export function createChatStore(scope: string) {
 
     async function streamAssistantReply(content: string, images?: string[]) {
       const sessionId = currentSessionId.value!
-      const sk = getScopeKey()!
+      const session = currentSession.value
+      const sk = session ? resolveScopeKey(session.scope, session.workflowId) : getScopeKey()!
       const providerStore = useAIProviderStore()
       const uiStore = useChatUIStore()
 
@@ -563,13 +609,14 @@ export function createChatStore(scope: string) {
 
         const history = messages.value
           .filter((m) => m.id !== assistantMsg.id && m.role !== 'system')
-          .map((m) => ({ role: m.role, content: m.content }))
+          .map((m) => ({ role: m.role, content: formatMessageForAgentHistory(m) }))
+          .filter((m) => m.content.trim().length > 0)
 
         const callbacks = createStreamCallbacks(
           assistantMsg, messages, streamingToken, streamingToolCalls,
           streamingThinkingBlocks, streamingUsage, retryStatus, resetStreamState,
           () => { pauseGenerationForUserQuestion().catch(() => {}) },
-          getScopeKey, () => currentSessionId.value,
+          () => sk, () => sessionId,
         )
         const result = await runAgentStream(
           history, content, images, callbacks,
@@ -587,8 +634,7 @@ export function createChatStore(scope: string) {
         if (idx !== -1) {
           const errorContent = error instanceof Error ? error.message : String(error)
           messages.value[idx] = { ...messages.value[idx], content: `[错误] ${errorContent}` }
-          const sk = getScopeKey()
-          if (sk) await dbUpdateMessage(assistantMsg.id, { content: `[错误] ${errorContent}` }, sk, sessionId)
+          await dbUpdateMessage(assistantMsg.id, { content: `[错误] ${errorContent}` }, sk, sessionId)
         }
       }
     }
@@ -624,7 +670,7 @@ export function createChatStore(scope: string) {
       const msgId = streamingMessageId.value
       if (msgId) {
         const updates = buildStreamUpdates(streamingToken, streamingToolCalls, streamingThinkingBlocks, streamingUsage)
-        const sk = getScopeKey()
+        const sk = currentSession.value ? resolveScopeKey(currentSession.value.scope, currentSession.value.workflowId) : getScopeKey()
         const sid = currentSessionId.value
         if (sk && sid) await persistMessageUpdate(msgId, messages, updates, sk, sid)
       }
