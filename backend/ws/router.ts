@@ -52,10 +52,23 @@ export class WSRouter {
       this.logger.debug('WS dispatch done', { channel, requestId, clientId, durationMs: Date.now() - start })
       return result as ChannelResponse<C>
     } catch (error) {
-      this.logger.warn(`WS channel failed: ${channel}`, { requestId, clientId, durationMs: Date.now() - start, error: error instanceof Error ? error.message : String(error) })
+      this.logger.warn(`WS channel failed: ${channel}`, { requestId, clientId, durationMs: Date.now() - start, error: formatErrorForLog(error) })
       throw normalizeRouterError(error)
     }
   }
+}
+
+function formatErrorForLog(error: unknown): string {
+  if (isBackendErrorShape(error)) return `${error.code}: ${error.message}`
+  if (error instanceof Error) return error.message
+  if (error && typeof error === 'object') {
+    try {
+      return JSON.stringify(error)
+    } catch {
+      return String(error)
+    }
+  }
+  return String(error)
 }
 
 function normalizeRouterError(error: unknown): BackendErrorShape {

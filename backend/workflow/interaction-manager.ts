@@ -98,6 +98,19 @@ export class BackendInteractionManager {
     })
   }
 
+  cancelExecution(executionId: string, message = '执行已停止'): number {
+    let cancelled = 0
+    for (const [id, pending] of this.pending.entries()) {
+      if (pending.executionId !== executionId) continue
+      this.pending.delete(id)
+      clearTimeout(pending.timer)
+      if (pending.reconnectTimer) clearTimeout(pending.reconnectTimer)
+      pending.reject(new Error(message))
+      cancelled += 1
+    }
+    return cancelled
+  }
+
   private handleResponse(response: InteractionResponse, clientId: string): void {
     const pending = this.pending.get(response.id)
     if (!pending) return

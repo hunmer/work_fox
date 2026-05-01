@@ -384,10 +384,19 @@ export class BackendWorkflowExecutionManager {
   }
 
   stop(executionId: string): WorkflowExecuteResponse {
-    const session = this.getSession(executionId)
-    session.stopRequested = true
+    const session = this.sessions.get(executionId)
+    if (!session) {
+      const finishedRecovery = this.finishedRecoveries.get(executionId)
+      if (finishedRecovery) {
+        return { executionId, status: finishedRecovery.recovery.status }
+      }
+      return { executionId, status: 'error' }
+    }
 
-    if (session.status === 'paused') {
+    session.stopRequested = true
+    this.deps.interactionManager.cancelExecution(executionId, '执行已停止')
+
+    if (session.status === 'running' || session.status === 'paused') {
       session.status = 'error'
       session.lastErrorMessage = '执行已停止'
       session.finishedAt = Date.now()
@@ -458,6 +467,7 @@ export class BackendWorkflowExecutionManager {
   private async runFromIndex(session: ExecutionSession, startIndex: number): Promise<void> {
     for (let i = startIndex; i < session.executionOrder.length; i++) {
       if (session.stopRequested) {
+        if (session.status === 'error') return
         session.status = 'error'
         session.lastErrorMessage = '执行已停止'
         session.finishedAt = Date.now()
@@ -554,6 +564,8 @@ export class BackendWorkflowExecutionManager {
   }
 
   private async executeNode(session: ExecutionSession, node: WorkflowNode): Promise<'completed' | 'interrupted'> {
+    if (session.stopRequested || session.status === 'error') return 'interrupted'
+
     const delay = typeof node.data?._delay === 'number' ? node.data._delay : 0
     if (delay > 0) {
       await sleep(delay)
@@ -612,6 +624,7 @@ export class BackendWorkflowExecutionManager {
         appendNodeLog('info', '使用 JSON 预设 outputs，跳过节点实际执行')
       }
       const result = presetOutput ?? await this.dispatchNode(session, node, resolvedData, appendNodeLog)
+      if (session.stopRequested) return 'interrupted'
       step.finishedAt = Date.now()
       step.status = 'completed'
       step.output = result && Array.isArray(result._logs)
@@ -639,6 +652,7 @@ export class BackendWorkflowExecutionManager {
       })
       this.emitLog(session)
     } catch (error) {
+      if (session.stopRequested) return 'interrupted'
       step.finishedAt = Date.now()
       step.status = 'error'
       step.error = error instanceof Error ? error.message : String(error)
@@ -1048,10 +1062,10 @@ if (typeof main === 'function') return main({ params, context })`)
 
     while (running.size > 0) {
       await Promise.race(running)
-      if (session.stopRequested) {
+      if (session.stopRequested || this.isSessionErrored(session)) {
         throw new Error('执行已停止')
       }
-      if (session.status === 'error') {
+      if (this.isSessionErrored(session)) {
         break
       }
       while (running.size < concurrency && startNext()) {
@@ -1215,15 +1229,19 @@ if (typeof main === 'function') return main({ params, context })`)
 
     const visited = new Set<string>()
     const executeFrom = async (nodeId: string): Promise<unknown> => {
+      if (this.shouldInterruptNestedExecution(session)) return undefined
+
       const outgoing = adjacency.get(nodeId) || []
       let lastResult: unknown
       for (const edge of outgoing) {
+        if (this.shouldInterruptNestedExecution(session)) return lastResult
         const activeHandle = this.getActiveBranches(session).get(edge.source)
         if (activeHandle !== undefined && edge.sourceHandle !== activeHandle) continue
         const nextNode = findWorkflowNode(scopeNodes, edge.target)
         if (!nextNode || visited.has(nextNode.id)) continue
         visited.add(nextNode.id)
-        await this.executeNode(session, nextNode)
+        const result = await this.executeNode(session, nextNode)
+        if (result === 'interrupted' || this.shouldInterruptNestedExecution(session)) return lastResult
         lastResult = this.getNodeExecutionData(session, nextNode.id)
         const downstream = await executeFrom(nextNode.id)
         if (downstream !== undefined) {
@@ -1263,10 +1281,13 @@ if (typeof main === 'function') return main({ params, context })`)
     const visited = new Set<string>([startNode.id])
 
     const executeFrom = async (nodeId: string): Promise<unknown> => {
+      if (this.shouldInterruptNestedExecution(session)) return undefined
+
       const outgoing = adjacency.get(nodeId) || []
       let lastResult: unknown
 
       for (const edge of outgoing) {
+        if (this.shouldInterruptNestedExecution(session)) return lastResult
         const activeHandle = this.getActiveBranches(session).get(edge.source)
         if (activeHandle !== undefined && edge.sourceHandle !== activeHandle) continue
 
@@ -1274,7 +1295,8 @@ if (typeof main === 'function') return main({ params, context })`)
         if (!nextNode || visited.has(nextNode.id)) continue
 
         visited.add(nextNode.id)
-        await this.executeNode(session, nextNode)
+        const result = await this.executeNode(session, nextNode)
+        if (result === 'interrupted' || this.shouldInterruptNestedExecution(session)) return lastResult
 
         if (nextNode.type !== 'start') {
           lastResult = this.getNodeExecutionData(session, nextNode.id)
@@ -1436,6 +1458,14 @@ if (typeof main === 'function') return main({ params, context })`)
       if (this.isNodeReachable(session, edge.source, seen)) return true
     }
     return false
+  }
+
+  private shouldInterruptNestedExecution(session: ExecutionSession): boolean {
+    return session.stopRequested || this.isSessionErrored(session)
+  }
+
+  private isSessionErrored(session: ExecutionSession): boolean {
+    return (session.status as EngineStatus) === 'error'
   }
 
   private resolveContextVariables(session: ExecutionSession, data: Record<string, any>): Record<string, any> {

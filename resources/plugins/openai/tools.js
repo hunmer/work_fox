@@ -162,11 +162,22 @@ module.exports = {
         }
         const result = await client.chat.completions.create(params)
         const choice = result.choices?.[0]
+        let thinking = choice?.message?.reasoning_content || ''
+        let content = choice?.message?.content || ''
+        if (!thinking) {
+          const match = content.match(/^<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>\s*/i)
+          if (match) {
+            thinking = match[0].replace(/^<think(?:ing)?>\s*/i, '').replace(/<\/think(?:ing)?>\s*$/i, '').trim()
+            content = content.slice(match[0].length).trim()
+          }
+        }
         return {
           success: true,
-          message: choice?.message?.content || '',
+          message: content,
+          thinking,
           data: {
-            content: choice?.message?.content,
+            content,
+            thinking,
             role: choice?.message?.role,
             finish_reason: choice?.finish_reason,
             usage: result.usage,

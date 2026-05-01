@@ -192,8 +192,10 @@ module.exports = {
       outputs: [
         { key: 'success', type: 'boolean' },
         { key: 'message', type: 'string' },
+        { key: 'thinking', type: 'string' },
         { key: 'data', type: 'object', children: [
           { key: 'content', type: 'string' },
+          { key: 'thinking', type: 'string' },
           { key: 'role', type: 'string' },
           { key: 'finish_reason', type: 'string' },
           { key: 'model', type: 'string' },
@@ -228,12 +230,23 @@ module.exports = {
           const result = await client.chat.completions.create(params)
           ctx.logger.info(`Chat - SDK 返回: ${JSON.stringify(result).substring(0, 500)}`)
           const choice = result.choices?.[0]
+          let thinking = choice?.message?.reasoning_content || ''
+          let content = choice?.message?.content || ''
+          if (!thinking) {
+            const match = content.match(/^<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>\s*/i)
+            if (match) {
+              thinking = match[0].replace(/^<think(?:ing)?>\s*/i, '').replace(/<\/think(?:ing)?>\s*$/i, '').trim()
+              content = content.slice(match[0].length).trim()
+            }
+          }
           ctx.logger.info(`Chat 完成, finish_reason: ${choice?.finish_reason}`)
           return {
             success: true,
-            message: choice?.message?.content || '',
+            message: content,
+            thinking,
             data: {
-              content: choice?.message?.content,
+              content,
+              thinking,
               role: choice?.message?.role,
               finish_reason: choice?.finish_reason,
               usage: result.usage,
