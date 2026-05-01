@@ -97,7 +97,8 @@ export function createBuiltinFsApi() {
       return fs.rename(oldPath, newPath)
     },
 
-    copyFile(src: string, dest: string) {
+    async copyFile(src: string, dest: string) {
+      await fs.mkdir(path.dirname(dest), { recursive: true })
       return fs.copyFile(src, dest)
     },
   }

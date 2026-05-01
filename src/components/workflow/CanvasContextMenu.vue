@@ -296,9 +296,8 @@ function handleBatchDelete() {
 }
 
 async function handleMergeToWorkflow() {
-  const ids = targetNodeIds.value.filter(id => store.canDeleteNode(id))
-  if (ids.length >= 2) {
-    await store.mergeNodesToSubWorkflow(ids)
+  if (targetNodeIds.value.length >= 2) {
+    await store.mergeNodesToSubWorkflow(targetNodeIds.value)
   }
 }
 
