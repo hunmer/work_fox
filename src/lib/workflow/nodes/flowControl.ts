@@ -231,6 +231,14 @@ export const flowControlNodes: NodeTypeDefinition[] = [
         visibleWhen: { key: 'loopType', equals: 'array' },
       },
       {
+        key: 'concurrency',
+        label: '同时处理数量',
+        type: 'number',
+        default: 1,
+        required: true,
+        tooltip: '同一时间最多并行执行的循环次数。某一轮完成后会立即启动下一轮，不等待当前批次全部完成。',
+      },
+      {
         key: 'sharedVariables',
         label: '中间变量',
         type: 'output_fields',

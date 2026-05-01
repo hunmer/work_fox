@@ -1,5 +1,7 @@
 {
     "taskManager.favorites": [
-        "work_fox/npm/dev:backend"
+        "work_fox/npm/dev:backend",
+        "work_fox/npm/dev:web",
+        "work_fox/npm/install"
     ]
 }

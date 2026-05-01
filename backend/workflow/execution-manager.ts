@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import type {
   Workflow,
   WorkflowNode,
@@ -124,12 +125,20 @@ interface LoopIterations {
   infinite: boolean
 }
 
+interface LoopWorkerState {
+  branch: Map<string, string>
+  data: Record<string, any>
+  frame: LoopExecutionFrame
+  inputs: Record<string, any>
+}
+
 const MAX_RECENT_EVENTS = 100
 const FINISHED_RECOVERY_TTL_MS = 2 * 60_000
 
 export class BackendWorkflowExecutionManager {
   private sessions = new Map<string, ExecutionSession>()
   private finishedRecoveries = new Map<string, FinishedExecutionRecovery>()
+  private loopWorkerState = new AsyncLocalStorage<LoopWorkerState>()
 
   constructor(private deps: ExecutionManagerDeps) {}
 
@@ -483,7 +492,7 @@ export class BackendWorkflowExecutionManager {
         continue
       }
 
-      if (session.activeBranches.size > 0 && !this.isNodeReachable(session, node.id)) {
+      if (this.getActiveBranches(session).size > 0 && !this.isNodeReachable(session, node.id)) {
         this.recordSkippedStep(session, node, '非活跃分支')
         continue
       }
@@ -553,10 +562,11 @@ export class BackendWorkflowExecutionManager {
 
     const resolvedData = this.resolveContextVariables(session, this.applySelectedJsonPreset(node.data))
     const stepInput = this.getStepInput(node, resolvedData)
-    if (!session.context.__inputs__) session.context.__inputs__ = {}
-    session.context.__inputs__[node.id] = node.type === 'end'
-      ? {}
-      : this.buildOutputObject(resolvedData.inputFields) ?? {}
+    this.setNodeExecutionInput(
+      session,
+      node.id,
+      node.type === 'end' ? {} : this.buildOutputObject(resolvedData.inputFields) ?? {},
+    )
     const step: ExecutionStep = {
       nodeId: node.id,
       nodeLabel: node.label,
@@ -613,11 +623,10 @@ export class BackendWorkflowExecutionManager {
         : result
 
       session.context[node.id] = step.output
-      if (!session.context.__data__) session.context.__data__ = {}
-      session.context.__data__[node.id] = result
+      this.setNodeExecutionData(session, node.id, result)
 
       if (node.type === 'switch' && result?.__branch__) {
-        session.activeBranches.set(node.id, result.__branch__)
+        this.getActiveBranches(session).set(node.id, result.__branch__)
       }
 
       this.emitContext(session)
@@ -681,7 +690,7 @@ export class BackendWorkflowExecutionManager {
         return this.executeTableDisplay(session, node, resolvedData)
       case 'run_code':
         return this.executeCode(
-          session.context,
+          this.getRuntimeContext(session),
           String(resolvedData.code || ''),
           this.buildOutputObject(resolvedData.inputFields) ?? {},
         )
@@ -976,19 +985,23 @@ if (typeof main === 'function') return main({ params, context })`)
 
     const loopType = typeof resolvedData.loopType === 'string' ? resolvedData.loopType : 'count'
     const iterations = this.resolveLoopIterations(loopType, resolvedData)
+    const concurrency = this.resolveLoopConcurrency(resolvedData.concurrency)
     const sharedVariables = this.initializeLoopSharedVariables(resolvedData.sharedVariables)
     const items: unknown[] = []
 
-    appendNodeLog('info', iterations.infinite ? '开始执行无限循环' : `开始执行循环，共 ${iterations.count} 次`)
-    for (let index = 0; iterations.infinite || index < (iterations.count ?? 0); index++) {
-      if (session.stopRequested) {
-        throw new Error('执行已停止')
-      }
-      if (iterations.infinite && index > 0) {
-        await sleep(0)
-      }
+    appendNodeLog(
+      'info',
+      iterations.infinite
+        ? `开始执行无限循环，并发 ${concurrency}`
+        : `开始执行循环，共 ${iterations.count} 次，并发 ${concurrency}`,
+    )
 
-      session.loopStack.push({
+    let nextIndex = 0
+    let stopScheduling = false
+    const running = new Set<Promise<void>>()
+
+    const hasNextIteration = () => iterations.infinite || nextIndex < (iterations.count ?? 0)
+    const createFrame = (index: number): LoopExecutionFrame => ({
         loopNodeId: node.id,
         parentData: session.context.__data__,
         bodyAnchorId: bodyNode.id,
@@ -1002,27 +1015,89 @@ if (typeof main === 'function') return main({ params, context })`)
         },
       })
 
-      try {
-        this.syncLoopContext(session)
-        appendNodeLog('info', iterations.infinite ? `循环第 ${index + 1} 次` : `循环第 ${index + 1}/${iterations.count} 次`)
-        const result = await this.executeLoopBody(session, bodyNode)
-        items.push(this.normalizeLoopIterationResult(result))
-        if (session.status === 'error') {
-          break
+    const startNext = () => {
+      if (stopScheduling || !hasNextIteration()) return false
+      const index = nextIndex++
+      const frame = createFrame(index)
+      const promise = this.executeLoopIteration(
+        session,
+        bodyNode,
+        frame,
+        iterations,
+        appendNodeLog,
+      ).then((result) => {
+        items[index] = this.normalizeLoopIterationResult(result)
+        if (session.status === 'error' || frame.breakRequested) {
+          stopScheduling = true
         }
-        if (this.getLoopFrame(session)?.breakRequested) {
-          appendNodeLog('info', 'Loop break requested; stop after current loop body')
-          break
-        }
-      } finally {
-        session.loopStack.pop()
-        this.syncLoopContext(session)
+      }).finally(() => {
+        running.delete(promise)
+      })
+      running.add(promise)
+      return true
+    }
+
+    while (running.size < concurrency && startNext()) {
+      // Fill the initial concurrency window.
+    }
+
+    while (running.size > 0) {
+      await Promise.race(running)
+      if (session.stopRequested) {
+        throw new Error('执行已停止')
+      }
+      if (session.status === 'error') {
+        break
+      }
+      while (running.size < concurrency && startNext()) {
+        // Backfill one completed iteration without waiting for the rest.
       }
     }
 
     appendNodeLog('info', '循环执行完成')
     const output = this.buildOutputObject(resolvedData.outputs) ?? {}
     return { ...output, items }
+  }
+
+  private async executeLoopIteration(
+    session: ExecutionSession,
+    bodyNode: WorkflowNode,
+    frame: LoopExecutionFrame,
+    iterations: LoopIterations,
+    appendNodeLog: (level: ExecutionLogEntry['level'], message: string) => void,
+  ): Promise<unknown> {
+    if (session.stopRequested) {
+      throw new Error('执行已停止')
+    }
+    if (iterations.infinite && frame.metadata.index > 0) {
+      await sleep(0)
+    }
+
+    session.loopStack.push(frame)
+    try {
+      this.syncLoopContext(session)
+      appendNodeLog(
+        'info',
+        iterations.infinite
+          ? `循环第 ${frame.metadata.index + 1} 次`
+          : `循环第 ${frame.metadata.index + 1}/${iterations.count} 次`,
+      )
+      const result = await this.runWithLoopWorkerState(session, frame, () => this.executeLoopBody(session, bodyNode))
+      if (frame.breakRequested) {
+        appendNodeLog('info', 'Loop break requested; stop after current loop body')
+      }
+      return result
+    } finally {
+      const frameIndex = session.loopStack.lastIndexOf(frame)
+      if (frameIndex >= 0) {
+        session.loopStack.splice(frameIndex, 1)
+      }
+      this.syncLoopContext(session)
+    }
+  }
+
+  private resolveLoopConcurrency(value: unknown): number {
+    return Math.max(1, Math.floor(Number(value) || 1))
   }
 
   private async executeSubWorkflow(
@@ -1138,13 +1213,13 @@ if (typeof main === 'function') return main({ params, context })`)
       const outgoing = adjacency.get(nodeId) || []
       let lastResult: unknown
       for (const edge of outgoing) {
-        const activeHandle = session.activeBranches.get(edge.source)
+        const activeHandle = this.getActiveBranches(session).get(edge.source)
         if (activeHandle !== undefined && edge.sourceHandle !== activeHandle) continue
         const nextNode = findWorkflowNode(scopeNodes, edge.target)
         if (!nextNode || visited.has(nextNode.id)) continue
         visited.add(nextNode.id)
         await this.executeNode(session, nextNode)
-        lastResult = session.context.__data__?.[nextNode.id]
+        lastResult = this.getNodeExecutionData(session, nextNode.id)
         const downstream = await executeFrom(nextNode.id)
         if (downstream !== undefined) {
           lastResult = downstream
@@ -1176,10 +1251,8 @@ if (typeof main === 'function') return main({ params, context })`)
     }
 
     if (input && Object.keys(input).length > 0) {
-      if (!session.context.__data__) session.context.__data__ = {}
-      session.context.__data__[startNode.id] = input
-      if (!session.context.__inputs__) session.context.__inputs__ = {}
-      session.context.__inputs__[startNode.id] = input
+      this.setNodeExecutionData(session, startNode.id, input)
+      this.setNodeExecutionInput(session, startNode.id, input)
     }
 
     const visited = new Set<string>([startNode.id])
@@ -1189,7 +1262,7 @@ if (typeof main === 'function') return main({ params, context })`)
       let lastResult: unknown
 
       for (const edge of outgoing) {
-        const activeHandle = session.activeBranches.get(edge.source)
+        const activeHandle = this.getActiveBranches(session).get(edge.source)
         if (activeHandle !== undefined && edge.sourceHandle !== activeHandle) continue
 
         const nextNode = nodeMap.get(edge.target)
@@ -1199,7 +1272,7 @@ if (typeof main === 'function') return main({ params, context })`)
         await this.executeNode(session, nextNode)
 
         if (nextNode.type !== 'start') {
-          lastResult = session.context.__data__?.[nextNode.id]
+          lastResult = this.getNodeExecutionData(session, nextNode.id)
         }
 
         const downstream = await executeFrom(nextNode.id)
@@ -1353,7 +1426,7 @@ if (typeof main === 'function') return main({ params, context })`)
     if (incoming.length === 0) return true
 
     for (const edge of incoming) {
-      const activeHandle = session.activeBranches.get(edge.source)
+      const activeHandle = this.getActiveBranches(session).get(edge.source)
       if (activeHandle !== undefined && edge.sourceHandle !== activeHandle) continue
       if (this.isNodeReachable(session, edge.source, seen)) return true
     }
@@ -1484,7 +1557,7 @@ if (typeof main === 'function') return main({ params, context })`)
 
     const inputMatch = value.match(/^\s*\{\{\s*__inputs__\[(["'])([^"']+)\1\]\.([^}]+?)\s*\}\}\s*$/)
     if (inputMatch) {
-      const inputData = session.context.__inputs__?.[inputMatch[2]]
+      const inputData = this.getNodeExecutionInput(session, inputMatch[2])
       if (inputData != null) {
         const result = this.getNestedValue(inputData, inputMatch[3])
         if (result !== undefined) return result
@@ -1534,7 +1607,7 @@ if (typeof main === 'function') return main({ params, context })`)
     text = text.replace(
       /\{\{\s*__inputs__\[(["'])([^"']+)\1\]\.([^}]+?)\s*\}\}/g,
       (_match, _quote, nodeId, fieldPath) => {
-        const inputData = session.context.__inputs__?.[nodeId]
+        const inputData = this.getNodeExecutionInput(session, nodeId)
         if (inputData == null) return ''
         return String(this.getNestedValue(inputData, fieldPath) ?? '')
       },
@@ -1580,7 +1653,29 @@ if (typeof main === 'function') return main({ params, context })`)
   }
 
   private getLoopFrame(session: ExecutionSession): LoopExecutionFrame | null {
+    const workerFrame = this.loopWorkerState.getStore()?.frame
+    if (workerFrame) return workerFrame
     return session.loopStack[session.loopStack.length - 1] || null
+  }
+
+  private getActiveBranches(session: ExecutionSession): Map<string, string> {
+    return this.loopWorkerState.getStore()?.branch ?? session.activeBranches
+  }
+
+  private runWithLoopWorkerState<T>(
+    session: ExecutionSession,
+    frame: LoopExecutionFrame,
+    callback: () => Promise<T>,
+  ): Promise<T> {
+    return this.loopWorkerState.run(
+      {
+        branch: new Map(session.activeBranches),
+        data: {},
+        frame,
+        inputs: {},
+      },
+      callback,
+    )
   }
 
   private syncLoopContext(session: ExecutionSession): void {
@@ -1589,7 +1684,23 @@ if (typeof main === 'function') return main({ params, context })`)
       delete session.context.__loop__
       return
     }
-    session.context.__loop__ = {
+    session.context.__loop__ = this.createLoopContext(frame)
+  }
+
+  private getRuntimeContext(session: ExecutionSession): Record<string, any> {
+    const frame = this.getLoopFrame(session)
+    const workerState = this.loopWorkerState.getStore()
+    if (!frame && !workerState) return session.context
+    return {
+      ...session.context,
+      ...(workerState ? { __data__: { ...session.context.__data__, ...workerState.data } } : {}),
+      ...(workerState ? { __inputs__: { ...session.context.__inputs__, ...workerState.inputs } } : {}),
+      ...(frame ? { __loop__: this.createLoopContext(frame) } : {}),
+    }
+  }
+
+  private createLoopContext(frame: LoopExecutionFrame): Record<string, unknown> {
+    return {
       vars: frame.variables,
       index: frame.metadata.index,
       count: frame.metadata.count,
@@ -1613,6 +1724,7 @@ if (typeof main === 'function') return main({ params, context })`)
 
   private getNodeExecutionData(session: ExecutionSession, nodeId: string): any {
     const frame = this.getLoopFrame(session)
+    const workerState = this.loopWorkerState.getStore()
     if (!frame) {
       return session.context.__data__?.[nodeId]
     }
@@ -1628,7 +1740,32 @@ if (typeof main === 'function') return main({ params, context })`)
       }
     }
 
-    return session.context.__data__?.[nodeId] ?? frame.parentData?.[nodeId]
+    return workerState?.data[nodeId] ?? session.context.__data__?.[nodeId] ?? frame.parentData?.[nodeId]
+  }
+
+  private setNodeExecutionData(session: ExecutionSession, nodeId: string, value: unknown): void {
+    const workerState = this.loopWorkerState.getStore()
+    if (workerState) {
+      workerState.data[nodeId] = value
+      return
+    }
+    if (!session.context.__data__) session.context.__data__ = {}
+    session.context.__data__[nodeId] = value
+  }
+
+  private getNodeExecutionInput(session: ExecutionSession, nodeId: string): any {
+    const workerState = this.loopWorkerState.getStore()
+    return workerState?.inputs[nodeId] ?? session.context.__inputs__?.[nodeId]
+  }
+
+  private setNodeExecutionInput(session: ExecutionSession, nodeId: string, value: unknown): void {
+    const workerState = this.loopWorkerState.getStore()
+    if (workerState) {
+      workerState.inputs[nodeId] = value
+      return
+    }
+    if (!session.context.__inputs__) session.context.__inputs__ = {}
+    session.context.__inputs__[nodeId] = value
   }
 
   private currentContext(session: ExecutionSession): Record<string, unknown> {
