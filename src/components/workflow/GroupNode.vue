@@ -240,7 +240,7 @@ function selectColor(color?: string) {
   border: 2px dashed var(--vf-node-border, #e2e8f0);
   border-radius: 8px;
   background: transparent;
-  pointer-events: auto;
+  pointer-events: none;
   min-width: 100px;
   min-height: 60px;
 }

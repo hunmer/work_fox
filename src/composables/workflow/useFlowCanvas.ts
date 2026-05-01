@@ -42,6 +42,7 @@ const DEFAULT_NODE_SIZE = {
 type Bounds = { x: number; y: number; width: number; height: number }
 
 const resizingNodeIds = new Set<string>()
+const GROUP_NODE_TYPE = 'group'
 
 export function useFlowCanvas(store: WorkflowStore, flowId: string) {
   const flowStore = useVueFlow(flowId)
@@ -353,6 +354,36 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
     }
   }
 
+  function shiftScopeChildren(scopeNodeId: string, dx: number, dy: number, movedNodeIds = new Set<string>()): void {
+    if (dx === 0 && dy === 0) return
+
+    const children = store.currentWorkflow?.nodes.filter((node) => getCompositeParentId(node) === scopeNodeId) || []
+    for (const child of children) {
+      if (!movedNodeIds.has(child.id)) {
+        movedNodeIds.add(child.id)
+        store.updateNodePosition(child.id, {
+          x: child.position.x + dx,
+          y: child.position.y + dy,
+        })
+      }
+      if (isScopeBoundaryWorkflowNode(child)) {
+        shiftScopeChildren(child.id, dx, dy, movedNodeIds)
+      }
+    }
+  }
+
+  function moveNodeWithScopeChildren(node: WorkflowNode, position: { x: number; y: number }, movedNodeIds = new Set<string>()): void {
+    const dx = position.x - node.position.x
+    const dy = position.y - node.position.y
+    if (!movedNodeIds.has(node.id)) {
+      movedNodeIds.add(node.id)
+      store.updateNodePosition(node.id, position)
+    }
+    if (isScopeBoundaryWorkflowNode(node)) {
+      shiftScopeChildren(node.id, dx, dy, movedNodeIds)
+    }
+  }
+
   function intersects(a: Bounds, b: Bounds): boolean {
     return a.x < b.x + b.width
       && a.x + a.width > b.x
@@ -502,13 +533,14 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
       height: currentBounds.height,
     })
 
+    const movedNodeIds = new Set<string>()
     for (const nodeId of store.getDescendantNodeIds(group.id)) {
       const node = store.currentWorkflow?.nodes.find(n => n.id === nodeId)
       if (!node) continue
-      store.updateNodePosition(node.id, {
+      moveNodeWithScopeChildren(node, {
         x: node.position.x + dx,
         y: node.position.y + dy,
-      })
+      }, movedNodeIds)
     }
 
     for (const childGroupId of store.getDescendantGroupIds(group.id)) {
@@ -561,14 +593,27 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
       && changes[0].dragging
       && changes[0].position
     ) {
-      const helperLines = getHelperLines(
-        changes[0],
-        getNodes.value as GraphNode[],
-      )
-      changes[0].position.x = helperLines.snapPosition.x ?? changes[0].position.x
-      changes[0].position.y = helperLines.snapPosition.y ?? changes[0].position.y
-      helperLineHorizontal.value = helperLines.horizontal
-      helperLineVertical.value = helperLines.vertical
+      const changedNode = getNodes.value.find((node) => node.id === changes[0].id)
+      if (changedNode?.type !== GROUP_NODE_TYPE) {
+        const draggedGroupId = findGroupOfNode(changes[0].id)
+        const draggedGroup = draggedGroupId
+          ? store.currentWorkflow?.groups?.find(g => g.id === draggedGroupId)
+          : null
+        const helperLines = getHelperLines(
+          changes[0],
+          getNodes.value as GraphNode[],
+          {
+            shouldSnapToNode: (node) => {
+              if (node.type === GROUP_NODE_TYPE) return false
+              return draggedGroup ? isNodeInGroup(draggedGroup, node.id) : !findGroupOfNode(node.id)
+            },
+          },
+        )
+        changes[0].position.x = helperLines.snapPosition.x ?? changes[0].position.x
+        changes[0].position.y = helperLines.snapPosition.y ?? changes[0].position.y
+        helperLineHorizontal.value = helperLines.horizontal
+        helperLineVertical.value = helperLines.vertical
+      }
     }
 
     let nextSelectedNodeIds: string[] | null = null
@@ -599,21 +644,6 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
 
         const currentNode = store.currentWorkflow?.nodes.find((node) => node.id === change.id)
         const previousPosition = currentNode ? { ...currentNode.position } : null
-        if (currentNode && isScopeBoundaryWorkflowNode(currentNode)) {
-          const dx = change.position.x - currentNode.position.x
-          const dy = change.position.y - currentNode.position.y
-          store.updateNodePosition(currentNode.id, change.position)
-          if (dx !== 0 || dy !== 0) {
-            const children = store.currentWorkflow?.nodes.filter((node) => getCompositeParentId(node) === currentNode.id) || []
-            for (const child of children) {
-              store.updateNodePosition(child.id, {
-                x: child.position.x + dx,
-                y: child.position.y + dy,
-              })
-            }
-          }
-          continue
-        }
         const groupId = findGroupOfNode(change.id)
         const group = groupId ? store.currentWorkflow?.groups?.find(g => g.id === groupId) : null
         const currentGroupBounds = group ? computeGroupBoundingBox(group) : null
@@ -630,11 +660,18 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
         ) {
           if (previousPosition) {
             flowStore.updateNode(change.id, { position: previousPosition })
+            if (currentNode && isScopeBoundaryWorkflowNode(currentNode)) {
+              moveNodeWithScopeChildren(currentNode, previousPosition)
+            }
           }
           continue
         }
 
-        store.updateNodePosition(change.id, change.position)
+        if (currentNode && isScopeBoundaryWorkflowNode(currentNode)) {
+          moveNodeWithScopeChildren(currentNode, change.position)
+        } else {
+          store.updateNodePosition(change.id, change.position)
+        }
         if (groupId && nextGroupBounds) {
           store.updateGroupBounds(groupId, nextGroupBounds)
         }
@@ -755,16 +792,18 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
       const bb = computeGroupBoundingBox(group)
       return {
         id: group.id,
-        type: 'group',
+        type: GROUP_NODE_TYPE,
         position: { x: bb.x, y: bb.y },
         selected: false,
         draggable: !group.locked,
         dragHandle: '.group-node__header',
+        zIndex: -10,
         width: bb.width,
         height: bb.height,
         style: {
           width: `${bb.width}px`,
           height: `${bb.height}px`,
+          zIndex: -10,
         },
         data: {
           name: group.name,

@@ -6,6 +6,11 @@ export interface GetHelperLinesResult {
   snapPosition: Partial<XYPosition>
 }
 
+export interface GetHelperLinesOptions {
+  distance?: number
+  shouldSnapToNode?: (node: GraphNode) => boolean
+}
+
 /**
  * 计算节点拖拽时的对齐辅助线位置和 snap 吸附坐标。
  *
@@ -18,8 +23,10 @@ export interface GetHelperLinesResult {
 export function getHelperLines(
   change: NodePositionChange,
   nodes: GraphNode[],
-  distance = 5,
+  options: GetHelperLinesOptions | number = 5,
 ): GetHelperLinesResult {
+  const distance = typeof options === 'number' ? options : (options.distance ?? 5)
+  const shouldSnapToNode = typeof options === 'number' ? undefined : options.shouldSnapToNode
   const defaultResult: GetHelperLinesResult = {
     horizontal: undefined,
     vertical: undefined,
@@ -44,7 +51,7 @@ export function getHelperLines(
   let verticalDistance = distance
 
   return nodes
-    .filter((node) => node.id !== nodeA.id)
+    .filter((node) => node.id !== nodeA.id && (shouldSnapToNode?.(node) ?? true))
     .reduce<GetHelperLinesResult>((result, nodeB) => {
       const nodeBBounds = {
         left: nodeB.position.x,
