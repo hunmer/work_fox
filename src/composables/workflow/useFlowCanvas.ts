@@ -16,7 +16,7 @@ import {
 import { getHelperLines } from '@/components/workflow/helper-line-utils'
 
 const CONTAINER_PADDING = {
-  top: 56,
+  top: 100,
   right: 56,
   bottom: 44,
   left: 56,
@@ -24,6 +24,11 @@ const CONTAINER_PADDING = {
 
 const MIN_CONTAINER_SIZE = {
   width: 520,
+  height: 260,
+}
+
+const LOOP_BODY_MIN_CONTAINER_SIZE = {
+  width: 150,
   height: 260,
 }
 
@@ -78,8 +83,11 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
 
     const nextX = minX - CONTAINER_PADDING.left
     const nextY = minY - CONTAINER_PADDING.top
-    const nextWidth = Math.max(MIN_CONTAINER_SIZE.width, maxX - minX + CONTAINER_PADDING.left + CONTAINER_PADDING.right)
-    const nextHeight = Math.max(MIN_CONTAINER_SIZE.height, maxY - minY + CONTAINER_PADDING.top + CONTAINER_PADDING.bottom)
+    const minSize = scopeNode.type === LOOP_BODY_NODE_TYPE
+      ? LOOP_BODY_MIN_CONTAINER_SIZE
+      : MIN_CONTAINER_SIZE
+    const nextWidth = Math.max(minSize.width, maxX - minX + CONTAINER_PADDING.left + CONTAINER_PADDING.right)
+    const nextHeight = Math.max(minSize.height, maxY - minY + CONTAINER_PADDING.top + CONTAINER_PADDING.bottom)
 
     if (scopeNode.position.x !== nextX || scopeNode.position.y !== nextY) {
       store.updateNodePosition(scopeNode.id, { x: nextX, y: nextY })
@@ -286,8 +294,8 @@ export function useFlowCanvas(store: WorkflowStore, flowId: string) {
       if (!isNodeAllowedInScope(draggedNode, node.id)) continue
       const absoluteX = node.position.x
       const absoluteY = node.position.y
-      const width = Number(node.data?.width || MIN_CONTAINER_SIZE.width)
-      const height = Number(node.data?.height || MIN_CONTAINER_SIZE.height)
+      const width = Number(node.data?.width || LOOP_BODY_MIN_CONTAINER_SIZE.width)
+      const height = Number(node.data?.height || LOOP_BODY_MIN_CONTAINER_SIZE.height)
       if (
         position.x >= absoluteX
         && position.x <= absoluteX + width

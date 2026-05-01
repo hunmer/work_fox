@@ -267,7 +267,7 @@ export const flowControlNodes: NodeTypeDefinition[] = [
           scopeBoundary: true,
           parentRole: LOOP_ROOT_ROLE,
           data: {
-            width: 520,
+            width: 150,
             height: 260,
           },
         },
@@ -295,7 +295,7 @@ export const flowControlNodes: NodeTypeDefinition[] = [
       source: false,
     },
     customView: LoopBodyContainer,
-    customViewMinSize: { width: 520, height: 260 },
+    customViewMinSize: { width: 150, height: 260 },
     debuggable: false,
     manualCreate: false,
   },
